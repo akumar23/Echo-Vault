@@ -1,0 +1,171 @@
+version: '3.8'
+
+# Extension fields for shared configurations
+x-common-env: &common-env
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://journal:journal@db:5432/journal}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+  JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+  REFLECTION_MODEL: ${REFLECTION_MODEL:-llama3.1:8b}
+  EMBED_MODEL: ${EMBED_MODEL:-mxbai-embed-large}
+
+x-api-worker-env: &api-worker-env
+  <<: *common-env
+  UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+
+services:
+  db:
+    # Pinned to PostgreSQL 16 with pgvector extension
+    # Using pg16 tag which tracks PostgreSQL 16.x stable releases
+    # To update: check https://github.com/pgvector/pgvector for latest pg16 tag
+    image: pgvector/pgvector:pg16
+    container_name: journal_db
+    environment:
+      POSTGRES_USER: journal
+      POSTGRES_PASSWORD: journal
+      POSTGRES_DB: journal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U journal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - journal_network
+
+  redis:
+    # Pinned to Redis 7.2.5-alpine (stable as of Nov 2024)
+    # To update: check https://hub.docker.com/_/redis for latest 7-alpine tag
+    image: redis:7.2.5-alpine
+    container_name: journal_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - journal_network
+
+  ollama:
+    # Pinned to specific digest for stability (Nov 2024)
+    # To update: docker pull ollama/ollama:latest and get new digest
+    image: ollama/ollama@sha256:3d8a05e3432d50ea57594fabe971e46cc8fe963a0f9f8c40400bd56cd5388e47
+    container_name: journal_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - journal_network
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    container_name: journal_api
+    env_file:
+      - ../.env
+    environment:
+      <<: *api-worker-env
+    volumes:
+      - ../api:/app
+      - uploads_data:/data/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - journal_network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    container_name: journal_worker
+    env_file:
+      - ../.env
+    environment:
+      <<: *api-worker-env
+    volumes:
+      - ../api:/app
+      - uploads_data:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - journal_network
+    command: celery -A app.celery_app worker --loglevel=info
+
+  beat:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    container_name: journal_beat
+    env_file:
+      - ../.env
+    environment:
+      <<: *common-env
+    volumes:
+      - ../api:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - journal_network
+    command: celery -A app.celery_app beat --loglevel=info
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+    container_name: journal_web
+    env_file:
+      - ../.env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../app:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+    networks:
+      - journal_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:
+  uploads_data:
+
+networks:
+  journal_network:
+    driver: bridge
+

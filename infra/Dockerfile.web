@@ -1,0 +1,26 @@
+# Pinned to Node.js 20.18.0-alpine (LTS as of Nov 2024)
+# To update: check https://hub.docker.com/_/node for latest 20-alpine tag
+FROM node:20.18.0-alpine
+
+# Install pnpm (pin to version matching local development)
+# This ensures lockfile compatibility
+RUN corepack enable && corepack prepare pnpm@8.15.6 --activate
+
+WORKDIR /app
+
+# Install dependencies
+# Copy package files
+COPY app/package.json ./
+COPY app/pnpm-lock.yaml* ./
+
+# Install dependencies using pnpm
+# pnpm install is faster and more efficient than npm
+RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
+
+# Copy application code (excluding node_modules via .dockerignore)
+COPY app/ .
+
+EXPOSE 3000
+
+CMD ["pnpm", "run", "dev"]
+

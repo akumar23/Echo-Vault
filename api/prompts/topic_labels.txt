@@ -1,0 +1,9 @@
+Analyze the following journal entry and return a JSON array of 3-5 concise topic labels (single words or short phrases) that best describe the main themes.
+
+Example format: ["work", "stress", "family", "gratitude"]
+
+Journal Entry:
+{content}
+
+JSON array of topic labels:
+

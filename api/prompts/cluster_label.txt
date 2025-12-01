@@ -1,0 +1,8 @@
+You are analyzing a cluster of journal entries that share a common theme.
+Based on these representative entries, generate a short, descriptive label (2-5 words) and a brief description.
+
+Representative entries:
+{entries}
+
+Respond in JSON format only, no other text:
+{{"label": "Brief theme label (2-5 words)", "description": "One sentence describing this theme", "confidence": "high" or "medium" or "low"}}

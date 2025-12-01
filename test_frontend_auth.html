@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoVault Auth Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>EchoVault Authentication Test</h1>
+
+    <div class="section">
+        <h2>1. Login</h2>
+        <div>
+            <input type="email" id="email" placeholder="Email" value="dev@test.com" />
+            <input type="password" id="password" placeholder="Password" value="password123" />
+            <button onclick="login()">Login</button>
+        </div>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Check Token</h2>
+        <button onclick="checkToken()">Check Token in localStorage</button>
+        <div id="tokenResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Create Entry (requires auth)</h2>
+        <button onclick="createEntry()">Create Entry</button>
+        <div id="entryResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>4. Console Logs</h2>
+        <div id="consoleLogs" style="max-height: 300px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const logsDiv = document.getElementById('consoleLogs');
+
+        // Intercept console.log
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const logEntry = document.createElement('div');
+            logEntry.textContent = args.map(a =>
+                typeof a === 'object' ? JSON.stringify(a, null, 2) : a
+            ).join(' ');
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        };
+
+        const originalError = console.error;
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            const logEntry = document.createElement('div');
+            logEntry.className = 'error';
+            logEntry.textContent = '❌ ' + args.map(a =>
+                typeof a === 'object' ? JSON.stringify(a, null, 2) : a
+            ).join(' ');
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        };
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            try {
+                console.log('Attempting login...');
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                console.log('Login response:', data);
+
+                if (response.ok) {
+                    localStorage.setItem('token', data.access_token);
+                    resultDiv.innerHTML = `<p class="success">✓ Login successful!</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    console.log('Token saved to localStorage');
+                } else {
+                    resultDiv.innerHTML = `<p class="error">✗ Login failed</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                resultDiv.innerHTML = `<p class="error">✗ Error: ${error.message}</p>`;
+            }
+        }
+
+        function checkToken() {
+            const token = localStorage.getItem('token');
+            const resultDiv = document.getElementById('tokenResult');
+
+            if (token) {
+                console.log('Token found in localStorage');
+                resultDiv.innerHTML = `<p class="success">✓ Token exists</p><pre>${token.substring(0, 50)}...</pre>`;
+            } else {
+                console.log('No token in localStorage');
+                resultDiv.innerHTML = `<p class="error">✗ No token found. Please login first.</p>`;
+            }
+        }
+
+        async function createEntry() {
+            const token = localStorage.getItem('token');
+            const resultDiv = document.getElementById('entryResult');
+
+            if (!token) {
+                resultDiv.innerHTML = `<p class="error">✗ Please login first</p>`;
+                console.error('No token available');
+                return;
+            }
+
+            try {
+                console.log('Creating entry with token...');
+                console.log('Authorization header:', `Bearer ${token.substring(0, 20)}...`);
+
+                const response = await fetch(`${API_URL}/entries`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        title: 'Test Entry from HTML',
+                        content: 'This is a test entry created from the HTML test page',
+                        tags: ['test', 'html']
+                    })
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `<p class="success">✓ Entry created!</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">✗ Failed (${response.status})</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (error) {
+                console.error('Create entry error:', error);
+                resultDiv.innerHTML = `<p class="error">✗ Error: ${error.message}</p>`;
+            }
+        }
+
+        // Initial check
+        checkToken();
+        console.log('Test page loaded. Click buttons to test authentication.');
+    </script>
+</body>
+</html>

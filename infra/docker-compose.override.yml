@@ -1,0 +1,30 @@
+# Override file to use native Ollama with Metal GPU acceleration
+# This disables the Docker Ollama container and connects to host Ollama instead
+
+services:
+  # Disable the Ollama container by setting replicas to 0
+  ollama:
+    deploy:
+      replicas: 0
+
+  # Update API to connect to host Ollama
+  api:
+    environment:
+      # host.docker.internal allows Docker containers to connect to host services
+      OLLAMA_URL: http://host.docker.internal:11434
+    # Remove dependency on Ollama container
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Update worker to connect to host Ollama
+  worker:
+    environment:
+      OLLAMA_URL: http://host.docker.internal:11434
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
