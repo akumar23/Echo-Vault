@@ -12,10 +12,13 @@ class OllamaService:
     Service for interacting with Ollama API.
     Uses a shared httpx.AsyncClient for connection pooling and better performance.
     Caches prompt templates loaded from disk at initialization.
+
+    Supports per-user custom Ollama URLs via the base_url parameter.
     """
 
-    def __init__(self):
-        self.base_url = settings.ollama_url
+    def __init__(self, base_url: Optional[str] = None):
+        # Use provided URL or fall back to environment default
+        self.base_url = base_url if base_url else settings.ollama_url
         self.embed_model = settings.embed_model
         self.reflection_model = settings.reflection_model
         self._client: Optional[httpx.AsyncClient] = None
@@ -200,5 +203,54 @@ class OllamaService:
         }
 
 
+# Global default service instance (uses env URL)
 ollama_service = OllamaService()
+
+# Cache for per-user service instances
+_user_services: Dict[str, OllamaService] = {}
+
+
+def get_ollama_service_for_url(url: Optional[str] = None) -> OllamaService:
+    """
+    Get an OllamaService instance for a specific URL.
+    Uses caching to avoid creating duplicate instances.
+
+    Args:
+        url: Custom Ollama URL, or None to use the default from env
+
+    Returns:
+        OllamaService instance configured for the given URL
+    """
+    if url is None:
+        return ollama_service
+
+    # Normalize URL for cache key
+    cache_key = url.rstrip('/')
+
+    if cache_key not in _user_services:
+        _user_services[cache_key] = OllamaService(base_url=cache_key)
+
+    return _user_services[cache_key]
+
+
+async def get_ollama_service_for_user(db, user_id: int) -> OllamaService:
+    """
+    Get an OllamaService instance for a specific user.
+    Checks if the user has a custom Ollama URL configured in their settings.
+
+    Args:
+        db: Database session
+        user_id: User ID to look up settings for
+
+    Returns:
+        OllamaService instance (custom URL if configured, otherwise default)
+    """
+    from app.models.settings import Settings
+
+    user_settings = db.query(Settings).filter(Settings.user_id == user_id).first()
+
+    if user_settings and user_settings.ollama_url:
+        return get_ollama_service_for_url(user_settings.ollama_url)
+
+    return ollama_service
 

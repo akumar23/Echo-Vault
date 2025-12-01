@@ -12,14 +12,33 @@ export default function SettingsPage() {
 
   const [halfLife, setHalfLife] = useState(30)
   const [hardDelete, setHardDelete] = useState(false)
+  const [ollamaUrl, setOllamaUrl] = useState('')
+  const [ollamaUrlError, setOllamaUrlError] = useState('')
 
   // Sync state when settings load
   useEffect(() => {
     if (settings) {
       setHalfLife(settings?.search_half_life_days ?? 30)
       setHardDelete(settings?.privacy_hard_delete ?? false)
+      setOllamaUrl(settings?.ollama_url ?? '')
     }
   }, [settings])
+
+  const validateOllamaUrl = (url: string): boolean => {
+    if (!url) return true // Empty is valid (uses default)
+    try {
+      const parsed = new URL(url)
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        setOllamaUrlError('URL must use http:// or https://')
+        return false
+      }
+      setOllamaUrlError('')
+      return true
+    } catch {
+      setOllamaUrlError('Please enter a valid URL (e.g., http://localhost:11434)')
+      return false
+    }
+  }
 
   if (isLoading) {
     return (
@@ -30,10 +49,15 @@ export default function SettingsPage() {
   }
 
   const handleSave = () => {
+    if (!validateOllamaUrl(ollamaUrl)) {
+      return
+    }
+
     updateMutation.mutate(
       {
         search_half_life_days: halfLife,
         privacy_hard_delete: hardDelete,
+        ollama_url: ollamaUrl || null,
       },
       {
         onSuccess: () => alert('Settings updated!')
@@ -80,6 +104,55 @@ export default function SettingsPage() {
               </ul>
               <p style={{ color: '#666', fontSize: '0.9rem', fontStyle: 'italic' }}>
                 <strong>Example:</strong> With 7 days, a recent entry about "work stress" will rank above an older, more detailed entry about the same topic. With 90 days, the more detailed entry would rank higher.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2>LLM Settings</h2>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label htmlFor="ollama-url" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Custom Ollama/LLM URL
+            </label>
+            <input
+              id="ollama-url"
+              type="url"
+              value={ollamaUrl}
+              onChange={(e) => {
+                setOllamaUrl(e.target.value)
+                if (ollamaUrlError) validateOllamaUrl(e.target.value)
+              }}
+              onBlur={(e) => validateOllamaUrl(e.target.value)}
+              placeholder="http://localhost:11434"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                fontSize: '1rem',
+                border: ollamaUrlError ? '2px solid #dc3545' : '1px solid #ccc',
+                borderRadius: '6px',
+                marginTop: '0.5rem',
+              }}
+            />
+            {ollamaUrlError && (
+              <p style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                {ollamaUrlError}
+              </p>
+            )}
+            <div style={{ marginTop: '0.75rem', padding: '1rem', background: '#f5f5f5', borderRadius: '6px' }}>
+              <p style={{ color: '#333', fontSize: '0.95rem', marginBottom: '0.5rem', fontWeight: '500' }}>
+                What does this do?
+              </p>
+              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                By default, EchoVault uses the Ollama server configured by the system administrator. You can override this to use your own Ollama instance or any compatible LLM API.
+              </p>
+              <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem', marginBottom: '0.75rem' }}>
+                <li><strong>Leave empty:</strong> Use the default system Ollama server</li>
+                <li><strong>Local Ollama:</strong> Use <code>http://localhost:11434</code></li>
+                <li><strong>Remote server:</strong> Use your own server URL (e.g., <code>http://192.168.1.100:11434</code>)</li>
+              </ul>
+              <p style={{ color: '#666', fontSize: '0.9rem', fontStyle: 'italic' }}>
+                <strong>Note:</strong> The server must be running Ollama and have the required models installed (embedding and reflection models).
               </p>
             </div>
           </div>

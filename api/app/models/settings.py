@@ -11,6 +11,7 @@ class Settings(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     search_half_life_days = Column(Float, default=30.0)  # Default 30 days
     privacy_hard_delete = Column(Boolean, default=False)
+    ollama_url = Column(String, nullable=True, default=None)  # Custom LLM URL, NULL = use env default
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

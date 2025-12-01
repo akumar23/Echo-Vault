@@ -39,7 +39,10 @@ async def update_settings(
         settings.search_half_life_days = settings_data.search_half_life_days
     if settings_data.privacy_hard_delete is not None:
         settings.privacy_hard_delete = settings_data.privacy_hard_delete
-    
+    # Handle ollama_url - empty string clears the setting
+    if settings_data.ollama_url is not None:
+        settings.ollama_url = settings_data.ollama_url if settings_data.ollama_url else None
+
     db.commit()
     db.refresh(settings)
     return settings

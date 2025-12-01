@@ -96,6 +96,7 @@ export interface Settings {
   user_id: number
   search_half_life_days: number
   privacy_hard_delete: boolean
+  ollama_url: string | null
 }
 
 export interface Reflection {
