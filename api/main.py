@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import auth, entries, search, insights, settings, forget, export, reflections, clusters
+from app.routers import auth, entries, search, insights, settings, forget, export, reflections
 from app.services.ollama_service import ollama_service
 
 # Configure logging
@@ -66,7 +66,6 @@ app.include_router(settings.router, prefix="/settings", tags=["settings"])
 app.include_router(forget.router, prefix="/forget", tags=["forget"])
 app.include_router(export.router, prefix="/export", tags=["export"])
 app.include_router(reflections.router, prefix="/reflections", tags=["reflections"])
-app.include_router(clusters.router)
 
 
 @app.get("/health")

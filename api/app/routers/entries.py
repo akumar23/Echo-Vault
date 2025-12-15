@@ -8,7 +8,7 @@ from app.schemas.entry import EntryCreate, EntryUpdate, EntryResponse
 from app.core.dependencies import get_current_user
 from app.jobs.embedding_job import enqueue_embedding_job
 from app.jobs.mood_job import enqueue_mood_job
-from app.jobs.reflection_job import enqueue_reflection_job
+from app.services.reflection_cache import reflection_cache
 
 router = APIRouter()
 
@@ -33,7 +33,9 @@ async def create_entry(
     # Enqueue background jobs
     enqueue_embedding_job(entry.id)
     enqueue_mood_job(entry.id)
-    enqueue_reflection_job(current_user.id)
+
+    # Invalidate cached reflection so it regenerates on next view
+    reflection_cache.delete_reflection(current_user.id)
 
     return entry
 
@@ -48,7 +50,7 @@ async def list_entries(
     entries = db.query(Entry).filter(
         Entry.user_id == current_user.id,
         Entry.is_deleted == False
-    ).offset(skip).limit(limit).all()
+    ).order_by(Entry.created_at.desc()).offset(skip).limit(limit).all()
     return entries
 
 
@@ -99,8 +101,8 @@ async def update_entry(
     if entry_data.content is not None:
         enqueue_embedding_job(entry.id)
 
-    # Regenerate reflection on any entry change
-    enqueue_reflection_job(current_user.id)
+    # Invalidate cached reflection so it regenerates on next view
+    reflection_cache.delete_reflection(current_user.id)
 
     return entry
 
@@ -121,8 +123,8 @@ async def delete_entry(
     entry.is_deleted = True
     db.commit()
 
-    # Regenerate reflection after deletion
-    enqueue_reflection_job(current_user.id)
+    # Invalidate cached reflection so it regenerates on next view
+    reflection_cache.delete_reflection(current_user.id)
 
     return None
 
