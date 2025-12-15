@@ -21,5 +21,4 @@ class Entry(Base):
     user = relationship("User", back_populates="entries")
     embeddings = relationship("EntryEmbedding", back_populates="entry", cascade="all, delete-orphan")
     attachments = relationship("Attachment", back_populates="entry", cascade="all, delete-orphan")
-    cluster_memberships = relationship("EntryClusterMembership", back_populates="entry", cascade="all, delete-orphan")
 
