@@ -17,17 +17,21 @@ api.interceptors.request.use(
       const token = localStorage.getItem('token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
-        console.log('[API] Adding Authorization header to request:', config.url)
-      } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[API] Adding Authorization header to request:', config.url)
+        }
+      } else if (process.env.NODE_ENV === 'development') {
         console.warn('[API] No token found in localStorage for request:', config.url)
       }
-    } else {
+    } else if (process.env.NODE_ENV === 'development') {
       console.warn('[API] SSR context - skipping token for request:', config.url)
     }
     return config
   },
   (error) => {
-    console.error('[API] Request interceptor error:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[API] Request interceptor error:', error)
+    }
     return Promise.reject(error)
   }
 )
@@ -37,24 +41,32 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      console.error('[API] Response error:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data,
-        url: error.config?.url
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[API] Response error:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          url: error.config?.url
+        })
+      }
 
       if (error.response.status === 401 || error.response.status === 403) {
         // Clear invalid token on 401/403 errors
         if (typeof window !== 'undefined') {
-          console.warn('[API] Authentication failed - clearing token')
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[API] Authentication failed - clearing token')
+          }
           localStorage.removeItem('token')
         }
       }
     } else if (error.request) {
-      console.error('[API] No response received:', error.request)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[API] No response received:', error.request)
+      }
     } else {
-      console.error('[API] Error setting up request:', error.message)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[API] Error setting up request:', error.message)
+      }
     }
     return Promise.reject(error)
   }
@@ -199,85 +211,6 @@ export const reflectionsApi = {
   },
   regenerate: async (): Promise<Reflection> => {
     const response = await api.post('/reflections/regenerate')
-    return response.data
-  },
-}
-
-// Clusters
-export interface Cluster {
-  cluster_id: number
-  label: string | null
-  description: string | null
-  entry_count: number
-  created_at: string
-  is_stale: boolean
-}
-
-export interface ClusterEntry {
-  entry_id: number
-  title: string | null
-  content: string
-  created_at: string
-  tags: string[]
-}
-
-export interface ClusterDetail {
-  cluster_id: number
-  label: string | null
-  description: string | null
-  entries: ClusterEntry[]
-  representative_entry_ids: number[]
-  confidence: number | null
-}
-
-export interface ClusterStats {
-  total_clusters: number
-  total_clustered_entries: number
-  total_unclustered_entries: number
-  largest_cluster_size: number
-  last_clustering_date: string | null
-}
-
-export interface ClusterEvolutionSnapshot {
-  snapshot_id: number
-  snapshot_date: string
-  total_entries: number
-  total_clusters: number
-  noise_count: number
-  metadata: Record<string, any>
-}
-
-export interface RelatedCluster {
-  cluster_id: number
-  label: string | null
-  description: string | null
-  similarity: number
-  entry_count: number
-}
-
-export const clustersApi = {
-  trigger: async () => {
-    const response = await api.post('/clusters/trigger')
-    return response.data
-  },
-  list: async () => {
-    const response = await api.get('/clusters/')
-    return response.data
-  },
-  stats: async () => {
-    const response = await api.get('/clusters/stats')
-    return response.data
-  },
-  evolution: async () => {
-    const response = await api.get('/clusters/evolution')
-    return response.data
-  },
-  get: async (id: number) => {
-    const response = await api.get(`/clusters/${id}`)
-    return response.data
-  },
-  related: async (id: number) => {
-    const response = await api.get(`/clusters/${id}/related`)
     return response.data
   },
 }

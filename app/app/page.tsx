@@ -3,7 +3,6 @@
 import { useEntries } from '@/hooks/useEntries'
 import { ReflectionsPanel } from '@/components/ReflectionsPanel'
 import { TrendsChart } from '@/components/TrendsChart'
-import { ThemesPreview } from '@/components/ThemesPreview'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Header } from '@/components/Header'
 import Link from 'next/link'
@@ -54,8 +53,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-
-        <ThemesPreview />
 
         <div className="card" style={{ marginTop: '1.5rem' }}>
           <h2>Mood Trends</h2>
