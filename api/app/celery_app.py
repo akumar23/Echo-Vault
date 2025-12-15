@@ -19,12 +19,8 @@ celery_app.conf.update(
 # Celery Beat schedule
 celery_app.conf.beat_schedule = {
     "weekly-insights-friday-midnight": {
-        "task": "app.jobs.insights_job.nightly_insights_task",
+        "task": "insights.nightly_insights",
         "schedule": crontab(hour=0, minute=0, day_of_week=5),  # Friday at 00:00 UTC
-    },
-    "nightly-clustering-3am": {
-        "task": "clustering.nightly_clustering",
-        "schedule": crontab(hour=3, minute=0),  # Every night at 03:00 UTC
     },
 }
 
