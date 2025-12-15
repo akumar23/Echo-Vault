@@ -146,9 +146,9 @@ def test_full_registration_flow():
 
 
 def test_get_me_without_token():
-    """Test that /auth/me returns 403 when no token is provided"""
+    """Test that /auth/me returns 401 when no token is provided"""
     response = client.get("/auth/me")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_get_me_with_invalid_token():
