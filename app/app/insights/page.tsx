@@ -17,10 +17,8 @@ export default function InsightsPage() {
     <ProtectedRoute>
       <div className="container">
         <Header title="Insights" showNav={false} />
-        <div style={{ marginBottom: '2rem' }}>
-          <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6' }}>
-            Redirecting to dashboard...
-          </p>
+        <div className="card">
+          <p className="text-muted loading">Redirecting to dashboard...</p>
         </div>
       </div>
     </ProtectedRoute>

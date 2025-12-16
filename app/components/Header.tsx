@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface HeaderProps {
@@ -10,37 +11,47 @@ interface HeaderProps {
 
 export function Header({ title, showNav = true }: HeaderProps) {
   const { user } = useAuth()
+  const pathname = usePathname()
+
+  const navLinks = [
+    { href: '/new', label: 'New Entry' },
+    { href: '/entries', label: 'All Entries' },
+    { href: '/insights', label: 'Insights' },
+    { href: '/settings', label: 'Settings' },
+    { href: '/help', label: 'Help' },
+  ]
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    return pathname.startsWith(href)
+  }
 
   return (
-    <header style={{ marginBottom: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <header className="header">
+      <div className="header__top">
         {title ? (
-          <h1>{title}</h1>
+          <h1 className="header__title">{title}</h1>
         ) : (
-          <h1>Welcome back, {user?.username ?? 'User'}</h1>
+          <h1 className="header__title">
+            Welcome back, {user?.username ?? 'User'}
+          </h1>
         )}
-        <Link
-          href="/"
-          className="btn btn-secondary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.5rem 1rem'
-          }}
-        >
-          <span style={{ fontSize: '1.2rem' }}>⌂</span>
+        <Link href="/" className="btn btn-ghost btn-sm">
           Home
         </Link>
       </div>
 
       {showNav && (
-        <nav style={{ marginTop: '1rem' }}>
-          <Link href="/new" style={{ marginRight: '1rem' }}>New Entry</Link>
-          <Link href="/entries" style={{ marginRight: '1rem' }}>All Entries</Link>
-          <Link href="/insights" style={{ marginRight: '1rem' }}>Insights</Link>
-          <Link href="/settings" style={{ marginRight: '1rem' }}>Settings</Link>
-          <Link href="/help">Help</Link>
+        <nav className="header__nav">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`nav-link ${isActive(link.href) ? 'nav-link--active' : ''}`}
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
       )}
     </header>

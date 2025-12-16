@@ -6,19 +6,11 @@ interface MoodIndicatorProps {
 }
 
 const MOOD_EMOJIS: { [key: number]: string } = {
-  1: '😢',
-  2: '😕',
-  3: '😐',
-  4: '🙂',
-  5: '😊',
-}
-
-const MOOD_COLORS: { [key: number]: string } = {
-  1: '#ef4444',
-  2: '#f59e0b',
-  3: '#6b7280',
-  4: '#10b981',
-  5: '#22c55e',
+  1: '01',
+  2: '02',
+  3: '03',
+  4: '04',
+  5: '05',
 }
 
 export function MoodIndicator({ moodUser, moodInferred }: MoodIndicatorProps) {
@@ -30,30 +22,9 @@ export function MoodIndicator({ moodUser, moodInferred }: MoodIndicatorProps) {
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.5rem',
-        fontSize: '0.875rem',
-      }}
-    >
-      <span
-        style={{
-          fontSize: '1.5rem',
-          filter: isUserSet ? 'none' : 'opacity(0.7)',
-        }}
-      >
-        {MOOD_EMOJIS[mood]}
-      </span>
-      <span
-        style={{
-          color: MOOD_COLORS[mood],
-          fontSize: '0.75rem',
-          fontWeight: 500,
-          opacity: 0.8,
-        }}
-      >
+    <div className={`mood-indicator mood-indicator--${mood}`}>
+      <span className="mood-indicator__emoji">{MOOD_EMOJIS[mood]}</span>
+      <span className="mood-indicator__source">
         {isUserSet ? 'You' : 'AI'}
       </span>
     </div>

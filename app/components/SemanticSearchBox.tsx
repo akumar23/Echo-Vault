@@ -31,46 +31,51 @@ function SemanticSearchBoxContent() {
 
   return (
     <div>
-      <form onSubmit={handleSearch} style={{ marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <input
-            type="text"
-            className="input"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search your entries semantically..."
-            style={{ flex: 1 }}
-          />
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Searching...' : 'Search'}
-          </button>
-        </div>
+      <form onSubmit={handleSearch} className="search-form mb-5">
+        <input
+          type="text"
+          className="input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search your entries semantically..."
+        />
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          {loading ? 'Searching...' : 'Search'}
+        </button>
       </form>
 
       {searched && (
-        <div>
+        <div className="search-results">
           {loading ? (
-            <p>Searching...</p>
+            <p className="loading">Searching...</p>
           ) : results.length > 0 ? (
             <div>
-              <h3>Results ({results.length})</h3>
+              <h3 className="mb-4">Results ({results.length})</h3>
               {results.map((result, i) => (
-                <div key={i} className="card" style={{ marginTop: '1rem' }}>
-                  <Link href={`/entries/${result.entry_id}`}>
-                    <h4>{result.title || 'Untitled'}</h4>
-                    <p style={{ color: '#666', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                      {format(new Date(result.created_at), 'MMM d, yyyy')} • Score: {result.score.toFixed(3)}
-                    </p>
-                    <p style={{ marginTop: '0.5rem' }}>
-                      {result.content.substring(0, 200)}
-                      {result.content.length > 200 ? '...' : ''}
-                    </p>
-                  </Link>
-                </div>
+                <Link
+                  key={i}
+                  href={`/entries/${result.entry_id}`}
+                  className="search-result"
+                  style={{ display: 'block' }}
+                >
+                  <div className="search-result__title">
+                    {result.title || 'Untitled'}
+                  </div>
+                  <div className="search-result__meta">
+                    <span>{format(new Date(result.created_at), 'MMM d, yyyy')}</span>
+                    <span className="search-result__score">
+                      Score: {result.score.toFixed(3)}
+                    </span>
+                  </div>
+                  <p className="search-result__preview">
+                    {result.content.substring(0, 200)}
+                    {result.content.length > 200 ? '...' : ''}
+                  </p>
+                </Link>
               ))}
             </div>
           ) : (
-            <p>No results found.</p>
+            <p className="text-muted">No results found.</p>
           )}
         </div>
       )}
@@ -82,10 +87,8 @@ export function SemanticSearchBox() {
   return (
     <ErrorBoundary
       fallback={
-        <div style={{ padding: '1rem', background: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
-          <p style={{ color: '#856404' }}>
-            Failed to load semantic search. Please try refreshing the page.
-          </p>
+        <div className="alert alert--error">
+          Failed to load semantic search. Please try refreshing the page.
         </div>
       }
     >
@@ -93,4 +96,3 @@ export function SemanticSearchBox() {
     </ErrorBoundary>
   )
 }
-

@@ -61,7 +61,9 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <ProtectedRoute>
-        <div className="container">Loading...</div>
+        <div className="container">
+          <p className="loading">Loading...</p>
+        </div>
       </ProtectedRoute>
     )
   }
@@ -109,15 +111,6 @@ export default function SettingsPage() {
     })
   }
 
-  const inputStyle = (hasError: boolean) => ({
-    width: '100%',
-    padding: '0.75rem',
-    fontSize: '1rem',
-    border: hasError ? '2px solid #dc3545' : '1px solid #ccc',
-    borderRadius: '6px',
-    marginTop: '0.5rem',
-  })
-
   const LLMSettingsSection = ({
     title,
     description,
@@ -149,18 +142,17 @@ export default function SettingsPage() {
     tokenSet: boolean
     type: 'generation' | 'embedding'
   }) => (
-    <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#fafafa', borderRadius: '8px', border: '1px solid #eee' }}>
-      <h3 style={{ marginBottom: '0.5rem', color: '#333' }}>{title}</h3>
-      <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{description}</p>
+    <div className="mb-6" style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
+      <h3 className="mb-2">{title}</h3>
+      <p className="text-muted mb-5">{description}</p>
 
       {/* URL */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <label htmlFor={`${type}-url`} style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>
-          API URL
-        </label>
+      <div className="form-group">
+        <label htmlFor={`${type}-url`}>API URL</label>
         <input
           id={`${type}-url`}
           type="url"
+          className={`input ${urlError ? 'input--error' : ''}`}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value)
@@ -168,34 +160,30 @@ export default function SettingsPage() {
           }}
           onBlur={(e) => validateUrl(e.target.value, setUrlError)}
           placeholder="http://localhost:11434"
-          style={inputStyle(!!urlError)}
+          aria-invalid={!!urlError}
         />
-        {urlError && (
-          <p style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.5rem' }}>{urlError}</p>
-        )}
-        <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-          Leave empty to use the default server
-        </p>
+        {urlError && <p className="form-error">{urlError}</p>}
+        <p className="form-helper">Leave empty to use the default server</p>
       </div>
 
       {/* API Token */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <label htmlFor={`${type}-token`} style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>
-          API Token {tokenSet && <span style={{ color: '#28a745', fontSize: '0.8rem' }}>(configured)</span>}
+      <div className="form-group">
+        <label htmlFor={`${type}-token`}>
+          API Token {tokenSet && <span className="text-accent">(configured)</span>}
         </label>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div className="flex gap-2">
           <input
             id={`${type}-token`}
             type={showToken ? 'text' : 'password'}
+            className="input flex-1"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder={tokenSet ? '********' : 'Optional - for cloud providers'}
-            style={{ ...inputStyle(false), flex: 1 }}
           />
           <button
             type="button"
             onClick={() => setShowToken(!showToken)}
-            style={{ padding: '0.75rem', border: '1px solid #ccc', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+            className="btn btn-secondary btn-sm"
           >
             {showToken ? 'Hide' : 'Show'}
           </button>
@@ -203,33 +191,27 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => clearToken(type)}
-              style={{ padding: '0.75rem', border: '1px solid #dc3545', borderRadius: '6px', background: '#fff', color: '#dc3545', cursor: 'pointer' }}
+              className="btn btn-danger btn-sm"
             >
               Clear
             </button>
           )}
         </div>
-        <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-          Required for OpenAI, Anthropic, etc. Optional for local Ollama.
-        </p>
+        <p className="form-helper">Required for OpenAI, Anthropic, etc. Optional for local Ollama.</p>
       </div>
 
       {/* Model Name */}
-      <div>
-        <label htmlFor={`${type}-model`} style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>
-          Model Name
-        </label>
+      <div className="form-group mb-0">
+        <label htmlFor={`${type}-model`}>Model Name</label>
         <input
           id={`${type}-model`}
           type="text"
+          className="input"
           value={model}
           onChange={(e) => setModel(e.target.value)}
           placeholder={type === 'generation' ? 'llama3.1:8b, gpt-4, claude-3-haiku, etc.' : 'mxbai-embed-large, text-embedding-3-small, etc.'}
-          style={inputStyle(false)}
         />
-        <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-          Leave empty to use the default model
-        </p>
+        <p className="form-helper">Leave empty to use the default model</p>
       </div>
     </div>
   )
@@ -238,8 +220,8 @@ export default function SettingsPage() {
     <ProtectedRoute>
       <div className="container">
         <Header title="Settings" showNav={false} />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <Link href="/help" style={{ color: '#0070f3', textDecoration: 'underline' }}>
+        <div className="text-right mb-5">
+          <Link href="/help" className="nav-link">
             Need help? View Help Page
           </Link>
         </div>
@@ -247,9 +229,9 @@ export default function SettingsPage() {
         {/* Search Settings */}
         <div className="card">
           <h2>Search Settings</h2>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label htmlFor="half-life" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Search Half-Life: {halfLife} days
+          <div className="form-group">
+            <label htmlFor="half-life">
+              Search Half-Life: <span className="text-accent">{halfLife}</span> days
             </label>
             <input
               id="half-life"
@@ -258,19 +240,18 @@ export default function SettingsPage() {
               max="365"
               value={halfLife}
               onChange={(e) => setHalfLife(parseFloat(e.target.value))}
-              style={{ width: '100%', marginTop: '0.5rem' }}
+              className="range-slider"
             />
-            <div style={{ marginTop: '0.75rem', padding: '1rem', background: '#f5f5f5', borderRadius: '6px' }}>
-              <p style={{ color: '#333', fontSize: '0.95rem', marginBottom: '0.5rem', fontWeight: '500' }}>
-                What does this do?
+            <div className="alert alert--info mt-4">
+              <p className="mb-2"><strong>What does this do?</strong></p>
+              <p className="mb-4">
+                Controls how search results balance relevance vs. recency. When you search for entries,
+                the system considers both how similar they are to your query AND how recent they are.
               </p>
-              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                This controls how search results balance relevance vs. recency. When you search for entries, the system considers both how similar they are to your query AND how recent they are.
-              </p>
-              <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem', marginBottom: '0.75rem' }}>
-                <li><strong>Lower values (1-15 days):</strong> Recent entries rank higher, even if slightly less relevant</li>
-                <li><strong>Medium values (15-60 days):</strong> Balanced approach - both relevance and recency matter</li>
-                <li><strong>Higher values (60-365 days):</strong> All entries treated equally by age - only relevance matters</li>
+              <ul style={{ marginLeft: 'var(--space-5)' }}>
+                <li><strong>Lower values (1-15 days):</strong> Recent entries rank higher</li>
+                <li><strong>Medium values (15-60 days):</strong> Balanced approach</li>
+                <li><strong>Higher values (60-365 days):</strong> Only relevance matters</li>
               </ul>
             </div>
           </div>
@@ -279,9 +260,9 @@ export default function SettingsPage() {
         {/* LLM Settings */}
         <div className="card">
           <h2>LLM Settings</h2>
-          <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+          <p className="text-muted mb-5">
             Configure the AI models used for reflections, insights, mood analysis, and semantic search.
-            Uses OpenAI-compatible API format, which works with Ollama, OpenAI, LM Studio, vLLM, and more.
+            Uses OpenAI-compatible API format.
           </p>
 
           <LLMSettingsSection
@@ -318,53 +299,40 @@ export default function SettingsPage() {
             type="embedding"
           />
 
-          <div style={{ padding: '1rem', background: '#e7f3ff', borderRadius: '6px', borderLeft: '4px solid #0070f3' }}>
-            <p style={{ color: '#333', fontSize: '0.9rem', margin: 0 }}>
-              <strong>Tip:</strong> For local Ollama, use <code>http://localhost:11434</code> as the URL.
-              Make sure the models are pulled (e.g., <code>ollama pull llama3.1:8b</code>).
-            </p>
+          <div className="alert alert--info">
+            <strong>Tip:</strong> For local Ollama, use <code>http://localhost:11434</code> as the URL.
+            Make sure the models are pulled (e.g., <code>ollama pull llama3.1:8b</code>).
           </div>
         </div>
 
         {/* Privacy Settings */}
         <div className="card">
           <h2>Privacy Settings</h2>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+          <div className="form-group">
+            <label className="checkbox">
               <input
                 type="checkbox"
                 checked={hardDelete}
                 onChange={(e) => setHardDelete(e.target.checked)}
-                style={{ marginRight: '0.5rem', width: '1.2rem', height: '1.2rem' }}
               />
               Enable Hard Delete
             </label>
-            <div style={{ marginTop: '0.75rem', padding: '1rem', background: '#f5f5f5', borderRadius: '6px' }}>
-              <p style={{ color: '#333', fontSize: '0.95rem', marginBottom: '0.5rem', fontWeight: '500' }}>
-                What does this do?
-              </p>
-              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                Controls what happens when you use the "Forget" feature on an entry.
-              </p>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                  <strong>When disabled (Soft Delete):</strong>
-                </p>
-                <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem' }}>
-                  <li>Entry is removed from search results</li>
-                  <li>Entry content is preserved in your journal</li>
-                  <li>Embedding vector is zeroed out</li>
-                </ul>
-              </div>
-              <div>
-                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                  <strong>When enabled (Hard Delete):</strong>
-                </p>
-                <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem' }}>
-                  <li>Entry is permanently deleted</li>
-                  <li>This action cannot be undone</li>
-                </ul>
-              </div>
+            <div className="alert alert--warning mt-4">
+              <p className="mb-2"><strong>What does this do?</strong></p>
+              <p className="mb-4">Controls what happens when you use the "Forget" feature on an entry.</p>
+
+              <p className="mb-2"><strong>When disabled (Soft Delete):</strong></p>
+              <ul style={{ marginLeft: 'var(--space-5)', marginBottom: 'var(--space-4)' }}>
+                <li>Entry is removed from search results</li>
+                <li>Content is preserved in your journal</li>
+                <li>Embedding vector is zeroed out</li>
+              </ul>
+
+              <p className="mb-2"><strong>When enabled (Hard Delete):</strong></p>
+              <ul style={{ marginLeft: 'var(--space-5)' }}>
+                <li>Entry is permanently deleted</li>
+                <li>This action cannot be undone</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -373,7 +341,6 @@ export default function SettingsPage() {
           onClick={handleSave}
           className="btn btn-primary"
           disabled={updateMutation.isPending}
-          style={{ marginTop: '1rem' }}
         >
           {updateMutation.isPending ? 'Saving...' : 'Save Settings'}
         </button>

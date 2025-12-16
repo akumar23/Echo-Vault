@@ -29,11 +29,11 @@ function TrendsChartContent() {
   const { data: entries, isLoading } = useEntries(0, 100)
 
   if (isLoading) {
-    return <div>Loading chart...</div>
+    return <div className="loading">Loading chart...</div>
   }
 
   if (!entries || entries.length === 0) {
-    return <p style={{ color: '#666' }}>No data available for trends</p>
+    return <p className="text-muted">No data available for trends</p>
   }
 
   // Group entries by date and calculate average mood
@@ -60,22 +60,61 @@ function TrendsChartContent() {
       {
         label: 'Average Mood',
         data: moodData,
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        tension: 0.1,
+        borderColor: '#00ff88',
+        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+        borderWidth: 2,
+        pointBackgroundColor: '#00ff88',
+        pointBorderColor: '#0a0a0a',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0, // Sharp lines for brutalist aesthetic
       },
     ],
   }
 
   const options = {
     responsive: true,
+    maintainAspectRatio: true,
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          color: '#f0f0f0',
+          font: {
+            family: "'JetBrains Mono', monospace",
+            size: 12,
+          },
+          boxWidth: 12,
+          boxHeight: 12,
+        },
       },
       title: {
         display: true,
-        text: 'Mood Trends (Last 30 Days)',
+        text: 'MOOD TRENDS (LAST 30 DAYS)',
+        color: '#f0f0f0',
+        font: {
+          family: "'JetBrains Mono', monospace",
+          size: 14,
+          weight: 'bold' as const,
+        },
+        padding: {
+          bottom: 20,
+        },
+      },
+      tooltip: {
+        backgroundColor: '#1a1a1a',
+        titleColor: '#f0f0f0',
+        bodyColor: '#888888',
+        borderColor: '#333333',
+        borderWidth: 2,
+        titleFont: {
+          family: "'JetBrains Mono', monospace",
+        },
+        bodyFont: {
+          family: "'JetBrains Mono', monospace",
+        },
+        cornerRadius: 0,
       },
     },
     scales: {
@@ -84,6 +123,37 @@ function TrendsChartContent() {
         max: 5,
         ticks: {
           stepSize: 1,
+          color: '#888888',
+          font: {
+            family: "'JetBrains Mono', monospace",
+            size: 11,
+          },
+        },
+        grid: {
+          color: '#333333',
+          lineWidth: 1,
+        },
+        border: {
+          color: '#333333',
+          width: 2,
+        },
+      },
+      x: {
+        ticks: {
+          color: '#888888',
+          font: {
+            family: "'JetBrains Mono', monospace",
+            size: 10,
+          },
+          maxRotation: 45,
+        },
+        grid: {
+          color: '#333333',
+          lineWidth: 1,
+        },
+        border: {
+          color: '#333333',
+          width: 2,
         },
       },
     },
@@ -96,10 +166,8 @@ export function TrendsChart() {
   return (
     <ErrorBoundary
       fallback={
-        <div style={{ padding: '1rem', background: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
-          <p style={{ color: '#856404' }}>
-            Failed to load trends chart. Please try refreshing the page.
-          </p>
+        <div className="alert alert--error">
+          Failed to load trends chart. Please try refreshing the page.
         </div>
       }
     >
@@ -107,4 +175,3 @@ export function TrendsChart() {
     </ErrorBoundary>
   )
 }
-

@@ -43,54 +43,62 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: '400px' }}>
-      <h1>Login</h1>
-      <form onSubmit={handleSubmit} style={{ marginTop: '2rem' }}>
-        {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
-        <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            className="input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? 'email-error' : undefined}
-            required
-          />
-          {errors.email && (
-            <p id="email-error" style={{ color: 'red', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              {errors.email}
-            </p>
+    <div className="container" style={{ maxWidth: '450px', marginTop: '10vh' }}>
+      <div className="card card--accent">
+        <h1 className="mb-6">Login</h1>
+
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <div className="alert alert--error mb-5">{error}</div>
           )}
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={!!errors.password}
-            aria-describedby={errors.password ? 'password-error' : undefined}
-            required
-          />
-          {errors.password && (
-            <p id="password-error" style={{ color: 'red', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              {errors.password}
-            </p>
-          )}
-        </div>
-        <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-          Login
-        </button>
-      </form>
-      <p style={{ marginTop: '1rem', textAlign: 'center' }}>
-        Don't have an account? <Link href="/register">Register</Link>
-      </p>
+
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              className="input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'email-error' : undefined}
+              required
+            />
+            {errors.email && (
+              <p id="email-error" className="form-error">
+                {errors.email}
+              </p>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              className="input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'password-error' : undefined}
+              required
+            />
+            {errors.password && (
+              <p id="password-error" className="form-error">
+                {errors.password}
+              </p>
+            )}
+          </div>
+
+          <button type="submit" className="btn btn-primary w-full">
+            Login
+          </button>
+        </form>
+
+        <p className="text-center mt-5 text-muted">
+          Don't have an account? <Link href="/register">Register</Link>
+        </p>
+      </div>
     </div>
   )
 }
-

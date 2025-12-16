@@ -50,7 +50,7 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="form-group">
         <label htmlFor="title">Title (optional)</label>
         <input
           id="title"
@@ -62,7 +62,7 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
         />
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="form-group">
         <label htmlFor="content">Content</label>
         <textarea
           id="content"
@@ -74,30 +74,20 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
         />
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="form-group">
         <label htmlFor="mood">Mood (1-5)</label>
 
-        <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={useLlmPrediction}
-              onChange={(e) => setUseLlmPrediction(e.target.checked)}
-              aria-label="Let AI predict mood automatically"
-            />
-            Let AI Predict Mood
-          </label>
-        </div>
+        <label className="checkbox mb-4">
+          <input
+            type="checkbox"
+            checked={useLlmPrediction}
+            onChange={(e) => setUseLlmPrediction(e.target.checked)}
+            aria-label="Let AI predict mood automatically"
+          />
+          Let AI Predict Mood
+        </label>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+        <div className="flex items-center gap-4">
           <input
             id="mood"
             type="range"
@@ -105,38 +95,28 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
             max="5"
             value={mood}
             onChange={(e) => setMood(parseInt(e.target.value))}
-            style={{
-              flex: 1,
-              opacity: useLlmPrediction ? 0.4 : 1,
-              cursor: useLlmPrediction ? 'not-allowed' : 'pointer'
-            }}
+            className="range-slider flex-1"
             disabled={useLlmPrediction}
             aria-describedby="mood-helper"
           />
-          <span style={{ opacity: useLlmPrediction ? 0.4 : 1 }}>{mood}</span>
+          <span className={useLlmPrediction ? 'text-muted' : 'text-accent'}>
+            {mood}
+          </span>
         </div>
-        <p
-          id="mood-helper"
-          style={{
-            fontSize: '0.85rem',
-            color: useLlmPrediction ? '#999' : '#666',
-            marginTop: '0.25rem',
-            marginLeft: '0.25rem'
-          }}
-        >
+        <p id="mood-helper" className="form-helper">
           {useLlmPrediction
             ? 'AI will automatically infer your mood from the entry content'
             : '1 = bad mood, 5 = good mood'}
         </p>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="form-group">
         <label htmlFor="tags">Tags</label>
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+        <div className="flex gap-2 mb-4">
           <input
             id="tags"
             type="text"
-            className="input"
+            className="input flex-1"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyPress={(e) => {
@@ -146,40 +126,23 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
               }
             }}
             placeholder="Add a tag..."
-            style={{ flex: 1 }}
           />
           <button type="button" onClick={handleAddTag} className="btn btn-secondary">
             Add
           </button>
         </div>
         {tags.length > 0 && (
-          <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div className="tags-container">
             {tags.map((tag, i) => (
-              <span
-                key={i}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  background: '#f0f0f0',
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '4px',
-                  fontSize: '0.9rem',
-                }}
-              >
+              <span key={i} className="tag">
                 {tag}
                 <button
                   type="button"
                   onClick={() => handleRemoveTag(tag)}
-                  style={{
-                    marginLeft: '0.5rem',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '1.2rem',
-                    lineHeight: 1,
-                  }}
+                  className="tag-remove"
+                  aria-label={`Remove tag ${tag}`}
                 >
-                  ×
+                  &times;
                 </button>
               </span>
             ))}
@@ -193,4 +156,3 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
     </form>
   )
 }
-

@@ -23,9 +23,10 @@ export default function NewEntryPage() {
     <ProtectedRoute>
       <div className="container">
         <Header title="New Entry" showNav={false} />
-        <Editor onSave={handleSave} saving={saving} />
+        <div className="card">
+          <Editor onSave={handleSave} saving={saving} />
+        </div>
       </div>
     </ProtectedRoute>
   )
 }
-

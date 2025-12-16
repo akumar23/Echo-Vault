@@ -40,17 +40,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }
 
       return (
-        <div className="container" style={{ textAlign: 'center', padding: '4rem 0' }}>
-          <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#d32f2f' }}>
-            Something went wrong
-          </h1>
-          <p style={{ color: '#666', marginBottom: '1rem' }}>
+        <div className="container text-center" style={{ paddingTop: 'var(--space-8)' }}>
+          <h1 className="text-error mb-4">Something went wrong</h1>
+          <p className="text-muted mb-5">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
           <button
             className="btn btn-primary"
             onClick={() => this.setState({ hasError: false, error: null })}
-            style={{ marginTop: '1rem' }}
           >
             Try again
           </button>

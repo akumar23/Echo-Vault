@@ -21,8 +21,8 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
 
   if (loading) {
     return (
-      <div className="container" style={{ textAlign: 'center', padding: '4rem 0' }}>
-        <p>Loading...</p>
+      <div className="container text-center" style={{ paddingTop: 'var(--space-8)' }}>
+        <p className="loading">Loading...</p>
       </div>
     )
   }

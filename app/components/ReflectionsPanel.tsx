@@ -60,57 +60,36 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
 
   if (loading) {
     return (
-      <div className="scrollable-content" style={{
-        overflowY: 'auto',
-        flex: 1,
-        scrollBehavior: 'smooth',
-        paddingRight: '0.5rem'
-      }}>
-        Loading reflection...
+      <div className="scrollable-content flex-1">
+        <span className="loading">Loading reflection...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="scrollable-content" style={{
-        overflowY: 'auto',
-        flex: 1,
-        scrollBehavior: 'smooth',
-        paddingRight: '0.5rem',
-        color: 'red'
-      }}>
-        {error}
+      <div className="scrollable-content flex-1">
+        <div className="reflection reflection--error">{error}</div>
       </div>
     )
   }
 
   if (!reflection) {
     return (
-      <div className="scrollable-content" style={{
-        overflowY: 'auto',
-        flex: 1,
-        scrollBehavior: 'smooth',
-        paddingRight: '0.5rem'
-      }}>
-        <p style={{ color: '#666' }}>No reflection available.</p>
+      <div className="scrollable-content flex-1">
+        <p className="text-muted">No reflection available.</p>
       </div>
     )
   }
 
   if (reflection.status === 'generating') {
     return (
-      <div className="scrollable-content" style={{
-        overflowY: 'auto',
-        flex: 1,
-        scrollBehavior: 'smooth',
-        paddingRight: '0.5rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span>Generating reflection...</span>
+      <div className="scrollable-content flex-1">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="loading">Generating reflection...</span>
         </div>
         {reflection.reflection && (
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', marginTop: '0.5rem', opacity: 0.7 }}>
+          <div className="reflection reflection--loading">
             {reflection.reflection}
           </div>
         )}
@@ -120,29 +99,20 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
 
   if (reflection.status === 'error') {
     return (
-      <div className="scrollable-content" style={{
-        overflowY: 'auto',
-        flex: 1,
-        scrollBehavior: 'smooth',
-        paddingRight: '0.5rem',
-        color: 'red'
-      }}>
-        {reflection.reflection}
+      <div className="scrollable-content flex-1">
+        <div className="reflection reflection--error">
+          {reflection.reflection}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="scrollable-content" style={{
-      overflowY: 'auto',
-      flex: 1,
-      scrollBehavior: 'smooth',
-      paddingRight: '0.5rem'
-    }}>
+    <div className="scrollable-content flex-1">
       {reflection.reflection ? (
-        <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{reflection.reflection}</div>
+        <div className="reflection">{reflection.reflection}</div>
       ) : (
-        <p style={{ color: '#666' }}>No reflection available. Create an entry to generate a reflection.</p>
+        <p className="text-muted">No reflection available. Create an entry to generate a reflection.</p>
       )}
     </div>
   )
@@ -152,10 +122,8 @@ export function ReflectionsPanel({}: ReflectionsPanelProps) {
   return (
     <ErrorBoundary
       fallback={
-        <div style={{ padding: '1rem', background: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
-          <p style={{ color: '#856404' }}>
-            Failed to load reflection. Please try refreshing the page.
-          </p>
+        <div className="alert alert--error">
+          Failed to load reflection. Please try refreshing the page.
         </div>
       }
     >

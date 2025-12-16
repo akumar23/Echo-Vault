@@ -22,7 +22,9 @@ export default function EntryDetailPage() {
   if (isLoading) {
     return (
       <ProtectedRoute>
-        <div className="container">Loading...</div>
+        <div className="container">
+          <p className="loading">Loading...</p>
+        </div>
       </ProtectedRoute>
     )
   }
@@ -30,7 +32,12 @@ export default function EntryDetailPage() {
   if (!entry) {
     return (
       <ProtectedRoute>
-        <div className="container">Entry not found</div>
+        <div className="container">
+          <div className="alert alert--error">Entry not found</div>
+          <Link href="/entries" className="btn btn-secondary">
+            Back to Entries
+          </Link>
+        </div>
       </ProtectedRoute>
     )
   }
@@ -39,13 +46,16 @@ export default function EntryDetailPage() {
     <ProtectedRoute>
       <div className="container">
         <Header title={entry.title || 'Untitled'} showNav={false} />
-        <div style={{ marginBottom: '1rem' }}>
-          <Link href="/entries">← Back to Entries</Link>
+
+        <div className="mb-5">
+          <Link href="/entries" className="nav-link">
+            &larr; Back to Entries
+          </Link>
         </div>
 
-        <div className="card">
-          <h1>{entry.title || 'Untitled'}</h1>
-          <p style={{ color: '#666', marginTop: '0.5rem' }}>
+        <div className="card mb-5">
+          <h1 className="mb-2">{entry.title || 'Untitled'}</h1>
+          <p className="text-muted mb-5">
             {format(new Date(entry.created_at), 'MMMM d, yyyy')}
           </p>
 
@@ -55,20 +65,20 @@ export default function EntryDetailPage() {
             saving={updateMutation.isPending}
           />
 
-          <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
+          <div className="flex gap-4 mt-6">
             <button
               onClick={() => deleteMutation.mutate(entryId)}
-              className="btn btn-secondary"
+              className="btn btn-danger"
               disabled={deleteMutation.isPending}
             >
-              Delete
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </button>
             <button
               onClick={() => forgetMutation.mutate(entryId)}
               className="btn btn-secondary"
               disabled={forgetMutation.isPending}
             >
-              Forget (Remove from Search)
+              {forgetMutation.isPending ? 'Forgetting...' : 'Forget (Remove from Search)'}
             </button>
           </div>
         </div>
@@ -81,4 +91,3 @@ export default function EntryDetailPage() {
     </ProtectedRoute>
   )
 }
-
