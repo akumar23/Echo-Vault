@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.entry import Entry
-from app.services.ollama_service import ollama_service
+from app.services.llm_service import get_generation_service_for_user
 from app.celery_app import celery_app
 import asyncio
 import logging
@@ -14,7 +14,7 @@ def infer_mood_task(entry_id: int):
     """
     Background task to infer mood for an entry.
 
-    Note: Uses asyncio.run() to call async OllamaService methods. This pattern
+    Note: Uses asyncio.run() to call async LLMService methods. This pattern
     is intentional - the event loop creation overhead (~50-200μs) is negligible
     compared to LLM inference time (~1-5s). Alternative approaches would add
     complexity without meaningful performance benefit.
@@ -26,8 +26,11 @@ def infer_mood_task(entry_id: int):
             logger.warning(f"Entry {entry_id} not found for mood inference")
             return
 
-        # Infer mood from Ollama
-        mood = asyncio.run(ollama_service.infer_mood(entry.content))
+        # Get user-specific generation service
+        generation_service = get_generation_service_for_user(db, entry.user_id)
+
+        # Infer mood using OpenAI-compatible API
+        mood = asyncio.run(generation_service.infer_mood(entry.content))
 
         # Update entry
         entry.mood_inferred = mood

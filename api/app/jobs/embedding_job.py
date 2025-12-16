@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.entry import Entry
 from app.models.embedding import EntryEmbedding
-from app.services.ollama_service import ollama_service
+from app.services.llm_service import get_embedding_service_for_user
 from app.celery_app import celery_app
 import asyncio
 
@@ -12,7 +12,7 @@ def create_embedding_task(entry_id: int):
     """
     Background task to create embedding for an entry.
 
-    Note: Uses asyncio.run() to call async OllamaService methods. This pattern
+    Note: Uses asyncio.run() to call async LLMService methods. This pattern
     is intentional - the event loop creation overhead (~50-200μs) is negligible
     compared to LLM inference time (~500ms-2s). Alternative approaches would add
     complexity without meaningful performance benefit.
@@ -23,9 +23,12 @@ def create_embedding_task(entry_id: int):
         if not entry:
             return
 
-        # Get embedding from Ollama
+        # Get user-specific embedding service
+        embedding_service = get_embedding_service_for_user(db, entry.user_id)
+
+        # Get embedding using OpenAI-compatible API
         text_to_embed = f"{entry.title or ''} {entry.content}"
-        embedding_vector = asyncio.run(ollama_service.get_embedding(text_to_embed))
+        embedding_vector = asyncio.run(embedding_service.get_embedding(text_to_embed))
         
         # Delete old embeddings for this entry
         db.query(EntryEmbedding).filter(EntryEmbedding.entry_id == entry_id).delete()

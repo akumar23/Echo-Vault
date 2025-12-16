@@ -108,7 +108,31 @@ export interface Settings {
   user_id: number
   search_half_life_days: number
   privacy_hard_delete: boolean
-  ollama_url: string | null
+
+  // Generation LLM settings
+  generation_url: string | null
+  generation_api_token_set: boolean
+  generation_model: string | null
+
+  // Embedding LLM settings
+  embedding_url: string | null
+  embedding_api_token_set: boolean
+  embedding_model: string | null
+}
+
+export interface SettingsUpdate {
+  search_half_life_days?: number
+  privacy_hard_delete?: boolean
+
+  // Generation LLM settings (token is write-only)
+  generation_url?: string | null
+  generation_api_token?: string | null
+  generation_model?: string | null
+
+  // Embedding LLM settings (token is write-only)
+  embedding_url?: string | null
+  embedding_api_token?: string | null
+  embedding_model?: string | null
 }
 
 export interface Reflection {
@@ -186,11 +210,11 @@ export const insightsApi = {
 
 // Settings
 export const settingsApi = {
-  get: async () => {
+  get: async (): Promise<Settings> => {
     const response = await api.get('/settings')
     return response.data
   },
-  update: async (settings: Partial<Settings>) => {
+  update: async (settings: SettingsUpdate): Promise<Settings> => {
     const response = await api.put('/settings', settings)
     return response.data
   },

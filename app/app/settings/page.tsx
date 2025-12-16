@@ -5,37 +5,55 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Header } from '@/components/Header'
+import { SettingsUpdate } from '@/lib/api'
 
 export default function SettingsPage() {
   const { data: settings, isLoading } = useSettings()
   const updateMutation = useUpdateSettings()
 
+  // Search settings
   const [halfLife, setHalfLife] = useState(30)
   const [hardDelete, setHardDelete] = useState(false)
-  const [ollamaUrl, setOllamaUrl] = useState('')
-  const [ollamaUrlError, setOllamaUrlError] = useState('')
+
+  // Generation LLM settings
+  const [generationUrl, setGenerationUrl] = useState('')
+  const [generationToken, setGenerationToken] = useState('')
+  const [generationModel, setGenerationModel] = useState('')
+  const [generationUrlError, setGenerationUrlError] = useState('')
+  const [showGenerationToken, setShowGenerationToken] = useState(false)
+
+  // Embedding LLM settings
+  const [embeddingUrl, setEmbeddingUrl] = useState('')
+  const [embeddingToken, setEmbeddingToken] = useState('')
+  const [embeddingModel, setEmbeddingModel] = useState('')
+  const [embeddingUrlError, setEmbeddingUrlError] = useState('')
+  const [showEmbeddingToken, setShowEmbeddingToken] = useState(false)
 
   // Sync state when settings load
   useEffect(() => {
     if (settings) {
-      setHalfLife(settings?.search_half_life_days ?? 30)
-      setHardDelete(settings?.privacy_hard_delete ?? false)
-      setOllamaUrl(settings?.ollama_url ?? '')
+      setHalfLife(settings.search_half_life_days ?? 30)
+      setHardDelete(settings.privacy_hard_delete ?? false)
+      setGenerationUrl(settings.generation_url ?? '')
+      setGenerationModel(settings.generation_model ?? '')
+      setEmbeddingUrl(settings.embedding_url ?? '')
+      setEmbeddingModel(settings.embedding_model ?? '')
+      // Don't set tokens - they are write-only
     }
   }, [settings])
 
-  const validateOllamaUrl = (url: string): boolean => {
+  const validateUrl = (url: string, setError: (e: string) => void): boolean => {
     if (!url) return true // Empty is valid (uses default)
     try {
       const parsed = new URL(url)
       if (!['http:', 'https:'].includes(parsed.protocol)) {
-        setOllamaUrlError('URL must use http:// or https://')
+        setError('URL must use http:// or https://')
         return false
       }
-      setOllamaUrlError('')
+      setError('')
       return true
     } catch {
-      setOllamaUrlError('Please enter a valid URL (e.g., http://localhost:11434)')
+      setError('Please enter a valid URL (e.g., http://localhost:11434)')
       return false
     }
   }
@@ -49,21 +67,172 @@ export default function SettingsPage() {
   }
 
   const handleSave = () => {
-    if (!validateOllamaUrl(ollamaUrl)) {
-      return
+    if (!validateUrl(generationUrl, setGenerationUrlError)) return
+    if (!validateUrl(embeddingUrl, setEmbeddingUrlError)) return
+
+    const update: SettingsUpdate = {
+      search_half_life_days: halfLife,
+      privacy_hard_delete: hardDelete,
+      generation_url: generationUrl || null,
+      generation_model: generationModel || null,
+      embedding_url: embeddingUrl || null,
+      embedding_model: embeddingModel || null,
     }
 
-    updateMutation.mutate(
-      {
-        search_half_life_days: halfLife,
-        privacy_hard_delete: hardDelete,
-        ollama_url: ollamaUrl || null,
-      },
-      {
-        onSuccess: () => alert('Settings updated!')
+    // Only send token if user entered a new one
+    if (generationToken) {
+      update.generation_api_token = generationToken
+    }
+    if (embeddingToken) {
+      update.embedding_api_token = embeddingToken
+    }
+
+    updateMutation.mutate(update, {
+      onSuccess: () => {
+        alert('Settings updated!')
+        // Clear token fields after save
+        setGenerationToken('')
+        setEmbeddingToken('')
       }
-    )
+    })
   }
+
+  const clearToken = (type: 'generation' | 'embedding') => {
+    const update: SettingsUpdate = type === 'generation'
+      ? { generation_api_token: '' }
+      : { embedding_api_token: '' }
+
+    updateMutation.mutate(update, {
+      onSuccess: () => {
+        alert(`${type === 'generation' ? 'Generation' : 'Embedding'} API token cleared!`)
+      }
+    })
+  }
+
+  const inputStyle = (hasError: boolean) => ({
+    width: '100%',
+    padding: '0.75rem',
+    fontSize: '1rem',
+    border: hasError ? '2px solid #dc3545' : '1px solid #ccc',
+    borderRadius: '6px',
+    marginTop: '0.5rem',
+  })
+
+  const LLMSettingsSection = ({
+    title,
+    description,
+    url,
+    setUrl,
+    urlError,
+    setUrlError,
+    token,
+    setToken,
+    showToken,
+    setShowToken,
+    model,
+    setModel,
+    tokenSet,
+    type,
+  }: {
+    title: string
+    description: string
+    url: string
+    setUrl: (v: string) => void
+    urlError: string
+    setUrlError: (v: string) => void
+    token: string
+    setToken: (v: string) => void
+    showToken: boolean
+    setShowToken: (v: boolean) => void
+    model: string
+    setModel: (v: string) => void
+    tokenSet: boolean
+    type: 'generation' | 'embedding'
+  }) => (
+    <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#fafafa', borderRadius: '8px', border: '1px solid #eee' }}>
+      <h3 style={{ marginBottom: '0.5rem', color: '#333' }}>{title}</h3>
+      <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{description}</p>
+
+      {/* URL */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <label htmlFor={`${type}-url`} style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>
+          API URL
+        </label>
+        <input
+          id={`${type}-url`}
+          type="url"
+          value={url}
+          onChange={(e) => {
+            setUrl(e.target.value)
+            if (urlError) validateUrl(e.target.value, setUrlError)
+          }}
+          onBlur={(e) => validateUrl(e.target.value, setUrlError)}
+          placeholder="http://localhost:11434"
+          style={inputStyle(!!urlError)}
+        />
+        {urlError && (
+          <p style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.5rem' }}>{urlError}</p>
+        )}
+        <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+          Leave empty to use the default server
+        </p>
+      </div>
+
+      {/* API Token */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <label htmlFor={`${type}-token`} style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>
+          API Token {tokenSet && <span style={{ color: '#28a745', fontSize: '0.8rem' }}>(configured)</span>}
+        </label>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <input
+            id={`${type}-token`}
+            type={showToken ? 'text' : 'password'}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder={tokenSet ? '********' : 'Optional - for cloud providers'}
+            style={{ ...inputStyle(false), flex: 1 }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowToken(!showToken)}
+            style={{ padding: '0.75rem', border: '1px solid #ccc', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+          >
+            {showToken ? 'Hide' : 'Show'}
+          </button>
+          {tokenSet && (
+            <button
+              type="button"
+              onClick={() => clearToken(type)}
+              style={{ padding: '0.75rem', border: '1px solid #dc3545', borderRadius: '6px', background: '#fff', color: '#dc3545', cursor: 'pointer' }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+          Required for OpenAI, Anthropic, etc. Optional for local Ollama.
+        </p>
+      </div>
+
+      {/* Model Name */}
+      <div>
+        <label htmlFor={`${type}-model`} style={{ display: 'block', marginBottom: '0.25rem', fontWeight: '500' }}>
+          Model Name
+        </label>
+        <input
+          id={`${type}-model`}
+          type="text"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder={type === 'generation' ? 'llama3.1:8b, gpt-4, claude-3-haiku, etc.' : 'mxbai-embed-large, text-embedding-3-small, etc.'}
+          style={inputStyle(false)}
+        />
+        <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+          Leave empty to use the default model
+        </p>
+      </div>
+    </div>
+  )
 
   return (
     <ProtectedRoute>
@@ -71,10 +240,11 @@ export default function SettingsPage() {
         <Header title="Settings" showNav={false} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
           <Link href="/help" style={{ color: '#0070f3', textDecoration: 'underline' }}>
-            Need help? View Help Page →
+            Need help? View Help Page
           </Link>
         </div>
 
+        {/* Search Settings */}
         <div className="card">
           <h2>Search Settings</h2>
           <div style={{ marginBottom: '1.5rem' }}>
@@ -102,62 +272,61 @@ export default function SettingsPage() {
                 <li><strong>Medium values (15-60 days):</strong> Balanced approach - both relevance and recency matter</li>
                 <li><strong>Higher values (60-365 days):</strong> All entries treated equally by age - only relevance matters</li>
               </ul>
-              <p style={{ color: '#666', fontSize: '0.9rem', fontStyle: 'italic' }}>
-                <strong>Example:</strong> With 7 days, a recent entry about "work stress" will rank above an older, more detailed entry about the same topic. With 90 days, the more detailed entry would rank higher.
-              </p>
             </div>
           </div>
         </div>
 
+        {/* LLM Settings */}
         <div className="card">
           <h2>LLM Settings</h2>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label htmlFor="ollama-url" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Custom Ollama/LLM URL
-            </label>
-            <input
-              id="ollama-url"
-              type="url"
-              value={ollamaUrl}
-              onChange={(e) => {
-                setOllamaUrl(e.target.value)
-                if (ollamaUrlError) validateOllamaUrl(e.target.value)
-              }}
-              onBlur={(e) => validateOllamaUrl(e.target.value)}
-              placeholder="http://localhost:11434"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                fontSize: '1rem',
-                border: ollamaUrlError ? '2px solid #dc3545' : '1px solid #ccc',
-                borderRadius: '6px',
-                marginTop: '0.5rem',
-              }}
-            />
-            {ollamaUrlError && (
-              <p style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.5rem' }}>
-                {ollamaUrlError}
-              </p>
-            )}
-            <div style={{ marginTop: '0.75rem', padding: '1rem', background: '#f5f5f5', borderRadius: '6px' }}>
-              <p style={{ color: '#333', fontSize: '0.95rem', marginBottom: '0.5rem', fontWeight: '500' }}>
-                What does this do?
-              </p>
-              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-                By default, EchoVault uses the Ollama server configured by the system administrator. You can override this to use your own Ollama instance or any compatible LLM API.
-              </p>
-              <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem', marginBottom: '0.75rem' }}>
-                <li><strong>Leave empty:</strong> Use the default system Ollama server</li>
-                <li><strong>Local Ollama:</strong> Use <code>http://localhost:11434</code></li>
-                <li><strong>Remote server:</strong> Use your own server URL (e.g., <code>http://192.168.1.100:11434</code>)</li>
-              </ul>
-              <p style={{ color: '#666', fontSize: '0.9rem', fontStyle: 'italic' }}>
-                <strong>Note:</strong> The server must be running Ollama and have the required models installed (embedding and reflection models).
-              </p>
-            </div>
+          <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+            Configure the AI models used for reflections, insights, mood analysis, and semantic search.
+            Uses OpenAI-compatible API format, which works with Ollama, OpenAI, LM Studio, vLLM, and more.
+          </p>
+
+          <LLMSettingsSection
+            title="Text Generation"
+            description="Used for reflections, insights, and mood analysis"
+            url={generationUrl}
+            setUrl={setGenerationUrl}
+            urlError={generationUrlError}
+            setUrlError={setGenerationUrlError}
+            token={generationToken}
+            setToken={setGenerationToken}
+            showToken={showGenerationToken}
+            setShowToken={setShowGenerationToken}
+            model={generationModel}
+            setModel={setGenerationModel}
+            tokenSet={settings?.generation_api_token_set ?? false}
+            type="generation"
+          />
+
+          <LLMSettingsSection
+            title="Embeddings"
+            description="Used for semantic search to find related entries"
+            url={embeddingUrl}
+            setUrl={setEmbeddingUrl}
+            urlError={embeddingUrlError}
+            setUrlError={setEmbeddingUrlError}
+            token={embeddingToken}
+            setToken={setEmbeddingToken}
+            showToken={showEmbeddingToken}
+            setShowToken={setShowEmbeddingToken}
+            model={embeddingModel}
+            setModel={setEmbeddingModel}
+            tokenSet={settings?.embedding_api_token_set ?? false}
+            type="embedding"
+          />
+
+          <div style={{ padding: '1rem', background: '#e7f3ff', borderRadius: '6px', borderLeft: '4px solid #0070f3' }}>
+            <p style={{ color: '#333', fontSize: '0.9rem', margin: 0 }}>
+              <strong>Tip:</strong> For local Ollama, use <code>http://localhost:11434</code> as the URL.
+              Make sure the models are pulled (e.g., <code>ollama pull llama3.1:8b</code>).
+            </p>
           </div>
         </div>
 
+        {/* Privacy Settings */}
         <div className="card">
           <h2>Privacy Settings</h2>
           <div style={{ marginBottom: '1.5rem' }}>
@@ -184,8 +353,7 @@ export default function SettingsPage() {
                 <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem' }}>
                   <li>Entry is removed from search results</li>
                   <li>Entry content is preserved in your journal</li>
-                  <li>You can still access it directly if you know the entry ID</li>
-                  <li>Embedding vector is zeroed out (can't be found by search)</li>
+                  <li>Embedding vector is zeroed out</li>
                 </ul>
               </div>
               <div>
@@ -193,10 +361,8 @@ export default function SettingsPage() {
                   <strong>When enabled (Hard Delete):</strong>
                 </p>
                 <ul style={{ color: '#666', fontSize: '0.9rem', marginLeft: '1.5rem' }}>
-                  <li>Entry is permanently deleted from the database</li>
-                  <li>All associated data is removed (embeddings, attachments)</li>
+                  <li>Entry is permanently deleted</li>
                   <li>This action cannot be undone</li>
-                  <li>Use this if you want complete removal for privacy</li>
                 </ul>
               </div>
             </div>
@@ -215,4 +381,3 @@ export default function SettingsPage() {
     </ProtectedRoute>
   )
 }
-

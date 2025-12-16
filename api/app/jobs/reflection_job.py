@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.entry import Entry
-from app.services.ollama_service import ollama_service
+from app.services.llm_service import get_generation_service_for_user
 from app.services.reflection_cache import reflection_cache
 from app.celery_app import celery_app
 import asyncio
@@ -16,7 +16,7 @@ def generate_reflection_task(user_id: int):
     """
     Background task to generate and cache reflection for a user.
 
-    Note: Uses asyncio.run() to call async OllamaService methods. This pattern
+    Note: Uses asyncio.run() to call async LLMService methods. This pattern
     is intentional - the event loop creation overhead (~50-200μs) is negligible
     compared to LLM inference time (~5-30s). Alternative approaches would add
     complexity without meaningful performance benefit.
@@ -25,6 +25,9 @@ def generate_reflection_task(user_id: int):
     try:
         # Mark as generating
         reflection_cache.set_status(user_id, "generating")
+
+        # Get user-specific generation service
+        generation_service = get_generation_service_for_user(db, user_id)
 
         # Get recent entries (last 7 days, max 10 entries)
         start_date = datetime.now() - timedelta(days=7)
@@ -49,8 +52,8 @@ def generate_reflection_task(user_id: int):
             for e in recent_entries
         ])
 
-        # Generate reflection from Ollama
-        reflection = asyncio.run(ollama_service.generate_reflection(entries_text))
+        # Generate reflection using OpenAI-compatible API
+        reflection = asyncio.run(generation_service.generate_reflection(entries_text))
 
         # Cache the result
         reflection_cache.set_reflection(user_id, reflection, status="complete")

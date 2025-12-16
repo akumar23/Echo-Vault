@@ -34,14 +34,28 @@ async def update_settings(
     if not settings:
         settings = Settings(user_id=current_user.id)
         db.add(settings)
-    
+
+    # Update basic settings
     if settings_data.search_half_life_days is not None:
         settings.search_half_life_days = settings_data.search_half_life_days
     if settings_data.privacy_hard_delete is not None:
         settings.privacy_hard_delete = settings_data.privacy_hard_delete
-    # Handle ollama_url - empty string clears the setting
-    if settings_data.ollama_url is not None:
-        settings.ollama_url = settings_data.ollama_url if settings_data.ollama_url else None
+
+    # Update generation LLM settings (empty string clears the setting)
+    if settings_data.generation_url is not None:
+        settings.generation_url = settings_data.generation_url or None
+    if settings_data.generation_api_token is not None:
+        settings.generation_api_token = settings_data.generation_api_token or None
+    if settings_data.generation_model is not None:
+        settings.generation_model = settings_data.generation_model or None
+
+    # Update embedding LLM settings (empty string clears the setting)
+    if settings_data.embedding_url is not None:
+        settings.embedding_url = settings_data.embedding_url or None
+    if settings_data.embedding_api_token is not None:
+        settings.embedding_api_token = settings_data.embedding_api_token or None
+    if settings_data.embedding_model is not None:
+        settings.embedding_model = settings_data.embedding_model or None
 
     db.commit()
     db.refresh(settings)

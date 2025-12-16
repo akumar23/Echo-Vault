@@ -3,7 +3,7 @@ from app.database import SessionLocal
 from app.models.user import User
 from app.models.entry import Entry
 from app.models.insight import Insight
-from app.services.ollama_service import ollama_service
+from app.services.llm_service import get_generation_service_for_user
 from app.celery_app import celery_app
 from datetime import datetime, timedelta
 import asyncio
@@ -14,7 +14,7 @@ def generate_insights_task(user_id: int, days: int = 7):
     """
     Background task to generate insights for a user.
 
-    Note: Uses asyncio.run() to call async OllamaService methods. This pattern
+    Note: Uses asyncio.run() to call async LLMService methods. This pattern
     is intentional - the event loop creation overhead (~50-200μs) is negligible
     compared to LLM inference time (~5-30s). Alternative approaches would add
     complexity without meaningful performance benefit.
@@ -24,6 +24,9 @@ def generate_insights_task(user_id: int, days: int = 7):
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             return
+
+        # Get user-specific generation service
+        generation_service = get_generation_service_for_user(db, user_id)
 
         # Get entries from last N days
         start_date = datetime.now() - timedelta(days=days)
@@ -42,8 +45,8 @@ def generate_insights_task(user_id: int, days: int = 7):
             for e in entries
         ])
 
-        # Generate insights from Ollama
-        insights_data = asyncio.run(ollama_service.generate_insights(entries_text))
+        # Generate insights using OpenAI-compatible API
+        insights_data = asyncio.run(generation_service.generate_insights(entries_text))
         
         # Create insight record
         insight = Insight(

@@ -1,13 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { settingsApi, Settings } from '@/lib/api'
+import { settingsApi, Settings, SettingsUpdate } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 
 /**
  * Hook to fetch user settings
  */
 export function useSettings() {
+  const { user, loading } = useAuth()
+
   return useQuery<Settings>({
     queryKey: ['settings'],
     queryFn: () => settingsApi.get(),
+    enabled: !loading && !!user,
   })
 }
 
@@ -18,7 +22,7 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (settings: Partial<Settings>) => settingsApi.update(settings),
+    mutationFn: (settings: SettingsUpdate) => settingsApi.update(settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
