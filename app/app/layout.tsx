@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
-import { JetBrains_Mono } from 'next/font/google'
+import { IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
+import { ThemeProvider } from '@/contexts/ThemeContext'
 
-const jetbrainsMono = JetBrains_Mono({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  variable: '--font-mono',
+  weight: ['400', '500', '600'],
+  variable: '--font-sans',
 })
 
 export const metadata: Metadata = {
@@ -20,9 +21,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={jetbrainsMono.className}>
-        <Providers>{children}</Providers>
+    <html lang="en" suppressHydrationWarning>
+      <body className={ibmPlexSans.className}>
+        <ThemeProvider>
+          <Providers>{children}</Providers>
+        </ThemeProvider>
       </body>
     </html>
   )
