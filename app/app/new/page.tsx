@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useCreateEntry } from '@/hooks/useEntryMutations'
-import { Editor } from '@/components/Editor'
+import { WritingEditor } from '@/components/WritingEditor'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { Header } from '@/components/Header'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { ArrowLeft } from 'lucide-react'
 
 export default function NewEntryPage() {
   const [saving, setSaving] = useState(false)
@@ -21,11 +23,17 @@ export default function NewEntryPage() {
 
   return (
     <ProtectedRoute>
-      <div className="container">
-        <Header title="New Entry" showNav={false} />
-        <div className="card">
-          <Editor onSave={handleSave} saving={saving} />
-        </div>
+      <div className="writing-page">
+        {/* Minimal navigation bar */}
+        <nav className="writing-page__nav">
+          <Link href="/" className="writing-page__back">
+            <ArrowLeft size={20} />
+            <span>Back</span>
+          </Link>
+          <ThemeToggle />
+        </nav>
+
+        <WritingEditor onSave={handleSave} saving={saving} />
       </div>
     </ProtectedRoute>
   )

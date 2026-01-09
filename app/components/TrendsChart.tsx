@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useEntries } from '@/hooks/useEntries'
 import { Line } from 'react-chartjs-2'
 import {
@@ -11,6 +12,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  TooltipItem,
 } from 'chart.js'
 import { format, subDays } from 'date-fns'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -25,96 +27,163 @@ ChartJS.register(
   Legend
 )
 
-function TrendsChartContent() {
-  const { data: entries, isLoading } = useEntries(0, 100)
+// Mood scale with emoji indicators
+const MOOD_SCALE = [
+  { value: 1, emoji: '😔', label: 'Rough' },
+  { value: 2, emoji: '😕', label: 'Low' },
+  { value: 3, emoji: '😐', label: 'Okay' },
+  { value: 4, emoji: '🙂', label: 'Good' },
+  { value: 5, emoji: '😊', label: 'Great' },
+]
+
+interface EntryMetadata {
+  titles: string[]
+  count: number
+  avgMood: number
+}
+
+interface TrendsChartContentProps {
+  days: 7 | 30 | 90
+}
+
+function TrendsChartContent({ days }: TrendsChartContentProps) {
+  const { data: entries, isLoading } = useEntries(0, 200)
 
   if (isLoading) {
     return <div className="loading">Loading chart...</div>
   }
 
-  if (!entries || entries.length === 0) {
-    return <p className="text-muted">No data available for trends</p>
-  }
+  // Process chart data with metadata for tooltips
+  const { chartData, entryMetadata, dateRange } = useMemo(() => {
+    if (!entries || entries.length === 0) {
+      return { chartData: null, entryMetadata: [], dateRange: [] }
+    }
 
-  // Group entries by date and calculate average mood
-  const last30Days = Array.from({ length: 30 }, (_, i) => subDays(new Date(), 29 - i))
-  const moodData = last30Days.map(date => {
-    const dateStr = format(date, 'yyyy-MM-dd')
-    const dayEntries = entries.filter((entry) => {
-      const entryDate = format(new Date(entry.created_at), 'yyyy-MM-dd')
-      return entryDate === dateStr
+    const dateRange = Array.from({ length: days }, (_, i) => subDays(new Date(), days - 1 - i))
+    const metadata: (EntryMetadata | null)[] = []
+
+    const moodData = dateRange.map(date => {
+      const dateStr = format(date, 'yyyy-MM-dd')
+      const dayEntries = entries.filter((entry) => {
+        const entryDate = format(new Date(entry.created_at), 'yyyy-MM-dd')
+        return entryDate === dateStr
+      })
+
+      if (dayEntries.length === 0) {
+        metadata.push(null)
+        return null
+      }
+
+      const moods = dayEntries
+        .map((e) => e.mood_user || e.mood_inferred)
+        .filter((m): m is number => m !== null && m !== undefined)
+
+      const avgMood = moods.length > 0
+        ? moods.reduce((a, b) => a + b, 0) / moods.length
+        : null
+
+      // Store metadata for tooltips
+      metadata.push({
+        titles: dayEntries.map(e => e.title || 'Untitled').slice(0, 3),
+        count: dayEntries.length,
+        avgMood: avgMood || 0
+      })
+
+      return avgMood
     })
 
-    if (dayEntries.length === 0) return null
+    // Determine tick spacing based on date range
+    const tickInterval = days <= 7 ? 1 : days <= 30 ? 5 : 10
 
-    const moods = dayEntries
-      .map((e) => e.mood_user || e.mood_inferred)
-      .filter((m) => m !== null && m !== undefined)
+    const data = {
+      labels: dateRange.map((date, i) => {
+        // Show fewer labels for cleaner display
+        if (days > 7 && i % tickInterval !== 0 && i !== dateRange.length - 1) {
+          return ''
+        }
+        return format(date, days <= 7 ? 'EEE' : 'MMM d')
+      }),
+      datasets: [
+        {
+          label: 'Mood',
+          data: moodData,
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0, 255, 136, 0.1)',
+          borderWidth: 2,
+          pointBackgroundColor: moodData.map(m => m !== null ? '#00ff88' : 'transparent'),
+          pointBorderColor: moodData.map(m => m !== null ? '#0a0a0a' : 'transparent'),
+          pointBorderWidth: 2,
+          pointRadius: moodData.map(m => m !== null ? 5 : 0),
+          pointHoverRadius: 8,
+          tension: 0,
+          spanGaps: true,
+        },
+      ],
+    }
 
-    return moods.length > 0 ? moods.reduce((a: number, b: number) => a + b, 0) / moods.length : null
-  })
+    return { chartData: data, entryMetadata: metadata, dateRange }
+  }, [entries, days])
 
-  const chartData = {
-    labels: last30Days.map(date => format(date, 'MMM d')),
-    datasets: [
-      {
-        label: 'Average Mood',
-        data: moodData,
-        borderColor: '#00ff88',
-        backgroundColor: 'rgba(0, 255, 136, 0.1)',
-        borderWidth: 2,
-        pointBackgroundColor: '#00ff88',
-        pointBorderColor: '#0a0a0a',
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        tension: 0, // Sharp lines for brutalist aesthetic
-      },
-    ],
+  if (!entries || entries.length === 0 || !chartData) {
+    return <p className="text-muted">No data available for trends</p>
   }
 
   const options = {
     responsive: true,
     maintainAspectRatio: true,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
-        position: 'top' as const,
-        labels: {
-          color: '#f0f0f0',
-          font: {
-            family: "'JetBrains Mono', monospace",
-            size: 12,
-          },
-          boxWidth: 12,
-          boxHeight: 12,
-        },
+        display: false, // Hide default legend, we'll use custom scale
       },
       title: {
-        display: true,
-        text: 'MOOD TRENDS (LAST 30 DAYS)',
-        color: '#f0f0f0',
-        font: {
-          family: "'JetBrains Mono', monospace",
-          size: 14,
-          weight: 'bold' as const,
-        },
-        padding: {
-          bottom: 20,
-        },
+        display: false, // Title handled externally
       },
       tooltip: {
+        enabled: true,
         backgroundColor: '#1a1a1a',
-        titleColor: '#f0f0f0',
-        bodyColor: '#888888',
-        borderColor: '#333333',
+        titleColor: '#00ff88',
+        bodyColor: '#f0f0f0',
+        borderColor: '#00ff88',
         borderWidth: 2,
+        padding: 12,
         titleFont: {
           family: "'JetBrains Mono', monospace",
+          size: 13,
+          weight: 'bold' as const,
         },
         bodyFont: {
           family: "'JetBrains Mono', monospace",
+          size: 12,
         },
         cornerRadius: 0,
+        displayColors: false,
+        callbacks: {
+          title: (items: TooltipItem<'line'>[]) => {
+            if (items.length === 0) return ''
+            const idx = items[0].dataIndex
+            const date = dateRange[idx]
+            return format(date, 'EEEE, MMM d')
+          },
+          label: (item: TooltipItem<'line'>) => {
+            const idx = item.dataIndex
+            const meta = entryMetadata[idx]
+            if (!meta) return 'No entries'
+
+            const moodValue = Math.round(meta.avgMood)
+            const moodInfo = MOOD_SCALE[moodValue - 1] || MOOD_SCALE[2]
+
+            return [
+              `${moodInfo.emoji} ${meta.avgMood.toFixed(1)} - ${moodInfo.label}`,
+              '',
+              `${meta.count} ${meta.count === 1 ? 'entry' : 'entries'}`,
+              ...meta.titles.map(t => `• ${t.length > 25 ? t.slice(0, 25) + '...' : t}`),
+            ]
+          },
+        },
       },
     },
     scales: {
@@ -127,6 +196,11 @@ function TrendsChartContent() {
           font: {
             family: "'JetBrains Mono', monospace",
             size: 11,
+          },
+          callback: (value: number | string) => {
+            const v = Number(value)
+            const mood = MOOD_SCALE[v - 1]
+            return mood ? `${mood.emoji}` : value
           },
         },
         grid: {
@@ -145,11 +219,12 @@ function TrendsChartContent() {
             family: "'JetBrains Mono', monospace",
             size: 10,
           },
-          maxRotation: 45,
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: days <= 7 ? 7 : 8,
         },
         grid: {
-          color: '#333333',
-          lineWidth: 1,
+          display: false,
         },
         border: {
           color: '#333333',
@@ -159,10 +234,28 @@ function TrendsChartContent() {
     },
   }
 
-  return <Line data={chartData} options={options} />
+  return (
+    <div>
+      {/* Mood Scale Legend */}
+      <div className="mood-scale-legend">
+        {MOOD_SCALE.map(({ value, emoji, label }) => (
+          <div key={value} className="mood-scale-item">
+            <span className="mood-scale-emoji">{emoji}</span>
+            <span className="mood-scale-label">{value} - {label}</span>
+          </div>
+        ))}
+      </div>
+
+      <Line data={chartData} options={options} />
+    </div>
+  )
 }
 
-export function TrendsChart() {
+interface TrendsChartProps {
+  days?: 7 | 30 | 90
+}
+
+export function TrendsChart({ days = 30 }: TrendsChartProps) {
   return (
     <ErrorBoundary
       fallback={
@@ -171,7 +264,7 @@ export function TrendsChart() {
         </div>
       }
     >
-      <TrendsChartContent />
+      <TrendsChartContent days={days} />
     </ErrorBoundary>
   )
 }

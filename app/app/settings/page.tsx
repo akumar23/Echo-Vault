@@ -6,6 +6,17 @@ import Link from 'next/link'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Header } from '@/components/Header'
 import { SettingsUpdate } from '@/lib/api'
+import {
+  Search,
+  Bot,
+  Shield,
+  HelpCircle,
+  Save,
+  Loader2,
+  Eye,
+  EyeOff,
+  Trash2
+} from 'lucide-react'
 
 export default function SettingsPage() {
   const { data: settings, isLoading } = useSettings()
@@ -53,7 +64,7 @@ export default function SettingsPage() {
       setError('')
       return true
     } catch {
-      setError('Please enter a valid URL (e.g., http://localhost:11434)')
+      setError('Please enter a valid URL (e.g., http://host.docker.internal:11434)')
       return false
     }
   }
@@ -62,7 +73,10 @@ export default function SettingsPage() {
     return (
       <ProtectedRoute>
         <div className="container">
-          <p className="loading">Loading...</p>
+          <div className="flex items-center gap-2">
+            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+            <span className="text-muted">Loading...</span>
+          </div>
         </div>
       </ProtectedRoute>
     )
@@ -159,7 +173,7 @@ export default function SettingsPage() {
             if (urlError) validateUrl(e.target.value, setUrlError)
           }}
           onBlur={(e) => validateUrl(e.target.value, setUrlError)}
-          placeholder="http://localhost:11434"
+          placeholder="http://host.docker.internal:11434"
           aria-invalid={!!urlError}
         />
         {urlError && <p className="form-error">{urlError}</p>}
@@ -184,16 +198,18 @@ export default function SettingsPage() {
             type="button"
             onClick={() => setShowToken(!showToken)}
             className="btn btn-secondary btn-sm"
+            title={showToken ? 'Hide token' : 'Show token'}
           >
-            {showToken ? 'Hide' : 'Show'}
+            {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
           {tokenSet && (
             <button
               type="button"
               onClick={() => clearToken(type)}
               className="btn btn-danger btn-sm"
+              title="Clear token"
             >
-              Clear
+              <Trash2 size={14} />
             </button>
           )}
         </div>
@@ -218,17 +234,23 @@ export default function SettingsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="container">
+      <div className="container container--narrow">
         <Header title="Settings" showNav={false} />
         <div className="text-right mb-5">
           <Link href="/help" className="nav-link">
+            <HelpCircle size={16} />
             Need help? View Help Page
           </Link>
         </div>
 
         {/* Search Settings */}
         <div className="card">
-          <h2>Search Settings</h2>
+          <div className="section-header">
+            <div className="section-header__icon">
+              <Search />
+            </div>
+            <h2>Search Settings</h2>
+          </div>
           <div className="form-group">
             <label htmlFor="half-life">
               Search Half-Life: <span className="text-accent">{halfLife}</span> days
@@ -259,7 +281,12 @@ export default function SettingsPage() {
 
         {/* LLM Settings */}
         <div className="card">
-          <h2>LLM Settings</h2>
+          <div className="section-header">
+            <div className="section-header__icon">
+              <Bot />
+            </div>
+            <h2>LLM Settings</h2>
+          </div>
           <p className="text-muted mb-5">
             Configure the AI models used for reflections, insights, mood analysis, and semantic search.
             Uses OpenAI-compatible API format.
@@ -300,14 +327,19 @@ export default function SettingsPage() {
           />
 
           <div className="alert alert--info">
-            <strong>Tip:</strong> For local Ollama, use <code>http://localhost:11434</code> as the URL.
+            <strong>Tip:</strong> For local Ollama with Docker, use <code>http://host.docker.internal:11434</code> as the URL.
             Make sure the models are pulled (e.g., <code>ollama pull llama3.1:8b</code>).
           </div>
         </div>
 
         {/* Privacy Settings */}
         <div className="card">
-          <h2>Privacy Settings</h2>
+          <div className="section-header">
+            <div className="section-header__icon">
+              <Shield />
+            </div>
+            <h2>Privacy Settings</h2>
+          </div>
           <div className="form-group">
             <label className="checkbox">
               <input
@@ -339,10 +371,21 @@ export default function SettingsPage() {
 
         <button
           onClick={handleSave}
-          className="btn btn-primary"
+          className="btn btn-cta btn-lg"
           disabled={updateMutation.isPending}
+          style={{ width: '100%' }}
         >
-          {updateMutation.isPending ? 'Saving...' : 'Save Settings'}
+          {updateMutation.isPending ? (
+            <>
+              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save size={18} />
+              Save Settings
+            </>
+          )}
         </button>
       </div>
     </ProtectedRoute>
