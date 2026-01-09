@@ -18,7 +18,7 @@ import json
 import re
 import logging
 import os
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncGenerator
 
 from app.core.config import settings as app_settings
 
@@ -42,7 +42,6 @@ class LLMService:
         self.model = model
         self.api_token = api_token
         self.service_type = service_type
-        self._client: Optional[httpx.AsyncClient] = None
         self._logger = logging.getLogger(__name__)
 
         # Cache prompt templates at initialization (only for generation service)
@@ -75,26 +74,28 @@ class LLMService:
 
         return prompts
 
-    def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the shared httpx.AsyncClient."""
-        if self._client is None or self._client.is_closed:
-            headers = {"Content-Type": "application/json"}
-            if self.api_token:
-                headers["Authorization"] = f"Bearer {self.api_token}"
+    def _create_client(self) -> httpx.AsyncClient:
+        """
+        Create a new httpx.AsyncClient.
 
-            self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-                headers=headers
-            )
-            self._logger.debug(f"Created new httpx.AsyncClient for {self.base_url}")
-        return self._client
+        Note: We intentionally create a fresh client for each request to avoid
+        'Event loop is closed' errors when used with asyncio.run() in Celery workers.
+        The client creation overhead (~1ms) is negligible compared to LLM inference
+        time (~5-30s).
+        """
+        headers = {"Content-Type": "application/json"}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+
+        return httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0),
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            headers=headers
+        )
 
     async def close(self):
-        """Close the shared httpx client."""
-        if self._client is not None and not self._client.is_closed:
-            await self._client.aclose()
-            self._logger.debug("Closed httpx.AsyncClient")
+        """Close the shared httpx client (no-op, clients are now per-request)."""
+        pass
 
     async def get_embedding(self, text: str) -> List[float]:
         """
@@ -102,23 +103,23 @@ class LLMService:
 
         Uses POST /v1/embeddings with {"model": "...", "input": "..."}
         """
-        client = self._get_client()
-        response = await client.post(
-            f"{self.base_url}/v1/embeddings",
-            json={"model": self.model, "input": text},
-            timeout=30.0
-        )
-        response.raise_for_status()
-        data = response.json()
+        async with self._create_client() as client:
+            response = await client.post(
+                f"{self.base_url}/v1/embeddings",
+                json={"model": self.model, "input": text},
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
 
-        # OpenAI format returns {"data": [{"embedding": [...]}]}
-        if "data" in data and len(data["data"]) > 0:
-            return data["data"][0]["embedding"]
-        # Fallback for simple format {"embedding": [...]}
-        elif "embedding" in data:
-            return data["embedding"]
-        else:
-            raise ValueError(f"Unexpected embedding response format: {data}")
+            # OpenAI format returns {"data": [{"embedding": [...]}]}
+            if "data" in data and len(data["data"]) > 0:
+                return data["data"][0]["embedding"]
+            # Fallback for simple format {"embedding": [...]}
+            elif "embedding" in data:
+                return data["embedding"]
+            else:
+                raise ValueError(f"Unexpected embedding response format: {data}")
 
     async def chat_completion(
         self,
@@ -131,7 +132,6 @@ class LLMService:
 
         Uses POST /v1/chat/completions with {"model": "...", "messages": [...]}
         """
-        client = self._get_client()
         payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -141,22 +141,70 @@ class LLMService:
         if max_tokens:
             payload["max_tokens"] = max_tokens
 
-        response = await client.post(
-            f"{self.base_url}/v1/chat/completions",
-            json=payload,
-            timeout=120.0
-        )
-        response.raise_for_status()
-        data = response.json()
+        async with self._create_client() as client:
+            response = await client.post(
+                f"{self.base_url}/v1/chat/completions",
+                json=payload,
+                timeout=120.0
+            )
+            response.raise_for_status()
+            data = response.json()
 
-        # OpenAI format returns {"choices": [{"message": {"content": "..."}}]}
-        if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0]["message"]["content"]
-        # Fallback for simple format {"response": "..."}
-        elif "response" in data:
-            return data["response"]
-        else:
-            raise ValueError(f"Unexpected chat completion response format: {data}")
+            # OpenAI format returns {"choices": [{"message": {"content": "..."}}]}
+            if "choices" in data and len(data["choices"]) > 0:
+                return data["choices"][0]["message"]["content"]
+            # Fallback for simple format {"response": "..."}
+            elif "response" in data:
+                return data["response"]
+            else:
+                raise ValueError(f"Unexpected chat completion response format: {data}")
+
+    async def chat_completion_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Generate text using OpenAI-compatible chat completions endpoint with streaming.
+        Yields tokens as they are generated.
+
+        Uses POST /v1/chat/completions with {"model": "...", "messages": [...], "stream": true}
+        """
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True
+        }
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+
+        async with self._create_client() as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/v1/chat/completions",
+                json=payload,
+                timeout=120.0
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    # SSE format: "data: {...}" or "data: [DONE]"
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            if "choices" in data and len(data["choices"]) > 0:
+                                delta = data["choices"][0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield content
+                        except json.JSONDecodeError:
+                            continue
 
     async def generate_reflection(self, entries_text: str) -> str:
         """Generate reflection from entries using chat completions."""
@@ -252,25 +300,104 @@ class LLMService:
     async def generate_insights(self, entries_summary: str) -> dict:
         """Generate insights (summary, themes, actions) from entries."""
         system_prompt = (
-            "You are a thoughtful journaling assistant. Analyze journal entries and provide insights including:\n"
-            "1. A brief summary of the entries\n"
-            "2. Key themes and patterns\n"
-            "3. Actionable suggestions for personal growth"
+            "Analyze journal entries. Output observations and actionable advice.\n\n"
+            "Respond in valid JSON:\n"
+            "{\n"
+            '  "summary": "Brief factual summary. State observed patterns and behaviors. No emotional language.",\n'
+            '  "themes": ["theme1", "theme2", "theme3"],\n'
+            '  "actions": [\n'
+            '    "Concrete action with specific parameters (time, frequency, duration)",\n'
+            '    "Another specific action",\n'
+            '    "Another specific action"\n'
+            "  ]\n"
+            "}\n\n"
+            "RULES:\n"
+            "- Summary: State what was observed. No commentary or encouragement.\n"
+            "- Themes: Single words or short phrases only.\n"
+            "- Actions: Specific and measurable (e.g., '10-min walk before 9am' not 'exercise more').\n"
+            "- No filler phrases, no emotional validation, no rhetorical questions.\n"
+            "- Be direct and clinical.\n\n"
+            "Output ONLY valid JSON."
         )
-        user_prompt = f"Journal Entries Summary:\n{entries_summary}\n\nPlease provide your insights:"
+        user_prompt = f"Journal Entries:\n{entries_summary}\n\nAnalyze (JSON only):"
 
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
 
-        reflection = await self.chat_completion(messages, temperature=0.7)
+        response_text = await self.chat_completion(messages, temperature=0.7)
+        return self._parse_insights_response(response_text)
 
-        return {
-            "summary": reflection[:500],
+    def _parse_insights_response(self, response_text: str) -> dict:
+        """Parse insights from LLM response with fallback strategies."""
+        default_result = {
+            "summary": "",
             "themes": [],
             "actions": []
         }
+
+        # Strategy 1: Try JSON parsing
+        try:
+            # Find JSON object in response
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                return {
+                    "summary": parsed.get("summary", ""),
+                    "themes": parsed.get("themes", [])[:5],  # Limit to 5 themes
+                    "actions": parsed.get("actions", [])[:5]  # Limit to 5 actions
+                }
+        except (json.JSONDecodeError, ValueError, AttributeError) as e:
+            self._logger.warning(f"Failed to parse insights JSON: {e}")
+
+        # Strategy 2: Use raw response as summary if JSON parsing fails
+        if response_text.strip():
+            return {
+                "summary": response_text.strip(),
+                "themes": [],
+                "actions": []
+            }
+
+        return default_result
+
+    async def extract_common_theme(self, entry_texts: List[str]) -> str:
+        """
+        Identify the common theme across multiple journal entries.
+
+        Returns a short phrase (2-4 words) describing the shared topic,
+        e.g., "nature walks", "work stress", "creative projects".
+        """
+        # Truncate entries to avoid token limits
+        truncated_entries = []
+        for text in entry_texts[:10]:  # Max 10 entries
+            truncated = text[:500] if len(text) > 500 else text
+            truncated_entries.append(truncated)
+
+        entries_text = "\n\n---\n\n".join(truncated_entries)
+
+        system_prompt = (
+            "You are a theme extraction assistant. Analyze journal entries and identify the common theme.\n\n"
+            "INSTRUCTIONS:\n"
+            "- Return ONLY a short phrase (2-4 words) describing the shared topic\n"
+            "- Be specific: 'outdoor hiking' not just 'nature'\n"
+            "- Examples: 'creative writing', 'work deadlines', 'family gatherings', 'fitness goals'\n"
+            "- No explanations, no punctuation, just the theme phrase"
+        )
+        user_prompt = f"Identify the common theme in these entries:\n\n{entries_text}\n\nCommon theme:"
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        response = await self.chat_completion(messages, temperature=0.3)
+        # Clean up response - remove quotes, extra whitespace, periods
+        theme = response.strip().strip('"\'').strip('.').lower()
+        # Limit to reasonable length
+        if len(theme) > 50:
+            theme = theme[:50].rsplit(' ', 1)[0]
+        return theme
 
 
 # Service instance caches
