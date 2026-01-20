@@ -1,7 +1,9 @@
 # Railway/Nixpacks configuration for EchoVault API
 
-[phases.setup]
-nixPkgs = ["python311"]
+providers = ["python"]
+
+[variables]
+NIXPACKS_PYTHON_VERSION = "3.11"
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
