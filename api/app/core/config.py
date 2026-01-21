@@ -1,8 +1,10 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
     database_url: str = "postgresql+psycopg://echovault:echovault@db:5432/echovault"
     redis_url: str = "redis://redis:6379/0"
     ollama_url: str = "http://ollama:11434"  # Deprecated, use generation/embedding URLs
@@ -18,10 +20,6 @@ class Settings(BaseSettings):
     default_generation_model: str = "llama3.1:8b"
     default_embedding_url: str = "http://ollama:11434"
     default_embedding_model: str = "mxbai-embed-large"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 settings = Settings()
