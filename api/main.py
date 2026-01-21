@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import engine, Base, get_db
-from app.routers import auth, entries, search, insights, settings, forget, export, reflections, chat
+from app.routers import auth, entries, search, insights, settings, forget, export, reflections, chat, prompts
 from app.services.ollama_service import ollama_service
 
 # Configure logging with environment-based level
@@ -17,6 +17,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Debug: Log database URL (masked) to verify env var is loaded
+_db_url = os.getenv("DATABASE_URL", "NOT_SET")
+_masked_url = _db_url[:30] + "..." if len(_db_url) > 30 else _db_url
+logger.info(f"DATABASE_URL from env: {_masked_url}")
 
 # Create tables
 try:
@@ -77,6 +82,7 @@ app.include_router(forget.router, prefix="/forget", tags=["forget"])
 app.include_router(export.router, prefix="/export", tags=["export"])
 app.include_router(reflections.router, prefix="/reflections", tags=["reflections"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
+app.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 
 
 @app.get("/health")
