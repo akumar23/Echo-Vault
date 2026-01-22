@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getErrorMessage } from '@/lib/errors'
 import { loginSchema, type LoginFormData } from '@/lib/validation'
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof LoginFormData, string>>>({})
   const { login } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,7 +37,8 @@ export default function LoginPage() {
     // Proceed with login
     try {
       await login(result.data.email, result.data.password)
-      router.push('/')
+      const returnUrl = searchParams.get('returnUrl') || '/journal'
+      router.push(returnUrl)
     } catch (err) {
       setError(getErrorMessage(err))
     }

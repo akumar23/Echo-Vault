@@ -37,7 +37,7 @@ export default function RegisterPage() {
     // Proceed with registration
     try {
       await register(result.data.email, result.data.username, result.data.password)
-      router.push('/')
+      router.push('/journal')
     } catch (err) {
       setError(getErrorMessage(err))
     }

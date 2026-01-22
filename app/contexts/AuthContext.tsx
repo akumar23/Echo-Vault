@@ -14,6 +14,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Helper to set cookie (for middleware auth check)
+function setTokenCookie(token: string) {
+  document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+}
+
+// Helper to remove cookie
+function removeTokenCookie() {
+  document.cookie = 'token=; path=/; max-age=0'
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -23,16 +33,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedToken = localStorage.getItem('token')
     if (storedToken) {
       setToken(storedToken)
+      setTokenCookie(storedToken) // Sync cookie with localStorage
       authApi.getMe()
         .then((userData) => {
           setUser(userData)
         })
         .catch(() => {
           localStorage.removeItem('token')
+          removeTokenCookie()
           setToken(null)
         })
         .finally(() => setLoading(false))
     } else {
+      removeTokenCookie() // Ensure cookie is cleared if no localStorage token
       setLoading(false)
     }
   }, [])
@@ -41,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const response = await authApi.login(email, password)
     const newToken = response.access_token
     localStorage.setItem('token', newToken)
+    setTokenCookie(newToken)
     setToken(newToken)
     const userData = await authApi.getMe()
     setUser(userData)
@@ -53,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem('token')
+    removeTokenCookie()
     setToken(null)
     setUser(null)
   }
