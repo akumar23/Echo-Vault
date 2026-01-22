@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from typing import Optional
 
 
@@ -6,6 +7,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
     database_url: str = "postgresql+psycopg://echovault:echovault@db:5432/echovault"
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def fix_postgres_scheme(cls, v: str) -> str:
+        """Convert postgresql:// to postgresql+psycopg:// for psycopg driver compatibility."""
+        if v.startswith("postgresql://") and "+psycopg" not in v:
+            return v.replace("postgresql://", "postgresql+psycopg://", 1)
+        return v
     redis_url: str = "redis://redis:6379/0"
     ollama_url: str = "http://ollama:11434"  # Deprecated, use generation/embedding URLs
     jwt_secret: str = "change_me"  # MUST be changed in production!
