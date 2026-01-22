@@ -19,23 +19,24 @@
     "chart.js": "^4.4.6",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.562.0",
-    "next": "16.0.7",
-    "react": "19.2.1",
+    "next": "16.1.4",
+    "react": "19.2.3",
     "react-chartjs-2": "^5.3.0",
-    "react-dom": "19.2.1",
+    "react-dom": "19.2.3",
     "react-markdown": "^9.1.0",
     "zod": "^3.25.76",
     "zustand": "^4.5.7"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.0.0",
     "@playwright/test": "^1.40.1",
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/cli": "^2.9.6",
     "@types/node": "^20.10.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "16.0.7",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.1.4",
     "typescript": "^5.7.3"
   }
 }
