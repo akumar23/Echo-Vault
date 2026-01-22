@@ -2,17 +2,18 @@ version: '3.8'
 
 # Extension fields for shared configurations
 x-common-env: &common-env
-  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://journal:journal@db:5432/journal}
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://echovault:echovault@db:5432/echovault}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
   JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
   REFLECTION_MODEL: ${REFLECTION_MODEL:-llama3.1:8b}
   EMBED_MODEL: ${EMBED_MODEL:-mxbai-embed-large}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
 
 x-api-worker-env: &api-worker-env
   <<: *common-env
   UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
-  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
 
 services:
   db:
@@ -20,29 +21,29 @@ services:
     # Using pg16 tag which tracks PostgreSQL 16.x stable releases
     # To update: check https://github.com/pgvector/pgvector for latest pg16 tag
     image: pgvector/pgvector:pg16
-    container_name: journal_db
+    container_name: echovault_db
     environment:
-      POSTGRES_USER: journal
-      POSTGRES_PASSWORD: journal
-      POSTGRES_DB: journal
+      POSTGRES_USER: ${POSTGRES_USER:-echovault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-echovault}
+      POSTGRES_DB: ${POSTGRES_DB:-echovault}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U journal"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-echovault}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - journal_network
+      - echovault_network
 
   redis:
     # Pinned to Redis 7.2.5-alpine (stable as of Nov 2024)
     # To update: check https://hub.docker.com/_/redis for latest 7-alpine tag
     image: redis:7.2.5-alpine
-    container_name: journal_redis
+    container_name: echovault_redis
     ports:
       - "6379:6379"
     volumes:
@@ -53,13 +54,13 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - journal_network
+      - echovault_network
 
   ollama:
     # Pinned to specific digest for stability (Nov 2024)
     # To update: docker pull ollama/ollama:latest and get new digest
     image: ollama/ollama@sha256:3d8a05e3432d50ea57594fabe971e46cc8fe963a0f9f8c40400bd56cd5388e47
-    container_name: journal_ollama
+    container_name: echovault_ollama
     ports:
       - "11434:11434"
     volumes:
@@ -71,13 +72,13 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - journal_network
+      - echovault_network
 
   api:
     build:
       context: ..
       dockerfile: infra/Dockerfile.api
-    container_name: journal_api
+    container_name: echovault_api
     env_file:
       - ../.env
     environment:
@@ -95,14 +96,14 @@ services:
       ollama:
         condition: service_healthy
     networks:
-      - journal_network
+      - echovault_network
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
     build:
       context: ..
       dockerfile: infra/Dockerfile.api
-    container_name: journal_worker
+    container_name: echovault_worker
     env_file:
       - ../.env
     environment:
@@ -118,14 +119,14 @@ services:
       ollama:
         condition: service_healthy
     networks:
-      - journal_network
+      - echovault_network
     command: celery -A app.celery_app worker --loglevel=info
 
   beat:
     build:
       context: ..
       dockerfile: infra/Dockerfile.api
-    container_name: journal_beat
+    container_name: echovault_beat
     env_file:
       - ../.env
     environment:
@@ -136,28 +137,26 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - journal_network
+      - echovault_network
     command: celery -A app.celery_app beat --loglevel=info
 
   web:
     build:
       context: ..
       dockerfile: infra/Dockerfile.web
-    container_name: journal_web
+    container_name: echovault_web
     env_file:
       - ../.env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
-    volumes:
-      - ../app:/app
-      - /app/node_modules
-      - /app/.next
+    # Note: Volume mounts removed for production standalone build
+    # For development with hot-reload, use: pnpm run dev in the app/ directory
     depends_on:
       - api
     networks:
-      - journal_network
+      - echovault_network
 
 volumes:
   postgres_data:
@@ -166,6 +165,6 @@ volumes:
   uploads_data:
 
 networks:
-  journal_network:
+  echovault_network:
     driver: bridge
 
