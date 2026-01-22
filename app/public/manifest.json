@@ -1,0 +1,16 @@
+{
+  "name": "EchoVault",
+  "short_name": "EchoVault",
+  "description": "Privacy-first AI journal that runs locally on your device",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F5F0",
+  "theme_color": "#C94C2A",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

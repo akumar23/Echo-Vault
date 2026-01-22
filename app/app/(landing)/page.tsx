@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   Hero,
-  ValueProps,
+  UseCases,
+  ProductPreview,
   Features,
   HowItWorks,
-  Quote,
+  Testimonials,
+  Pricing,
+  FAQ,
+  About,
   CTA,
   ForNerds,
   Privacy,
@@ -38,10 +42,14 @@ export default function LandingPage() {
   return (
     <div className="landing-page">
       <Hero />
-      <ValueProps />
+      <UseCases />
+      <ProductPreview />
       <Features />
       <HowItWorks />
-      <Quote />
+      <Testimonials />
+      <Pricing />
+      <FAQ />
+      <About />
       <CTA />
       <ForNerds />
       <Privacy />
