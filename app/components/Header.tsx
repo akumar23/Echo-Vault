@@ -2,17 +2,17 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
 import { ThemeToggle } from './ThemeToggle'
+import { PersonalizedGreeting } from './PersonalizedGreeting'
 import { PenLine, BookOpen, Settings, HelpCircle, Home } from 'lucide-react'
 
 interface HeaderProps {
   title?: string
   showNav?: boolean
+  showGreeting?: boolean
 }
 
-export function Header({ title, showNav = true }: HeaderProps) {
-  const { user } = useAuth()
+export function Header({ title, showNav = true, showGreeting = false }: HeaderProps) {
   const pathname = usePathname()
 
   const navLinks = [
@@ -30,13 +30,11 @@ export function Header({ title, showNav = true }: HeaderProps) {
   return (
     <header className="header">
       <div className="header__top">
-        {title ? (
+        {showGreeting ? (
+          <PersonalizedGreeting />
+        ) : title ? (
           <h1 className="header__title">{title}</h1>
-        ) : (
-          <h1 className="header__title">
-            Welcome back, {user?.username ?? 'User'}
-          </h1>
-        )}
+        ) : null}
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Link href="/" className="btn btn-ghost btn-sm">

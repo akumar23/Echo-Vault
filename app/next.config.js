@@ -1,8 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Explicitly enable turbopack for development (optional, Next.js 16 default)
-  // turbopack: {},
+  // Use 'export' for Tauri builds (static), 'standalone' for Docker
+  output: process.env.TAURI_BUILD === 'true' ? 'export' : 'standalone',
+  // Required for static export with images
+  ...(process.env.TAURI_BUILD === 'true' && {
+    images: {
+      unoptimized: true,
+    },
+  }),
 }
 
 module.exports = nextConfig

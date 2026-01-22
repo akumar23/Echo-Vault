@@ -103,6 +103,20 @@ export interface Insight {
   created_at: string
 }
 
+export interface SemanticMoodInsight {
+  type: 'positive_theme' | 'negative_theme' | 'mood_trend'
+  theme: string
+  avg_mood: number
+  count: number
+  insight: string
+}
+
+export interface SemanticMoodInsightsResponse {
+  insights: SemanticMoodInsight[]
+  total_entries: number
+  has_sufficient_data: boolean
+}
+
 export interface Settings {
   id: number
   user_id: number
@@ -147,6 +161,42 @@ export interface SearchResult {
   created_at: string
   score: number
   tags?: string[]
+}
+
+// Prompts
+export interface WritingSuggestion {
+  id: string
+  text: string
+  type: 'question' | 'prompt' | 'continuation'
+  context: string
+  source_entry_id?: number
+}
+
+export interface SuggestionsResponse {
+  suggestions: WritingSuggestion[]
+  preferred_type: string | null
+  has_sufficient_data: boolean
+}
+
+export interface PromptInteraction {
+  prompt_text: string
+  prompt_type: 'question' | 'prompt' | 'continuation'
+  action: 'displayed' | 'clicked' | 'cycled' | 'dismissed' | 'completed'
+  entry_id?: number
+  source_entry_id?: number
+}
+
+export interface PromptStats {
+  prompt_type: string
+  displayed_count: number
+  clicked_count: number
+  completed_count: number
+  completion_rate: number
+}
+
+export interface PromptStatsResponse {
+  stats: PromptStats[]
+  total_interactions: number
 }
 
 // Auth
@@ -206,6 +256,10 @@ export const insightsApi = {
     const response = await api.post('/insights/generate', null, { params: { days } })
     return response.data
   },
+  getMoodContent: async (): Promise<SemanticMoodInsightsResponse> => {
+    const response = await api.get('/insights/mood-content')
+    return response.data
+  },
 }
 
 // Settings
@@ -235,6 +289,21 @@ export const reflectionsApi = {
   },
   regenerate: async (): Promise<Reflection> => {
     const response = await api.post('/reflections/regenerate')
+    return response.data
+  },
+}
+
+// Prompts
+export const promptsApi = {
+  getSuggestions: async (): Promise<SuggestionsResponse> => {
+    const response = await api.get('/prompts/suggestions')
+    return response.data
+  },
+  logInteraction: async (interaction: PromptInteraction): Promise<void> => {
+    await api.post('/prompts/interaction', interaction)
+  },
+  getStats: async (): Promise<PromptStatsResponse> => {
+    const response = await api.get('/prompts/stats')
     return response.data
   },
 }

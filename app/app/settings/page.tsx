@@ -15,12 +15,15 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  Trash2
+  Trash2,
+  MessageCircle
 } from 'lucide-react'
+import { useInsightVoice, InsightVoice } from '@/contexts/InsightVoiceContext'
 
 export default function SettingsPage() {
   const { data: settings, isLoading } = useSettings()
   const updateMutation = useUpdateSettings()
+  const { voice, setVoice } = useInsightVoice()
 
   // Search settings
   const [halfLife, setHalfLife] = useState(30)
@@ -366,6 +369,62 @@ export default function SettingsPage() {
                 <li>This action cannot be undone</li>
               </ul>
             </div>
+          </div>
+        </div>
+
+        {/* Insight Voice Settings */}
+        <div className="card">
+          <div className="section-header">
+            <div className="section-header__icon">
+              <MessageCircle />
+            </div>
+            <h2>Insight Voice</h2>
+          </div>
+          <p className="text-muted mb-5">
+            Choose how EchoVault speaks to you. This affects greetings, insights, and nudges.
+          </p>
+
+          <div className="voice-selector">
+            {([
+              {
+                id: 'gentle' as InsightVoice,
+                name: 'Gentle',
+                emoji: '🌿',
+                description: 'Warm, supportive, and encouraging',
+                example: '"You\'ve been on a great streak lately"'
+              },
+              {
+                id: 'direct' as InsightVoice,
+                name: 'Direct',
+                emoji: '📊',
+                description: 'Concise, factual, no-nonsense',
+                example: '"Mood up. Strong momentum."'
+              },
+              {
+                id: 'playful' as InsightVoice,
+                name: 'Playful',
+                emoji: '✨',
+                description: 'Fun, upbeat, with emojis',
+                example: '"Look at you go! On fire! 🔥"'
+              }
+            ]).map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`voice-option ${voice === option.id ? 'voice-option--active' : ''}`}
+                onClick={() => setVoice(option.id)}
+              >
+                <span className="voice-option__emoji">{option.emoji}</span>
+                <div className="voice-option__content">
+                  <span className="voice-option__name">{option.name}</span>
+                  <span className="voice-option__description">{option.description}</span>
+                  <span className="voice-option__example">{option.example}</span>
+                </div>
+                {voice === option.id && (
+                  <span className="voice-option__check">✓</span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 

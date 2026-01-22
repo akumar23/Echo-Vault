@@ -1,17 +1,22 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Entry } from '@/lib/api'
+import { Entry, promptsApi } from '@/lib/api'
+import { VoiceInput } from './VoiceInput'
 
 interface WritingEditorProps {
   entry?: Entry
   onSave: (entry: { title?: string; content: string; tags: string[]; mood_user?: number }) => Promise<void>
   saving?: boolean
+  initialPrompt?: string
+  promptType?: 'question' | 'prompt' | 'continuation'
+  sourceEntryId?: number
 }
 
 const MOOD_LABELS = ['Low', 'Down', 'Neutral', 'Good', 'Great']
+const MOOD_EMOJIS = ['😢', '😕', '😐', '🙂', '😊']
 
-export function WritingEditor({ entry, onSave, saving = false }: WritingEditorProps) {
+export function WritingEditor({ entry, onSave, saving = false, initialPrompt, promptType, sourceEntryId }: WritingEditorProps) {
   const [title, setTitle] = useState(entry?.title ?? '')
   const [content, setContent] = useState(entry?.content ?? '')
   const [tags, setTags] = useState<string[]>(entry?.tags ?? [])
@@ -20,9 +25,21 @@ export function WritingEditor({ entry, onSave, saving = false }: WritingEditorPr
   const [useLlmPrediction, setUseLlmPrediction] = useState(entry?.mood_user == null)
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [showPrompt, setShowPrompt] = useState(!!initialPrompt)
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
+
+  // Handle voice transcription
+  const handleVoiceTranscript = useCallback((transcript: string) => {
+    setContent(prev => {
+      // Add space before transcript if content doesn't end with space or is empty
+      const needsSpace = prev.length > 0 && !prev.endsWith(' ') && !prev.endsWith('\n')
+      return prev + (needsSpace ? ' ' : '') + transcript
+    })
+    // Focus the textarea after voice input
+    contentRef.current?.focus()
+  }, [])
 
   useEffect(() => {
     if (entry) {
@@ -101,6 +118,16 @@ export function WritingEditor({ entry, onSave, saving = false }: WritingEditorPr
       tags,
       mood_user: useLlmPrediction ? undefined : mood
     })
+
+    // Log completion interaction if this entry was created from a prompt
+    if (initialPrompt && promptType) {
+      promptsApi.logInteraction({
+        prompt_text: initialPrompt,
+        prompt_type: promptType,
+        action: 'completed',
+        source_entry_id: sourceEntryId,
+      }).catch(console.error)
+    }
   }
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
@@ -174,7 +201,7 @@ export function WritingEditor({ entry, onSave, saving = false }: WritingEditorPr
                     onClick={() => setMood(value)}
                     aria-label={`Mood ${value}: ${MOOD_LABELS[value - 1]}`}
                   >
-                    <span className="writing-editor__mood-value">{value}</span>
+                    <span className="writing-editor__mood-emoji">{MOOD_EMOJIS[value - 1]}</span>
                     <span className="writing-editor__mood-label">{MOOD_LABELS[value - 1]}</span>
                   </button>
                 ))}
@@ -231,6 +258,31 @@ export function WritingEditor({ entry, onSave, saving = false }: WritingEditorPr
         </div>
       </div>
 
+      {/* Writing prompt from mood nudge */}
+      {showPrompt && initialPrompt && (
+        <div className="writing-editor__prompt-banner">
+          <div className="writing-editor__prompt-content">
+            <span className="writing-editor__prompt-icon">💭</span>
+            <p className="writing-editor__prompt-text">"{initialPrompt}"</p>
+          </div>
+          <button
+            type="button"
+            className="writing-editor__prompt-dismiss"
+            onClick={() => setShowPrompt(false)}
+            aria-label="Dismiss prompt"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Voice input row */}
+      <div className="writing-editor__voice-row">
+        <VoiceInput onTranscript={handleVoiceTranscript} disabled={saving} />
+        <span className="writing-editor__voice-label">Voice input</span>
+        <span className="writing-editor__voice-hint">Click mic to dictate</span>
+      </div>
+
       {/* Main writing area */}
       <div className="writing-editor__document">
         {/* Inline title */}
@@ -249,7 +301,7 @@ export function WritingEditor({ entry, onSave, saving = false }: WritingEditorPr
           className="writing-editor__content"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Start writing..."
+          placeholder={initialPrompt ? `Reflect on: "${initialPrompt}"` : "Start writing..."}
           aria-label="Entry content"
         />
       </div>

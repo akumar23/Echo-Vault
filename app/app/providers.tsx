@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { MoodResponsiveLayout } from '@/components/MoodResponsiveLayout'
+import { InsightVoiceProvider } from '@/contexts/InsightVoiceContext'
+import { BackendStatus } from '@/components/BackendStatus'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -21,7 +24,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          {children}
+          <InsightVoiceProvider>
+            <BackendStatus />
+            <MoodResponsiveLayout>
+              {children}
+            </MoodResponsiveLayout>
+          </InsightVoiceProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
