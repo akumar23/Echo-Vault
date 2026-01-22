@@ -19,10 +19,10 @@
     "chart.js": "^4.4.6",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.562.0",
-    "next": "16.0.3",
-    "react": "19.2.0",
+    "next": "16.0.7",
+    "react": "19.2.1",
     "react-chartjs-2": "^5.3.0",
-    "react-dom": "19.2.0",
+    "react-dom": "19.2.1",
     "react-markdown": "^9.1.0",
     "zod": "^3.25.76",
     "zustand": "^4.5.7"
@@ -35,7 +35,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^8.57.0",
-    "eslint-config-next": "16.0.3",
+    "eslint-config-next": "16.0.7",
     "typescript": "^5.7.3"
   }
 }
