@@ -1,3 +1,4 @@
+import ssl
 import redis
 import json
 from typing import Optional
@@ -11,7 +12,15 @@ class ReflectionCache:
     REFLECTION_TTL = 60 * 60 * 24 * 7  # 7 days TTL
 
     def __init__(self):
-        self.redis = redis.from_url(settings.redis_url, decode_responses=True)
+        # Add SSL configuration if using TLS (rediss://)
+        if settings.redis_url.startswith("rediss://"):
+            self.redis = redis.from_url(
+                settings.redis_url,
+                decode_responses=True,
+                ssl_cert_reqs=ssl.CERT_REQUIRED,
+            )
+        else:
+            self.redis = redis.from_url(settings.redis_url, decode_responses=True)
 
     def _get_key(self, user_id: int) -> str:
         return f"{self.REFLECTION_KEY_PREFIX}{user_id}"
