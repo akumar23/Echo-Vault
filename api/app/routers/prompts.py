@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 
 from app.database import get_db
 from app.models.user import User
@@ -172,13 +172,13 @@ async def _get_preferred_type(user_id: int, db: Session) -> Optional[str]:
         db.query(
             PromptInteraction.prompt_type,
             func.sum(
-                func.case(
+                case(
                     (PromptInteraction.action == "completed", 1),
                     else_=0,
                 )
             ).label("completed"),
             func.sum(
-                func.case(
+                case(
                     (PromptInteraction.action == "displayed", 1),
                     else_=0,
                 )

@@ -2600,9 +2600,9 @@ label {
   position: relative;
   background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(201, 76, 42, 0.04) 100%);
   border: 1px solid var(--accent);
-  border-left: 4px solid var(--accent);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-3);
   margin-bottom: var(--space-5);
   animation: nudge-appear 500ms ease-out;
 }
@@ -2618,60 +2618,75 @@ label {
   }
 }
 
+.mood-nudge__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.mood-nudge__icon {
+  font-size: 1.125rem;
+}
+
+.mood-nudge__message {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
 .mood-nudge__dismiss {
   position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
+  top: var(--space-2);
+  right: var(--space-2);
   background: transparent;
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  padding: var(--space-1);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
 
 .mood-nudge__dismiss:hover {
-  color: var(--text-primary);
+  color: var(--text-secondary);
   background: var(--bg-elevated);
-}
-
-.mood-nudge__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.mood-nudge__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.mood-nudge__icon {
-  font-size: 1.5rem;
-}
-
-.mood-nudge__message {
-  font-size: var(--text-base);
-  font-weight: 500;
-  color: var(--text-primary);
 }
 
 .mood-nudge__prompt {
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
-  padding: var(--space-4);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-1);
+}
+
+.mood-nudge__prompt-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mood-nudge__prompt-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.mood-nudge__preferred {
+  font-size: var(--text-xs);
+  color: var(--accent);
 }
 
 .mood-nudge__prompt-text {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-style: italic;
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 0;
 }
 
@@ -2679,14 +2694,14 @@ label {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 4px;
   background: transparent;
   border: none;
   color: var(--accent);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   cursor: pointer;
-  padding: var(--space-1) var(--space-2);
-  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+  padding: 2px 4px;
+  margin: -2px -4px;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
@@ -2695,21 +2710,25 @@ label {
   background: var(--accent-subtle);
 }
 
-.mood-nudge__actions {
-  display: flex;
-  gap: var(--space-3);
+.mood-nudge__write-btn {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: all var(--transition-fast);
 }
 
-@media (max-width: 768px) {
-  .mood-nudge__actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .mood-nudge__actions .btn {
-    justify-content: center;
-  }
+.mood-nudge__write-btn:hover {
+  background: var(--accent-hover);
 }
 
 /* --------------------------------------------------------------------------

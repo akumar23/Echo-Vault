@@ -1,0 +1,88 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EchoVault",
+  "identifier": "com.echovault.app",
+  "version": "0.1.0",
+  "build": {
+    "beforeBuildCommand": "pnpm build:tauri",
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../out"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "EchoVault",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    },
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8000 ws://localhost:8000; img-src 'self' data: blob:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Privacy-first journaling with local AI",
+    "longDescription": "EchoVault is a privacy-first journaling application with local LLM inference. All AI processing happens locally, keeping your thoughts private.",
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "exceptionDomain": null,
+      "signingIdentity": null,
+      "entitlements": null
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "timestampUrl": null,
+      "wix": null,
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": null,
+        "sidebarImage": null
+      }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      },
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/your-username/echovault/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    },
+    "global-shortcut": {
+      "all": true
+    },
+    "notification": {
+      "all": true
+    },
+    "shell": {
+      "open": true
+    }
+  }
+}

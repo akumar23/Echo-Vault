@@ -243,57 +243,48 @@ export function MoodNudge() {
 
   return (
     <div className="mood-nudge">
+      <div className="mood-nudge__header">
+        <span className="mood-nudge__icon">💭</span>
+        <span className="mood-nudge__message">{nudgeMessage}</span>
+      </div>
+
       <button
         className="mood-nudge__dismiss"
         onClick={handleDismiss}
-        aria-label="Dismiss"
+        aria-label="Not now"
+        title="Not now"
       >
-        <X size={16} />
+        Not now
       </button>
 
-      <div className="mood-nudge__content">
-        <div className="mood-nudge__header">
-          <span className="mood-nudge__icon">💭</span>
-          <span className="mood-nudge__message">{nudgeMessage}</span>
+      <div className="mood-nudge__prompt">
+        <div className="mood-nudge__prompt-meta">
+          <span className="mood-nudge__prompt-type">
+            <TypeIcon size={12} />
+            {currentSuggestion.context}
+          </span>
+          {isPreferred && <span className="mood-nudge__preferred">Works for you</span>}
         </div>
-
-        <div className="mood-nudge__prompt">
-          <div className="mood-nudge__prompt-meta">
-            <span className="mood-nudge__prompt-type">
-              <TypeIcon size={14} />
-              {typeLabel}
-              {isPreferred && <span className="mood-nudge__preferred">Works for you</span>}
-            </span>
-            <span className="mood-nudge__prompt-context">{currentSuggestion.context}</span>
-          </div>
-          <p className="mood-nudge__prompt-text">"{currentSuggestion.text}"</p>
-          <button
-            className="mood-nudge__new-prompt"
-            onClick={handleNewPrompt}
-            aria-label="Get new prompt"
-          >
-            <Sparkles size={14} />
-            New suggestion
-          </button>
-        </div>
-
-        <div className="mood-nudge__actions">
-          <Link
-            href={promptUrl}
-            className="btn btn-primary"
-            onClick={handleClick}
-          >
-            <PenLine size={16} />
-            {buttonText}
-          </Link>
-          <button
-            className="btn btn-ghost"
-            onClick={handleDismiss}
-          >
-            Not now
-          </button>
-        </div>
+        <p className="mood-nudge__prompt-text">"{currentSuggestion.text}"</p>
+        <button
+          className="mood-nudge__new-prompt"
+          onClick={handleNewPrompt}
+          aria-label="Get new prompt"
+        >
+          <Sparkles size={12} />
+          New suggestion
+        </button>
       </div>
+
+      <Link
+        href={promptUrl}
+        className="mood-nudge__write-btn"
+        onClick={handleClick}
+        title={buttonText}
+      >
+        <PenLine size={14} />
+        {buttonText}
+      </Link>
     </div>
   )
 }
