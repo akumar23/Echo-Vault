@@ -3,17 +3,26 @@ import React from 'react'
 interface MoodIndicatorProps {
   moodUser: number | null
   moodInferred: number | null
+  size?: 'default' | 'large'
 }
 
 const MOOD_EMOJIS: { [key: number]: string } = {
-  1: '01',
-  2: '02',
-  3: '03',
-  4: '04',
-  5: '05',
+  1: '😢',
+  2: '😕',
+  3: '😐',
+  4: '🙂',
+  5: '😊',
 }
 
-export function MoodIndicator({ moodUser, moodInferred }: MoodIndicatorProps) {
+const MOOD_LABELS: { [key: number]: string } = {
+  1: 'Low',
+  2: 'Down',
+  3: 'Okay',
+  4: 'Good',
+  5: 'Great',
+}
+
+export function MoodIndicator({ moodUser, moodInferred, size = 'default' }: MoodIndicatorProps) {
   const mood = moodUser ?? moodInferred
   const isUserSet = moodUser !== null
 
@@ -22,11 +31,14 @@ export function MoodIndicator({ moodUser, moodInferred }: MoodIndicatorProps) {
   }
 
   return (
-    <div className={`mood-indicator mood-indicator--${mood}`}>
+    <div className={`mood-indicator mood-indicator--${mood} ${size === 'large' ? 'mood-indicator--large' : ''}`}>
       <span className="mood-indicator__emoji">{MOOD_EMOJIS[mood]}</span>
-      <span className="mood-indicator__source">
-        {isUserSet ? 'You' : 'AI'}
-      </span>
+      <div className="mood-indicator__details">
+        <span className="mood-indicator__label">{MOOD_LABELS[mood]}</span>
+        <span className="mood-indicator__source">
+          {isUserSet ? 'You' : 'AI'}
+        </span>
+      </div>
     </div>
   )
 }
