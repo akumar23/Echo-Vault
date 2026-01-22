@@ -21,7 +21,8 @@ async def get_reflection(
     cached = reflection_cache.get_reflection(current_user.id)
 
     if cached is None:
-        # No reflection exists yet, trigger generation
+        # Set status BEFORE enqueuing to prevent duplicate jobs from race condition
+        reflection_cache.set_reflection(current_user.id, "", status="generating")
         enqueue_reflection_job(current_user.id)
         return ReflectionResponse(
             reflection="",
@@ -39,6 +40,8 @@ async def regenerate_reflection(
     current_user: User = Depends(get_current_user)
 ):
     """Force regeneration of reflection"""
+    # Set status BEFORE enqueuing to prevent duplicate jobs
+    reflection_cache.set_reflection(current_user.id, "", status="generating")
     enqueue_reflection_job(current_user.id)
     return ReflectionResponse(
         reflection="",
