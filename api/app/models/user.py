@@ -17,4 +17,5 @@ class User(Base):
     entries = relationship("Entry", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("Settings", back_populates="user", uselist=False, cascade="all, delete-orphan")
     insights = relationship("Insight", back_populates="user", cascade="all, delete-orphan")
+    prompt_interactions = relationship("PromptInteraction", back_populates="user", cascade="all, delete-orphan")
 

@@ -61,22 +61,22 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         # Rollback any partial changes
         db.rollback()
-        # Log database errors for debugging
-        error_msg = f"Database error during registration: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        # Log database errors for debugging (includes full details for server logs)
+        logger.error(f"Database error during registration: {str(e)}", exc_info=True)
+        # Return sanitized error to client (no internal details exposed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error occurred during registration: {str(e)}"
+            detail="A database error occurred during registration. Please try again."
         )
     except Exception as e:
         # Rollback any partial changes
         db.rollback()
-        # Log the error for debugging
-        error_msg = f"Registration error: {type(e).__name__}: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        # Log the error for debugging (includes full details for server logs)
+        logger.error(f"Registration error: {type(e).__name__}: {str(e)}", exc_info=True)
+        # Return sanitized error to client (no internal details exposed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred during registration: {str(e)}"
+            detail="An error occurred during registration. Please try again."
         )
 
 
