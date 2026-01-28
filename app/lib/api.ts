@@ -12,60 +12,25 @@ const api = axios.create({
 // Add auth token to requests
 api.interceptors.request.use(
   (config) => {
-    // Guard against SSR - localStorage only available in browser
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[API] Adding Authorization header to request:', config.url)
-        }
-      } else if (process.env.NODE_ENV === 'development') {
-        console.warn('[API] No token found in localStorage for request:', config.url)
       }
-    } else if (process.env.NODE_ENV === 'development') {
-      console.warn('[API] SSR context - skipping token for request:', config.url)
     }
     return config
   },
-  (error) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[API] Request interceptor error:', error)
-    }
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
-// Add response interceptor for better error handling
+// Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[API] Response error:', {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
-          url: error.config?.url
-        })
-      }
-
-      if (error.response.status === 401 || error.response.status === 403) {
-        // Clear invalid token on 401/403 errors
-        if (typeof window !== 'undefined') {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[API] Authentication failed - clearing token')
-          }
-          localStorage.removeItem('token')
-        }
-      }
-    } else if (error.request) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[API] No response received:', error.request)
-      }
-    } else {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[API] Error setting up request:', error.message)
+    // Clear invalid token on auth errors
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token')
       }
     }
     return Promise.reject(error)

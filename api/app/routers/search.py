@@ -10,7 +10,7 @@ from app.models.embedding import EntryEmbedding
 from app.models.settings import Settings
 from app.schemas.search import SearchRequest, SearchResult
 from app.core.dependencies import get_current_user
-from app.services.ollama_service import ollama_service
+from app.services.llm_service import get_embedding_service_for_user
 from pgvector.sqlalchemy import Vector
 
 router = APIRouter()
@@ -26,8 +26,9 @@ async def semantic_search(
     settings = db.query(Settings).filter(Settings.user_id == current_user.id).first()
     half_life_days = settings.search_half_life_days if settings else 30.0
 
-    # Get query embedding
-    query_embedding = await ollama_service.get_embedding(search_request.query)
+    # Get query embedding using user's configured embedding service
+    embedding_service = get_embedding_service_for_user(db, current_user.id)
+    query_embedding = await embedding_service.get_embedding(search_request.query)
 
     # Calculate age in days using SQL (EXTRACT returns epoch in seconds)
     # age_days = (NOW() - created_at) / 86400

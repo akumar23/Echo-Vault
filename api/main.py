@@ -8,7 +8,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import engine, Base, get_db
 from app.routers import auth, entries, search, insights, settings, forget, export, reflections, chat, prompts
-from app.services.ollama_service import ollama_service
 
 # Configure logging with environment-based level
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -36,15 +35,13 @@ async def lifespan(app: FastAPI):
     """
     Manage application lifespan events.
     Startup: Initialize resources
-    Shutdown: Clean up resources (e.g., close httpx client in OllamaService)
+    Shutdown: Clean up resources
     """
     # Startup
     logger.info("Application startup: initializing resources")
     yield
     # Shutdown
     logger.info("Application shutdown: cleaning up resources")
-    await ollama_service.close()
-    logger.info("OllamaService httpx client closed")
 
 
 app = FastAPI(

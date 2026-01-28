@@ -17,7 +17,6 @@ import httpx
 import json
 import re
 import logging
-import os
 from typing import List, Optional, Dict, Any, AsyncGenerator
 
 from app.core.config import settings as app_settings
@@ -28,7 +27,6 @@ class LLMService:
     Service for interacting with OpenAI-compatible LLM APIs.
 
     Supports optional Bearer token authentication for cloud providers.
-    Caches prompt templates loaded from disk at initialization.
     """
 
     def __init__(
@@ -43,36 +41,6 @@ class LLMService:
         self.api_token = api_token
         self.service_type = service_type
         self._logger = logging.getLogger(__name__)
-
-        # Cache prompt templates at initialization (only for generation service)
-        self._prompts: Dict[str, str] = {}
-        if service_type == "generation":
-            self._prompts = self._load_prompts()
-
-    def _load_prompts(self) -> Dict[str, str]:
-        """Load all prompt templates from disk once at initialization."""
-        prompts_dir = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
-        prompt_files = {
-            "reflection": "reflection.txt",
-            "mood_infer": "mood_infer.txt",
-            "topic_labels": "topic_labels.txt"
-        }
-
-        prompts = {}
-        for name, filename in prompt_files.items():
-            prompt_path = os.path.join(prompts_dir, filename)
-            try:
-                with open(prompt_path, "r") as f:
-                    prompts[name] = f.read()
-                self._logger.debug(f"Loaded prompt template: {name}")
-            except FileNotFoundError:
-                self._logger.warning(f"Prompt template not found: {prompt_path}")
-                prompts[name] = ""
-            except Exception as e:
-                self._logger.error(f"Error loading prompt template {name}: {e}")
-                prompts[name] = ""
-
-        return prompts
 
     def _create_client(self) -> httpx.AsyncClient:
         """
@@ -92,10 +60,6 @@ class LLMService:
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
             headers=headers
         )
-
-    async def close(self):
-        """Close the shared httpx client (no-op, clients are now per-request)."""
-        pass
 
     async def get_embedding(self, text: str) -> List[float]:
         """

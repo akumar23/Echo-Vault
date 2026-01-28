@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -120,7 +120,7 @@ async def get_writing_suggestions(
     3. Continuation style - references a specific past entry (last 7 days)
     """
     # Get recent entries (last 7 days for continuations)
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
     recent_entries = (
         db.query(Entry)
         .filter(
@@ -361,9 +361,9 @@ async def _generate_continuation_suggestion(
 
     # Format the date nicely
     entry_date = source_entry.created_at
-    if entry_date.date() == datetime.utcnow().date():
+    if entry_date.date() == datetime.now(timezone.utc).date():
         date_str = "earlier today"
-    elif (datetime.utcnow() - entry_date).days == 1:
+    elif (datetime.now(timezone.utc) - entry_date).days == 1:
         date_str = "yesterday"
     else:
         date_str = entry_date.strftime("%A")  # Day name like "Tuesday"
@@ -433,9 +433,9 @@ def _get_fallback_continuation(entries: List[Entry]) -> WritingSuggestion:
     if entries:
         entry = entries[0]
         entry_date = entry.created_at
-        if entry_date.date() == datetime.utcnow().date():
+        if entry_date.date() == datetime.now(timezone.utc).date():
             date_str = "earlier today"
-        elif (datetime.utcnow() - entry_date).days == 1:
+        elif (datetime.now(timezone.utc) - entry_date).days == 1:
             date_str = "yesterday"
         else:
             date_str = entry_date.strftime("%A")
