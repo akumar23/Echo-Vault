@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="mood.infer_mood")
+@celery_app.task(name="mood.infer_mood", ignore_result=True)
 def infer_mood_task(entry_id: int):
     """
     Background task to infer mood for an entry.

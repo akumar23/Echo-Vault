@@ -7,7 +7,7 @@ from app.celery_app import celery_app
 import asyncio
 
 
-@celery_app.task(name="embedding.create_embedding")
+@celery_app.task(name="embedding.create_embedding", ignore_result=True)
 def create_embedding_task(entry_id: int):
     """
     Background task to create embedding for an entry.

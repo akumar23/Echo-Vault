@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import asyncio
 
 
-@celery_app.task(name="insights.generate_insights")
+@celery_app.task(name="insights.generate_insights", ignore_result=True)
 def generate_insights_task(user_id: int, days: int = 7):
     """
     Background task to generate insights for a user.
@@ -63,7 +63,7 @@ def generate_insights_task(user_id: int, days: int = 7):
         db.close()
 
 
-@celery_app.task(name="insights.nightly_insights")
+@celery_app.task(name="insights.nightly_insights", ignore_result=True)
 def nightly_insights_task():
     """Nightly task to generate insights for all active users"""
     db = SessionLocal()

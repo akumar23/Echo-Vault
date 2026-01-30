@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="reflection.generate_reflection")
+@celery_app.task(name="reflection.generate_reflection", ignore_result=True)
 def generate_reflection_task(user_id: int):
     """
     Background task to generate and cache reflection for a user.

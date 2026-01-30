@@ -12,7 +12,7 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
   const [reflection, setReflection] = useState<Reflection | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const mountedRef = useRef(true)
 
   const fetchReflection = useCallback(async () => {
@@ -22,9 +22,9 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
         setReflection(data)
         setError('')
 
-        // If still generating, continue polling
+        // Only poll if actively generating (5s interval)
         if (data.status === 'generating') {
-          pollIntervalRef.current = setTimeout(fetchReflection, 2000)
+          pollTimeoutRef.current = setTimeout(fetchReflection, 5000)
         }
       }
     } catch (err) {
@@ -54,8 +54,8 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
 
     return () => {
       mountedRef.current = false
-      if (pollIntervalRef.current) {
-        clearTimeout(pollIntervalRef.current)
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current)
       }
     }
   }, [fetchReflection])

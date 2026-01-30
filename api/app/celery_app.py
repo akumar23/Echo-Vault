@@ -16,6 +16,9 @@ celery_config = {
     "result_serializer": "json",
     "timezone": "UTC",
     "enable_utc": True,
+    # Reduce Redis commands by not storing results and setting TTL
+    "task_ignore_result": True,
+    "result_expires": 3600,  # 1 hour TTL for any results that are stored
 }
 
 # Add SSL configuration if using TLS (rediss://)
