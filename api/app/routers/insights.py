@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+import os
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Optional
 from app.database import get_db
 from app.models.user import User
 from app.models.entry import Entry
@@ -9,10 +10,41 @@ from app.models.embedding import EntryEmbedding
 from app.models.insight import Insight
 from app.schemas.insight import InsightResponse, SemanticMoodInsightsResponse, SemanticMoodInsight
 from app.core.dependencies import get_current_user
-from app.jobs.insights_job import generate_insights_task
+from app.jobs.insights_job import generate_insights_task, nightly_insights_task
 from app.services.llm_service import get_generation_service_for_user
 
 router = APIRouter()
+
+# Internal cron secret for triggering scheduled tasks without Celery Beat
+# Set CRON_SECRET env var to enable this endpoint
+CRON_SECRET = os.getenv("CRON_SECRET")
+
+
+@router.post("/cron/weekly")
+async def trigger_weekly_insights(
+    x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")
+):
+    """
+    Internal endpoint for triggering weekly insights via external cron.
+
+    This replaces Celery Beat to reduce Redis operations.
+    Configure your platform (Railway, Render, etc.) to call this endpoint
+    weekly with the X-Cron-Secret header matching your CRON_SECRET env var.
+
+    Example Railway cron:
+        Schedule: 0 0 * * 5 (Friday at midnight)
+        Command: curl -X POST https://your-api.railway.app/insights/cron/weekly -H "X-Cron-Secret: your-secret"
+    """
+    if not CRON_SECRET:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if x_cron_secret != CRON_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Trigger the nightly insights task (runs for all users)
+    nightly_insights_task.delay()
+
+    return {"status": "queued", "message": "Weekly insights generation triggered for all users"}
 
 
 @router.post("/generate")

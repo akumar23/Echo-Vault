@@ -12,7 +12,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.database import get_db
+from contextlib import contextmanager
+from app.database import SessionLocal
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.models.entry import Entry
@@ -22,6 +23,21 @@ from app.services.reflection_cache import reflection_cache
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def get_db_session():
+    """Context manager for short-lived DB sessions in WebSocket handlers.
+
+    Unlike HTTP requests, WebSocket connections are long-lived. Using a single
+    DB session for the entire connection would exhaust the connection pool.
+    Instead, we create short-lived sessions for each database operation.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # WebSocket close codes
 WS_NORMAL_CLOSE = 1000
@@ -48,10 +64,12 @@ Guidelines:
 
 async def authenticate_websocket(
     websocket: WebSocket,
-    token: Optional[str],
-    db: Session
-) -> Optional[User]:
-    """Authenticate WebSocket connection using JWT token from query parameter."""
+    token: Optional[str]
+) -> Optional[int]:
+    """Authenticate WebSocket connection using JWT token from query parameter.
+
+    Returns user_id instead of User object to avoid holding DB session.
+    """
     if not token:
         await websocket.close(code=WS_AUTH_FAILED, reason="Missing authentication token")
         return None
@@ -72,52 +90,60 @@ async def authenticate_websocket(
         await websocket.close(code=WS_AUTH_FAILED, reason="Invalid user ID")
         return None
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    if user is None:
-        await websocket.close(code=WS_USER_NOT_FOUND, reason="User not found or inactive")
-        return None
+    # Verify user exists with a short-lived session
+    with get_db_session() as db:
+        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        if user is None:
+            await websocket.close(code=WS_USER_NOT_FOUND, reason="User not found or inactive")
+            return None
 
-    return user
+    return user_id
 
 
 async def get_related_entries(
-    db: Session,
     user_id: int,
     query: str,
     embedding_service,
     k: int = 3
 ) -> List[Dict]:
-    """Get semantically related entries using pgvector."""
+    """Get semantically related entries using pgvector.
+
+    Uses a short-lived DB session to avoid holding connections during
+    long-lived WebSocket connections.
+    """
     try:
         # Get query embedding
         query_embedding = await embedding_service.get_embedding(query)
 
-        # Calculate cosine distance and similarity
-        distance = EntryEmbedding.embedding.cosine_distance(query_embedding)
-        similarity_expr = 1 - (distance / 2)
+        # Use short-lived session for DB query
+        with get_db_session() as db:
+            # Calculate cosine distance and similarity
+            distance = EntryEmbedding.embedding.cosine_distance(query_embedding)
+            similarity_expr = 1 - (distance / 2)
 
-        results = db.query(
-            Entry.title,
-            Entry.content,
-            Entry.created_at,
-            similarity_expr.label("score")
-        ).join(
-            EntryEmbedding, Entry.id == EntryEmbedding.entry_id
-        ).filter(
-            Entry.user_id == user_id,
-            Entry.is_deleted == False,
-            EntryEmbedding.is_active == True
-        ).order_by(distance).limit(k).all()
+            results = db.query(
+                Entry.title,
+                Entry.content,
+                Entry.created_at,
+                similarity_expr.label("score")
+            ).join(
+                EntryEmbedding, Entry.id == EntryEmbedding.entry_id
+            ).filter(
+                Entry.user_id == user_id,
+                Entry.is_deleted == False,
+                EntryEmbedding.is_active == True
+            ).order_by(distance).limit(k).all()
 
-        return [
-            {
-                "title": r.title,
-                "content": r.content[:500] if r.content else "",  # Truncate for context
-                "created_at": r.created_at.isoformat(),
-                "score": float(r.score)
-            }
-            for r in results
-        ]
+            # Extract data while session is open
+            return [
+                {
+                    "title": r.title,
+                    "content": r.content[:500] if r.content else "",  # Truncate for context
+                    "created_at": r.created_at.isoformat(),
+                    "score": float(r.score)
+                }
+                for r in results
+            ]
     except Exception as e:
         logger.warning(f"Failed to get related entries: {e}")
         return []
@@ -156,26 +182,29 @@ async def chat_websocket(
         {"type": "token", "content": "..."}
         {"type": "complete"}
         {"type": "error", "message": "..."}
+
+    Note: Uses short-lived DB sessions per operation to avoid exhausting the
+    connection pool during long-lived WebSocket connections.
     """
-    db = next(get_db())
     websocket_accepted = False
 
     try:
-        # Authenticate before accepting
-        user = await authenticate_websocket(websocket, token, db)
-        if user is None:
+        # Authenticate before accepting (uses short-lived session internally)
+        user_id = await authenticate_websocket(websocket, token)
+        if user_id is None:
             return
 
         await websocket.accept()
         websocket_accepted = True
 
-        # Get current reflection from cache
-        cached = reflection_cache.get_reflection(user.id)
+        # Get current reflection from cache (Redis, no DB needed)
+        cached = reflection_cache.get_reflection(user_id)
         reflection_text = cached.get("reflection", "") if cached else ""
 
-        # Get LLM services for this user
-        generation_service = get_generation_service_for_user(db, user.id)
-        embedding_service = get_embedding_service_for_user(db, user.id)
+        # Get LLM services for this user (short-lived session)
+        with get_db_session() as db:
+            generation_service = get_generation_service_for_user(db, user_id)
+            embedding_service = get_embedding_service_for_user(db, user_id)
 
         # Send initial context
         await websocket.send_json({
@@ -205,9 +234,9 @@ async def chat_websocket(
                     "content": user_message
                 })
 
-                # Get related entries based on user message
+                # Get related entries based on user message (uses short-lived session)
                 related_entries = await get_related_entries(
-                    db, user.id, user_message, embedding_service, k=3
+                    user_id, user_message, embedding_service, k=3
                 )
 
                 # Build system prompt
@@ -243,7 +272,7 @@ async def chat_websocket(
                 await websocket.send_json({"type": "complete"})
 
             except WebSocketDisconnect:
-                logger.info(f"WebSocket disconnected for user {user.id}")
+                logger.info(f"WebSocket disconnected for user {user_id}")
                 break
             except json.JSONDecodeError:
                 await websocket.send_json({
@@ -264,5 +293,3 @@ async def chat_websocket(
                 await websocket.close(code=WS_SERVER_ERROR, reason="Internal server error")
             except Exception:
                 pass
-    finally:
-        db.close()

@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import engine, Base, get_db
 from app.routers import auth, entries, search, insights, settings, forget, export, reflections, chat, prompts
+from app.services.reflection_cache import reflection_cache
 
 # Configure logging with environment-based level
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -84,15 +85,38 @@ app.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 
 @app.get("/health")
 async def health(db: Session = Depends(get_db)):
-    """Health check endpoint that verifies database connectivity."""
+    """Health check endpoint that verifies database and Redis connectivity."""
+    results = {"database": "unknown", "redis": "unknown"}
+    errors = []
+
+    # Check database
     try:
-        # Verify database connection
         db.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "connected"}
+        results["database"] = "connected"
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        results["database"] = "disconnected"
+        errors.append(f"database: {str(e)}")
+        logger.error(f"Health check - database failed: {e}")
+
+    # Check Redis
+    try:
+        if reflection_cache.ping():
+            results["redis"] = "connected"
+        else:
+            results["redis"] = "disconnected"
+            errors.append("redis: ping failed")
+    except Exception as e:
+        results["redis"] = "disconnected"
+        errors.append(f"redis: {str(e)}")
+        logger.error(f"Health check - redis failed: {e}")
+
+    all_healthy = all(v == "connected" for v in results.values())
+
+    if all_healthy:
+        return {"status": "ok", **results}
+    else:
         return JSONResponse(
             status_code=503,
-            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+            content={"status": "degraded", **results, "errors": errors}
         )
 
