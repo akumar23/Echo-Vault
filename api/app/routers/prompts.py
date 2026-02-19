@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends
@@ -211,50 +212,69 @@ async def _generate_suggestions(
     avg_mood: float,
     llm_service,
 ) -> List[WritingSuggestion]:
-    """Generate AI-powered writing suggestions."""
+    """Generate AI-powered writing suggestions.
+
+    Parallelizes independent LLM calls for better performance:
+    - Phase 1: Extract theme, generate prompt, generate continuation (in parallel)
+    - Phase 2: Generate question (requires theme from phase 1)
+    """
     suggestions = []
 
     # Prepare entries text for theme extraction
     entry_texts = [f"{e.title or ''}\n{e.content}" for e in entries[:5]]
 
-    # Generate Question style suggestion
-    try:
-        theme = await llm_service.extract_common_theme(entry_texts)
-        question_prompt = await _generate_question_suggestion(theme, llm_service)
-        suggestions.append(
-            WritingSuggestion(
+    # Phase 1: Run independent LLM calls in parallel
+    # - extract_common_theme: needed for question generation
+    # - _generate_prompt_suggestion: independent (uses avg_mood)
+    # - _generate_continuation_suggestion: independent (uses entries)
+    theme_task = llm_service.extract_common_theme(entry_texts)
+    prompt_task = _generate_prompt_suggestion(avg_mood, llm_service)
+    continuation_task = _generate_continuation_suggestion(entries, llm_service)
+
+    # Gather results (exceptions are captured, not raised)
+    results = await asyncio.gather(
+        theme_task, prompt_task, continuation_task,
+        return_exceptions=True
+    )
+    theme_result, prompt_result, continuation_result = results
+
+    # Phase 2: Generate question using extracted theme
+    question_suggestion = None
+    if isinstance(theme_result, Exception):
+        question_suggestion = _get_fallback_question()
+    else:
+        try:
+            question_prompt = await _generate_question_suggestion(theme_result, llm_service)
+            question_suggestion = WritingSuggestion(
                 id=str(uuid.uuid4()),
                 text=question_prompt,
                 type="question",
-                context=f"Based on your recent entries about {theme}",
+                context=f"Based on your recent entries about {theme_result}",
             )
-        )
-    except Exception:
-        suggestions.append(_get_fallback_question())
+        except Exception:
+            question_suggestion = _get_fallback_question()
+    suggestions.append(question_suggestion)
 
-    # Generate Prompt style suggestion (mood-based)
-    try:
-        prompt_text = await _generate_prompt_suggestion(avg_mood, llm_service)
+    # Process prompt result
+    if isinstance(prompt_result, Exception):
+        suggestions.append(_get_fallback_prompt(avg_mood))
+    else:
         mood_context = "Your mood has been lower lately" if avg_mood < 3 else "Reflecting on recent feelings"
         suggestions.append(
             WritingSuggestion(
                 id=str(uuid.uuid4()),
-                text=prompt_text,
+                text=prompt_result,
                 type="prompt",
                 context=mood_context,
             )
         )
-    except Exception:
-        suggestions.append(_get_fallback_prompt(avg_mood))
 
-    # Generate Continuation style suggestion
-    try:
-        continuation = await _generate_continuation_suggestion(entries, llm_service)
-        if continuation:
-            suggestions.append(continuation)
-        else:
-            suggestions.append(_get_fallback_continuation(entries))
-    except Exception:
+    # Process continuation result
+    if isinstance(continuation_result, Exception):
+        suggestions.append(_get_fallback_continuation(entries))
+    elif continuation_result:
+        suggestions.append(continuation_result)
+    else:
         suggestions.append(_get_fallback_continuation(entries))
 
     return suggestions

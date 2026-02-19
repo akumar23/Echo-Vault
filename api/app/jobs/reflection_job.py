@@ -11,7 +11,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="reflection.generate_reflection", ignore_result=True)
+@celery_app.task(
+    name="reflection.generate_reflection",
+    ignore_result=True,
+    time_limit=180,  # Hard kill at 3 minutes (reflections take longer)
+    soft_time_limit=150,  # Graceful shutdown at 2.5 minutes
+)
 def generate_reflection_task(user_id: int):
     """
     Background task to generate and cache reflection for a user.

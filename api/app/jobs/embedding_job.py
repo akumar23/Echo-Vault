@@ -5,9 +5,21 @@ from app.models.embedding import EntryEmbedding
 from app.services.llm_service import get_embedding_service_for_user
 from app.celery_app import celery_app
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="embedding.create_embedding", ignore_result=True)
+@celery_app.task(
+    name="embedding.create_embedding",
+    ignore_result=True,
+    time_limit=120,  # Hard kill at 2 minutes
+    soft_time_limit=90,  # Graceful shutdown at 90 seconds
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+    retry_backoff=True,
+    retry_backoff_max=300,
+)
 def create_embedding_task(entry_id: int):
     """
     Background task to create embedding for an entry.

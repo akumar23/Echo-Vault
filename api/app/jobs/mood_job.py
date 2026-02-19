@@ -9,7 +9,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="mood.infer_mood", ignore_result=True)
+@celery_app.task(
+    name="mood.infer_mood",
+    ignore_result=True,
+    time_limit=120,  # Hard kill at 2 minutes
+    soft_time_limit=90,  # Graceful shutdown at 90 seconds
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+    retry_backoff=True,
+    retry_backoff_max=300,
+)
 def infer_mood_task(entry_id: int):
     """
     Background task to infer mood for an entry.

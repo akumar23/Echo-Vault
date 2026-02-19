@@ -9,7 +9,15 @@ from datetime import datetime, timedelta
 import asyncio
 
 
-@celery_app.task(name="insights.generate_insights", ignore_result=True)
+@celery_app.task(
+    name="insights.generate_insights",
+    ignore_result=True,
+    time_limit=180,  # Hard kill at 3 minutes
+    soft_time_limit=150,  # Graceful shutdown at 2.5 minutes
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 2, "countdown": 120},
+    retry_backoff=True,
+)
 def generate_insights_task(user_id: int, days: int = 7):
     """
     Background task to generate insights for a user.
@@ -63,7 +71,12 @@ def generate_insights_task(user_id: int, days: int = 7):
         db.close()
 
 
-@celery_app.task(name="insights.nightly_insights", ignore_result=True)
+@celery_app.task(
+    name="insights.nightly_insights",
+    ignore_result=True,
+    time_limit=60,  # Hard kill at 1 minute (just enqueues tasks)
+    soft_time_limit=45,
+)
 def nightly_insights_task():
     """Nightly task to generate insights for all active users"""
     db = SessionLocal()
