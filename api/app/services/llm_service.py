@@ -17,7 +17,7 @@ import httpx
 import json
 import re
 import logging
-from typing import List, Optional, Any, AsyncGenerator
+from typing import List, Dict, Optional, Any, AsyncGenerator
 
 from app.core.config import settings as app_settings
 
