@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCreateEntry } from '@/hooks/useEntryMutations'
@@ -9,7 +9,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { ArrowLeft } from 'lucide-react'
 
-export default function NewEntryPage() {
+function NewEntryForm() {
   const [saving, setSaving] = useState(false)
   const mutation = useCreateEntry()
   const searchParams = useSearchParams()
@@ -31,25 +31,43 @@ export default function NewEntryPage() {
   }
 
   return (
-    <ProtectedRoute>
-      <div className="writing-page">
-        {/* Minimal navigation bar */}
-        <nav className="writing-page__nav">
-          <Link href="/" className="writing-page__back">
-            <ArrowLeft size={20} />
-            <span>Back</span>
-          </Link>
-          <ThemeToggle />
-        </nav>
+    <div className="writing-page">
+      <nav className="writing-page__nav">
+        <Link href="/" className="writing-page__back">
+          <ArrowLeft size={20} />
+          <span>Back</span>
+        </Link>
+        <ThemeToggle />
+      </nav>
 
-        <WritingEditor
-          onSave={handleSave}
-          saving={saving}
-          initialPrompt={initialPrompt}
-          promptType={promptType}
-          sourceEntryId={sourceEntryId}
-        />
-      </div>
+      <WritingEditor
+        onSave={handleSave}
+        saving={saving}
+        initialPrompt={initialPrompt}
+        promptType={promptType}
+        sourceEntryId={sourceEntryId}
+      />
+    </div>
+  )
+}
+
+export default function NewEntryPage() {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={
+        <div className="writing-page">
+          <nav className="writing-page__nav">
+            <Link href="/" className="writing-page__back">
+              <ArrowLeft size={20} />
+              <span>Back</span>
+            </Link>
+            <ThemeToggle />
+          </nav>
+          <div className="text-center text-muted p-8">Loading editor...</div>
+        </div>
+      }>
+        <NewEntryForm />
+      </Suspense>
     </ProtectedRoute>
   )
 }

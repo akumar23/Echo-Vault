@@ -131,30 +131,18 @@ const STORAGE_KEY = 'echocault-insight-voice'
 
 export function InsightVoiceProvider({ children }: InsightVoiceProviderProps) {
   const [voice, setVoiceState] = useState<InsightVoice>('gentle')
-  const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load preference from localStorage on mount
+  // Load preference from localStorage after hydration
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEY) as InsightVoice | null
-      if (stored && ['gentle', 'direct', 'playful'].includes(stored)) {
-        setVoiceState(stored)
-      }
-      setIsLoaded(true)
+    const stored = localStorage.getItem(STORAGE_KEY) as InsightVoice | null
+    if (stored && ['gentle', 'direct', 'playful'].includes(stored)) {
+      setVoiceState(stored)
     }
   }, [])
 
-  // Save preference to localStorage
   const setVoice = (newVoice: InsightVoice) => {
     setVoiceState(newVoice)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, newVoice)
-    }
-  }
-
-  // Don't render children until loaded to prevent hydration mismatch
-  if (!isLoaded) {
-    return null
+    localStorage.setItem(STORAGE_KEY, newVoice)
   }
 
   return (
