@@ -1,5 +1,6 @@
 import uuid
-import asyncio
+import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends
@@ -212,189 +213,94 @@ async def _generate_suggestions(
     avg_mood: float,
     llm_service,
 ) -> List[WritingSuggestion]:
-    """Generate AI-powered writing suggestions.
+    """Generate AI-powered writing suggestions with a single LLM call."""
+    # Prepare context for LLM
+    entry_summaries = []
+    for e in entries[:5]:
+        title = e.title or "Untitled"
+        content_preview = e.content[:200] if len(e.content) > 200 else e.content
+        entry_summaries.append(f"- {title}: {content_preview}")
+    entries_text = "\n".join(entry_summaries)
 
-    Parallelizes independent LLM calls for better performance:
-    - Phase 1: Extract theme, generate prompt, generate continuation (in parallel)
-    - Phase 2: Generate question (requires theme from phase 1)
-    """
-    suggestions = []
-
-    # Prepare entries text for theme extraction
-    entry_texts = [f"{e.title or ''}\n{e.content}" for e in entries[:5]]
-
-    # Phase 1: Run independent LLM calls in parallel
-    # - extract_common_theme: needed for question generation
-    # - _generate_prompt_suggestion: independent (uses avg_mood)
-    # - _generate_continuation_suggestion: independent (uses entries)
-    theme_task = llm_service.extract_common_theme(entry_texts)
-    prompt_task = _generate_prompt_suggestion(avg_mood, llm_service)
-    continuation_task = _generate_continuation_suggestion(entries, llm_service)
-
-    # Gather results (exceptions are captured, not raised)
-    results = await asyncio.gather(
-        theme_task, prompt_task, continuation_task,
-        return_exceptions=True
-    )
-    theme_result, prompt_result, continuation_result = results
-
-    # Phase 2: Generate question using extracted theme
-    question_suggestion = None
-    if isinstance(theme_result, Exception):
-        question_suggestion = _get_fallback_question()
-    else:
-        try:
-            question_prompt = await _generate_question_suggestion(theme_result, llm_service)
-            question_suggestion = WritingSuggestion(
-                id=str(uuid.uuid4()),
-                text=question_prompt,
-                type="question",
-                context=f"Based on your recent entries about {theme_result}",
-            )
-        except Exception:
-            question_suggestion = _get_fallback_question()
-    suggestions.append(question_suggestion)
-
-    # Process prompt result
-    if isinstance(prompt_result, Exception):
-        suggestions.append(_get_fallback_prompt(avg_mood))
-    else:
-        mood_context = "Your mood has been lower lately" if avg_mood < 3 else "Reflecting on recent feelings"
-        suggestions.append(
-            WritingSuggestion(
-                id=str(uuid.uuid4()),
-                text=prompt_result,
-                type="prompt",
-                context=mood_context,
-            )
-        )
-
-    # Process continuation result
-    if isinstance(continuation_result, Exception):
-        suggestions.append(_get_fallback_continuation(entries))
-    elif continuation_result:
-        suggestions.append(continuation_result)
-    else:
-        suggestions.append(_get_fallback_continuation(entries))
-
-    return suggestions
-
-
-async def _generate_question_suggestion(theme: str, llm_service) -> str:
-    """Generate an introspective question based on a theme."""
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a thoughtful journaling coach. Generate a single introspective question "
-                "that encourages deep reflection on the given theme.\n\n"
-                "RULES:\n"
-                "- Output ONLY the question, no explanations\n"
-                "- Question should be open-ended (not yes/no)\n"
-                "- Be specific to the theme\n"
-                "- Keep it under 20 words"
-            ),
-        },
-        {
-            "role": "user",
-            "content": f"Generate an introspective question about: {theme}",
-        },
-    ]
-
-    response = await llm_service.chat_completion(messages, temperature=0.7)
-    return response.strip().strip('"')
-
-
-async def _generate_prompt_suggestion(avg_mood: float, llm_service) -> str:
-    """Generate a writing prompt based on current mood."""
-    mood_context = ""
-    if avg_mood <= 2:
-        mood_context = "The user has been feeling down. Generate a gentle, supportive prompt."
-    elif avg_mood >= 4:
-        mood_context = "The user has been feeling good. Generate a prompt to explore or celebrate that."
-    else:
-        mood_context = "The user has neutral mood. Generate a reflective prompt."
-
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a journaling prompt generator. Create a single writing prompt.\n\n"
-                "RULES:\n"
-                "- Output ONLY the prompt, no explanations\n"
-                "- Start with an action verb (Write about, Describe, Explore, etc.)\n"
-                "- Be specific and evocative\n"
-                "- Keep it under 15 words"
-            ),
-        },
-        {
-            "role": "user",
-            "content": mood_context,
-        },
-    ]
-
-    response = await llm_service.chat_completion(messages, temperature=0.7)
-    return response.strip().strip('"')
-
-
-async def _generate_continuation_suggestion(
-    entries: List[Entry], llm_service
-) -> Optional[WritingSuggestion]:
-    """Generate a continuation suggestion referencing a specific past entry."""
-    if not entries:
-        return None
-
-    # Pick a recent entry with substantial content
-    source_entry = None
-    for entry in entries:
-        if len(entry.content) > 100:
-            source_entry = entry
-            break
-
-    if not source_entry:
-        source_entry = entries[0]
-
-    # Extract a key topic from the entry
-    content_preview = source_entry.content[:300]
-
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a journaling assistant. Based on a past journal entry, "
-                "generate a follow-up prompt that references what the user wrote.\n\n"
-                "RULES:\n"
-                "- Start with a time reference like 'Earlier you mentioned...' or 'You wrote about...'\n"
-                "- Reference a specific detail from the entry\n"
-                "- End with a question about how things have changed or progressed\n"
-                "- Keep it under 25 words\n"
-                "- Output ONLY the prompt"
-            ),
-        },
-        {
-            "role": "user",
-            "content": f"Past entry:\n{content_preview}\n\nGenerate follow-up prompt:",
-        },
-    ]
-
-    response = await llm_service.chat_completion(messages, temperature=0.7)
-
-    # Format the date nicely
+    # Pick source entry for continuation
+    source_entry = next((e for e in entries if len(e.content) > 100), entries[0])
     entry_date = source_entry.created_at
     if entry_date.date() == datetime.now(timezone.utc).date():
         date_str = "earlier today"
     elif (datetime.now(timezone.utc) - entry_date).days == 1:
         date_str = "yesterday"
     else:
-        date_str = entry_date.strftime("%A")  # Day name like "Tuesday"
+        date_str = entry_date.strftime("%A")
 
-    return WritingSuggestion(
-        id=str(uuid.uuid4()),
-        text=response.strip().strip('"'),
-        type="continuation",
-        context=f"From your entry {date_str}",
-        source_entry_id=source_entry.id,
-    )
+    mood_desc = "low" if avg_mood <= 2 else "positive" if avg_mood >= 4 else "neutral"
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a journaling coach. Generate 3 writing suggestions based on recent journal entries.\n\n"
+                "OUTPUT FORMAT (JSON only):\n"
+                "{\n"
+                '  "theme": "2-4 word theme from entries (e.g., creative projects, work stress)",\n'
+                '  "question": "Open-ended introspective question about the theme (under 20 words)",\n'
+                '  "prompt": "Writing prompt starting with action verb (under 15 words)",\n'
+                '  "continuation": "Follow-up referencing past entry, ending with question (under 25 words)"\n'
+                "}\n\n"
+                "RULES:\n"
+                "- question: Deep reflection on identified theme\n"
+                "- prompt: Mood-appropriate (supportive if low, celebratory if positive)\n"
+                "- continuation: Reference specific detail from the most recent entry\n"
+                "- Output ONLY valid JSON, no explanations"
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Recent entries:\n{entries_text}\n\nMood: {mood_desc}\n\nGenerate suggestions (JSON):",
+        },
+    ]
+
+    try:
+        response = await llm_service.chat_completion(messages, temperature=0.7)
+        parsed = _parse_suggestions_response(response)
+
+        return [
+            WritingSuggestion(
+                id=str(uuid.uuid4()),
+                text=parsed["question"],
+                type="question",
+                context=f"Based on your recent entries about {parsed['theme']}",
+            ),
+            WritingSuggestion(
+                id=str(uuid.uuid4()),
+                text=parsed["prompt"],
+                type="prompt",
+                context="Your mood has been lower lately" if avg_mood < 3 else "Reflecting on recent feelings",
+            ),
+            WritingSuggestion(
+                id=str(uuid.uuid4()),
+                text=parsed["continuation"],
+                type="continuation",
+                context=f"From your entry {date_str}",
+                source_entry_id=source_entry.id,
+            ),
+        ]
+    except Exception:
+        return _get_fallback_suggestions()
+
+
+def _parse_suggestions_response(response_text: str) -> dict:
+    """Parse suggestions from LLM response."""
+    # Try to extract JSON from response
+    json_match = re.search(r'\{[\s\S]*\}', response_text)
+    if json_match:
+        parsed = json.loads(json_match.group())
+        return {
+            "theme": parsed.get("theme", "recent thoughts"),
+            "question": parsed.get("question", "What patterns have you noticed in your thoughts lately?"),
+            "prompt": parsed.get("prompt", "Write about something you're curious about right now."),
+            "continuation": parsed.get("continuation", "Looking back at your recent entries, what stands out?"),
+        }
+    raise ValueError("Could not parse suggestions JSON")
 
 
 def _get_fallback_suggestions() -> List[WritingSuggestion]:

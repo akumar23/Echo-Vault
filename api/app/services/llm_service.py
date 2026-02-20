@@ -17,7 +17,7 @@ import httpx
 import json
 import re
 import logging
-from typing import List, Optional, Dict, Any, AsyncGenerator
+from typing import List, Optional, Any, AsyncGenerator
 
 from app.core.config import settings as app_settings
 
@@ -364,40 +364,18 @@ class LLMService:
         return theme
 
 
-# Service instance caches
-_generation_services: Dict[str, LLMService] = {}
-_embedding_services: Dict[str, LLMService] = {}
-
-
-def _get_cache_key(url: str, model: str, api_token: Optional[str]) -> str:
-    """Generate cache key for service instance."""
-    token_hash = hash(api_token) if api_token else "none"
-    return f"{url}|{model}|{token_hash}"
-
-
 def get_generation_service(
     url: Optional[str] = None,
     model: Optional[str] = None,
     api_token: Optional[str] = None
 ) -> LLMService:
-    """
-    Get a generation LLM service instance.
-    Uses caching to avoid creating duplicate instances.
-    Falls back to environment defaults for missing parameters.
-    """
-    url = url or app_settings.default_generation_url
-    model = model or app_settings.default_generation_model
-    cache_key = _get_cache_key(url, model, api_token)
-
-    if cache_key not in _generation_services:
-        _generation_services[cache_key] = LLMService(
-            base_url=url,
-            model=model,
-            api_token=api_token,
-            service_type="generation"
-        )
-
-    return _generation_services[cache_key]
+    """Get a generation LLM service instance."""
+    return LLMService(
+        base_url=url or app_settings.default_generation_url,
+        model=model or app_settings.default_generation_model,
+        api_token=api_token,
+        service_type="generation"
+    )
 
 
 def get_embedding_service(
@@ -405,64 +383,44 @@ def get_embedding_service(
     model: Optional[str] = None,
     api_token: Optional[str] = None
 ) -> LLMService:
-    """
-    Get an embedding LLM service instance.
-    Uses caching to avoid creating duplicate instances.
-    Falls back to environment defaults for missing parameters.
-    """
-    url = url or app_settings.default_embedding_url
-    model = model or app_settings.default_embedding_model
-    cache_key = _get_cache_key(url, model, api_token)
-
-    if cache_key not in _embedding_services:
-        _embedding_services[cache_key] = LLMService(
-            base_url=url,
-            model=model,
-            api_token=api_token,
-            service_type="embedding"
-        )
-
-    return _embedding_services[cache_key]
+    """Get an embedding LLM service instance."""
+    return LLMService(
+        base_url=url or app_settings.default_embedding_url,
+        model=model or app_settings.default_embedding_model,
+        api_token=api_token,
+        service_type="embedding"
+    )
 
 
 def get_generation_service_for_user(db, user_id: int) -> LLMService:
-    """
-    Get a generation LLM service for a specific user.
-    Checks user settings for custom configuration.
-    """
+    """Get a generation LLM service for a specific user."""
     from app.models.settings import Settings
 
     user_settings = db.query(Settings).filter(Settings.user_id == user_id).first()
 
     if user_settings:
-        return get_generation_service(
-            url=user_settings.generation_url,
-            model=user_settings.generation_model,
-            api_token=user_settings.generation_api_token
+        return LLMService(
+            base_url=user_settings.generation_url or app_settings.default_generation_url,
+            model=user_settings.generation_model or app_settings.default_generation_model,
+            api_token=user_settings.generation_api_token,
+            service_type="generation"
         )
 
     return get_generation_service()
 
 
 def get_embedding_service_for_user(db, user_id: int) -> LLMService:
-    """
-    Get an embedding LLM service for a specific user.
-    Checks user settings for custom configuration.
-    """
+    """Get an embedding LLM service for a specific user."""
     from app.models.settings import Settings
 
     user_settings = db.query(Settings).filter(Settings.user_id == user_id).first()
 
     if user_settings:
-        return get_embedding_service(
-            url=user_settings.embedding_url,
-            model=user_settings.embedding_model,
-            api_token=user_settings.embedding_api_token
+        return LLMService(
+            base_url=user_settings.embedding_url or app_settings.default_embedding_url,
+            model=user_settings.embedding_model or app_settings.default_embedding_model,
+            api_token=user_settings.embedding_api_token,
+            service_type="embedding"
         )
 
     return get_embedding_service()
-
-
-# Default service instances (using environment defaults)
-default_generation_service = get_generation_service()
-default_embedding_service = get_embedding_service()

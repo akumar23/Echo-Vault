@@ -124,24 +124,6 @@ services:
       - echovault_network
     command: celery -A app.celery_app worker --loglevel=info
 
-  beat:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.api
-    container_name: echovault_beat
-    env_file:
-      - ../.env
-    environment:
-      <<: *common-env
-    volumes:
-      - ../api:/app
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - echovault_network
-    command: celery -A app.celery_app beat --loglevel=info
-
   web:
     build:
       context: ..
