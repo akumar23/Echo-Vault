@@ -11,6 +11,8 @@ import {
   Settings,
   ChevronDown
 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { FadeIn, StaggerContainer, StaggerItem, useMotion } from '@/components/motion'
 
 const features = [
   {
@@ -85,64 +87,224 @@ Mix and match: use local for embeddings and cloud for chat—or go full offline.
   },
 ]
 
-function FeatureCard({ feature }: { feature: typeof features[0] }) {
+function FeatureCard({ feature, index }: { feature: typeof features[0]; index: number }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const { reducedMotion } = useMotion()
 
   return (
-    <div className={`feature-card ${isExpanded ? 'feature-card--expanded' : ''}`}>
-      <button
-        className="feature-card__header"
+    <motion.div
+      className="feature-card-new"
+      layout={!reducedMotion}
+      style={{
+        borderLeftColor: feature.color,
+      }}
+    >
+      <motion.button
+        className="feature-card-new__header"
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
+        whileHover={{ x: 4 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       >
-        <div className="feature-card__header-left">
-          <div
-            className="feature-card__icon"
-            style={{ backgroundColor: `${feature.color}20`, color: feature.color }}
+        <div className="feature-card-new__header-left">
+          <motion.div
+            className="feature-card-new__icon"
+            style={{
+              backgroundColor: `color-mix(in srgb, ${feature.color} 15%, transparent)`,
+              color: feature.color,
+            }}
+            animate={isExpanded ? { scale: 1.1 } : { scale: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
           >
-            <feature.icon size={24} />
-          </div>
-          <div className="feature-card__titles">
-            <span className="feature-card__emoji">{feature.emoji}</span>
-            <h3 className="feature-card__title">{feature.title}</h3>
+            <feature.icon size={22} />
+          </motion.div>
+          <div className="feature-card-new__titles">
+            <span className="feature-card-new__emoji">{feature.emoji}</span>
+            <h3 className="feature-card-new__title">{feature.title}</h3>
           </div>
         </div>
-        <ChevronDown
-          size={20}
-          className={`feature-card__chevron ${isExpanded ? 'feature-card__chevron--open' : ''}`}
-        />
-      </button>
+        <motion.div
+          animate={{ rotate: isExpanded ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown size={20} className="feature-card-new__chevron" />
+        </motion.div>
+      </motion.button>
 
-      <div className="feature-card__summary">
-        <p>{feature.summary}</p>
-      </div>
+      <p className="feature-card-new__summary">{feature.summary}</p>
 
-      <div className={`feature-card__details ${isExpanded ? 'feature-card__details--open' : ''}`}>
-        <div className="feature-card__description">
-          {feature.description.split('\n\n').map((paragraph, i) => (
-            <p key={i}>{paragraph}</p>
-          ))}
-        </div>
-      </div>
-    </div>
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            className="feature-card-new__details"
+            initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+          >
+            <div className="feature-card-new__description">
+              {feature.description.split('\n\n').map((paragraph, i) => (
+                <motion.p
+                  key={i}
+                  initial={reducedMotion ? false : { opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  {paragraph}
+                </motion.p>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }
 
 export function Features() {
   return (
-    <section className="features" id="features">
-      <div className="features__header">
-        <h2 className="features__title">Feature Highlights</h2>
-        <p className="features__subtitle">
-          Click each feature to learn more about how EchoVault helps you understand yourself better.
-        </p>
-      </div>
+    <section className="features-new" id="features">
+      <FadeIn>
+        <div className="features-new__header">
+          <h2 className="features-new__title">Feature Highlights</h2>
+          <p className="features-new__subtitle">
+            Click each feature to learn more about how EchoVault helps you understand yourself better.
+          </p>
+        </div>
+      </FadeIn>
 
-      <div className="features__grid">
-        {features.map((feature) => (
-          <FeatureCard key={feature.title} feature={feature} />
+      <StaggerContainer className="features-new__grid" staggerDelay={0.06} delayChildren={0.1}>
+        {features.map((feature, index) => (
+          <StaggerItem key={feature.title}>
+            <FeatureCard feature={feature} index={index} />
+          </StaggerItem>
         ))}
-      </div>
+      </StaggerContainer>
+
+      <style jsx global>{`
+        .features-new {
+          padding: var(--space-10) 0;
+        }
+
+        .features-new__header {
+          text-align: center;
+          margin-bottom: var(--space-8);
+        }
+
+        .features-new__title {
+          font-size: var(--text-3xl);
+          font-weight: 700;
+          margin-bottom: var(--space-3);
+        }
+
+        .features-new__subtitle {
+          color: var(--text-muted);
+          font-size: var(--text-lg);
+          max-width: 600px;
+          margin: 0 auto;
+        }
+
+        .features-new__grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: var(--space-4);
+        }
+
+        .feature-card-new {
+          background: var(--bg-surface);
+          border: 1px solid var(--border);
+          border-left: 3px solid var(--accent);
+          border-radius: var(--radius-md);
+          padding: var(--space-4);
+          transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .feature-card-new:hover {
+          box-shadow: var(--shadow-md);
+        }
+
+        .feature-card-new__header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          background: none;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          text-align: left;
+        }
+
+        .feature-card-new__header-left {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+        }
+
+        .feature-card-new__icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          border-radius: var(--radius-md);
+          flex-shrink: 0;
+        }
+
+        .feature-card-new__titles {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+        }
+
+        .feature-card-new__emoji {
+          font-size: var(--text-lg);
+        }
+
+        .feature-card-new__title {
+          font-size: var(--text-base);
+          font-weight: 600;
+        }
+
+        .feature-card-new__chevron {
+          color: var(--text-muted);
+          flex-shrink: 0;
+        }
+
+        .feature-card-new__summary {
+          color: var(--text-muted);
+          font-size: var(--text-sm);
+          margin-top: var(--space-3);
+          line-height: 1.5;
+        }
+
+        .feature-card-new__details {
+          overflow: hidden;
+        }
+
+        .feature-card-new__description {
+          padding-top: var(--space-4);
+          border-top: 1px solid var(--border);
+          margin-top: var(--space-4);
+        }
+
+        .feature-card-new__description p {
+          color: var(--text-primary);
+          font-size: var(--text-sm);
+          line-height: 1.7;
+          margin-bottom: var(--space-3);
+        }
+
+        .feature-card-new__description p:last-child {
+          margin-bottom: 0;
+        }
+
+        @media (max-width: 640px) {
+          .features-new__grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </section>
   )
 }
