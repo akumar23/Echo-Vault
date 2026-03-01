@@ -89,11 +89,8 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
     textPrimary: getCssVar('--text-primary', '#E8E4DE'),
   }), [chartReady]) // Re-compute when chart is ready (client-side)
 
-  if (isLoading || !chartReady) {
-    return <div className="skeleton" style={{ height: '200px', width: '100%' }} />
-  }
-
   // Process chart data with metadata for tooltips
+  // Must be called before any conditional returns to satisfy React hooks rules
   const { chartData, entryMetadata, dateRange } = useMemo(() => {
     if (!entries || entries.length === 0) {
       return { chartData: null, entryMetadata: [], dateRange: [] }
@@ -164,10 +161,7 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
     return { chartData: data, entryMetadata: metadata, dateRange }
   }, [entries, days, colors])
 
-  if (!entries || entries.length === 0 || !chartData) {
-    return <p className="text-muted">No data available for trends</p>
-  }
-
+  // Chart options - must be defined before conditional returns
   const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: true,
@@ -273,6 +267,15 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
       },
     },
   }), [colors, days, dateRange, entryMetadata])
+
+  // Conditional returns after all hooks
+  if (isLoading || !chartReady) {
+    return <div className="skeleton" style={{ height: '200px', width: '100%' }} />
+  }
+
+  if (!entries || entries.length === 0 || !chartData) {
+    return <p className="text-muted">No data available for trends</p>
+  }
 
   return (
     <div>
