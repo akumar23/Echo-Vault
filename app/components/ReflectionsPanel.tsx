@@ -1,66 +1,16 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { reflectionsApi, Reflection } from '@/lib/api'
+import { useReflection } from '@/hooks/useReflection'
 import { ErrorBoundary } from './ErrorBoundary'
 import { Loader2, AlertCircle, FileText } from 'lucide-react'
 
 interface ReflectionsPanelProps {}
 
 function ReflectionsPanelContent({}: ReflectionsPanelProps) {
-  const [reflection, setReflection] = useState<Reflection | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const mountedRef = useRef(true)
+  const { reflection, isLoading, isStreaming, error } = useReflection()
 
-  const fetchReflection = useCallback(async () => {
-    try {
-      const data = await reflectionsApi.get()
-      if (mountedRef.current) {
-        setReflection(data)
-        setError('')
-
-        // Only poll if actively generating (5s interval)
-        if (data.status === 'generating') {
-          pollTimeoutRef.current = setTimeout(fetchReflection, 5000)
-        }
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        setError('Failed to load reflection')
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    mountedRef.current = true
-
-    // Check for auth token
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-    if (!token) {
-      setError('Authentication required. Please log in.')
-      setLoading(false)
-      return
-    }
-
-    // Fetch reflection on mount
-    fetchReflection()
-
-    return () => {
-      mountedRef.current = false
-      if (pollTimeoutRef.current) {
-        clearTimeout(pollTimeoutRef.current)
-      }
-    }
-  }, [fetchReflection])
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="scrollable-content flex-1">
         <div className="flex items-center gap-2">
@@ -98,7 +48,10 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
       <div className="scrollable-content flex-1">
         <div className="flex items-center gap-2 mb-4">
           <Loader2 size={18} className="text-accent" style={{ animation: 'spin 1s linear infinite' }} />
-          <span className="text-accent">Generating reflection...</span>
+          <span className="text-accent">
+            Generating reflection...
+            {isStreaming && <span className="text-muted ml-2">(streaming)</span>}
+          </span>
         </div>
         {reflection.reflection && (
           <div className="reflection reflection--loading prose prose-sm">
