@@ -23,6 +23,8 @@ export function ChatPanel({ reflection }: ChatPanelProps) {
     streamingContent,
     isConnected,
     isStreaming,
+    isReconnecting,
+    reconnectAttempt,
     sendMessage
   } = useChat({
     enabled: true,
@@ -57,7 +59,9 @@ export function ChatPanel({ reflection }: ChatPanelProps) {
       {!isConnected && (
         <div className="chat-status-bar">
           <span className="chat-status chat-status--disconnected">
-            Connecting...
+            {isReconnecting
+              ? `Reconnecting... (attempt ${reconnectAttempt}/5)`
+              : 'Connecting...'}
           </span>
         </div>
       )}

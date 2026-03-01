@@ -20,6 +20,10 @@ interface ChatContext {
 interface UseChatOptions {
   enabled: boolean
   onError?: (error: string) => void
+  /** Maximum number of reconnection attempts. Default: 5 */
+  maxReconnectAttempts?: number
+  /** Base delay for reconnection in ms. Default: 1000 */
+  reconnectBaseDelay?: number
 }
 
 interface UseChatReturn {
@@ -27,6 +31,8 @@ interface UseChatReturn {
   streamingContent: string
   isConnected: boolean
   isStreaming: boolean
+  isReconnecting: boolean
+  reconnectAttempt: number
   context: ChatContext | null
   sendMessage: (content: string) => void
   reset: () => void
@@ -35,17 +41,27 @@ interface UseChatReturn {
 /**
  * Hook for managing WebSocket chat with the reflection assistant.
  * Connects to the chat WebSocket when enabled and manages message state.
+ * Includes automatic reconnection with exponential backoff.
  */
-export function useChat({ enabled, onError }: UseChatOptions): UseChatReturn {
+export function useChat({
+  enabled,
+  onError,
+  maxReconnectAttempts = 5,
+  reconnectBaseDelay = 1000,
+}: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingContent, setStreamingContent] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const [reconnectAttempt, setReconnectAttempt] = useState(0)
   const [context, setContext] = useState<ChatContext | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const streamingContentRef = useRef('')
   const mountedRef = useRef(true)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const shouldReconnectRef = useRef(true)
   // Store onError in a ref to avoid recreating callbacks
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
@@ -56,15 +72,28 @@ export function useChat({ enabled, onError }: UseChatOptions): UseChatReturn {
     streamingContentRef.current = ''
     setContext(null)
     setIsStreaming(false)
+    setReconnectAttempt(0)
+    setIsReconnecting(false)
+  }, [])
+
+  const clearReconnectTimeout = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
   }, [])
 
   const disconnect = useCallback(() => {
+    shouldReconnectRef.current = false
+    clearReconnectTimeout()
     if (wsRef.current) {
       wsRef.current.close(1000, 'Client initiated close')
       wsRef.current = null
     }
     setIsConnected(false)
-  }, [])
+    setIsReconnecting(false)
+    setReconnectAttempt(0)
+  }, [clearReconnectTimeout])
 
   const connect = useCallback(() => {
     // Get token from localStorage
@@ -94,6 +123,8 @@ export function useChat({ enabled, onError }: UseChatOptions): UseChatReturn {
     ws.onopen = () => {
       if (mountedRef.current) {
         setIsConnected(true)
+        setIsReconnecting(false)
+        setReconnectAttempt(0)
       }
     }
 
@@ -154,19 +185,48 @@ export function useChat({ enabled, onError }: UseChatOptions): UseChatReturn {
       setIsConnected(false)
       setIsStreaming(false)
 
-      // Handle specific close codes
+      // Handle specific close codes - don't reconnect for auth errors
       if (event.code === 4001) {
         onErrorRef.current?.('Authentication failed. Please log in again.')
+        shouldReconnectRef.current = false
+        return
       } else if (event.code === 4002) {
         onErrorRef.current?.('User not found.')
-      } else if (event.code !== 1000 && event.code !== 1001) {
-        // Don't show error for normal closures
-        if (event.reason) {
-          onErrorRef.current?.(`Connection closed: ${event.reason}`)
-        }
+        shouldReconnectRef.current = false
+        return
       }
+
+      // Don't reconnect for normal closures (1000 = normal, 1001 = going away)
+      if (event.code === 1000 || event.code === 1001) {
+        return
+      }
+
+      // Attempt reconnection with exponential backoff
+      setReconnectAttempt(prev => {
+        const nextAttempt = prev + 1
+
+        if (nextAttempt <= maxReconnectAttempts && shouldReconnectRef.current) {
+          setIsReconnecting(true)
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 30s)
+          const delay = Math.min(
+            reconnectBaseDelay * Math.pow(2, prev),
+            30000
+          )
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current && shouldReconnectRef.current) {
+              connect()
+            }
+          }, delay)
+        } else if (nextAttempt > maxReconnectAttempts) {
+          setIsReconnecting(false)
+          onErrorRef.current?.('Connection lost. Please refresh the page to reconnect.')
+        }
+
+        return nextAttempt
+      })
     }
-  }, []) // No dependencies - uses refs for callbacks
+  }, [maxReconnectAttempts, reconnectBaseDelay]) // Dependencies for reconnection config
 
   const sendMessage = useCallback((content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -194,6 +254,7 @@ export function useChat({ enabled, onError }: UseChatOptions): UseChatReturn {
     mountedRef.current = true
 
     if (enabled) {
+      shouldReconnectRef.current = true
       connect()
     } else {
       disconnect()
@@ -211,6 +272,8 @@ export function useChat({ enabled, onError }: UseChatOptions): UseChatReturn {
     streamingContent,
     isConnected,
     isStreaming,
+    isReconnecting,
+    reconnectAttempt,
     context,
     sendMessage,
     reset
