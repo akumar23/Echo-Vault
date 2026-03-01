@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getErrorMessage } from '@/lib/errors'
 import { registerSchema, type RegisterFormData } from '@/lib/validation'
+import { PasswordStrength } from '@/components/PasswordStrength'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -100,9 +101,12 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? 'password-error' : undefined}
+              aria-describedby={errors.password ? 'password-error' : 'password-strength'}
               required
             />
+            <div id="password-strength">
+              <PasswordStrength password={password} />
+            </div>
             {errors.password && (
               <p id="password-error" className="form-error">
                 {errors.password}
