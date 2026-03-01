@@ -13,24 +13,70 @@ interface WritingEditorProps {
   sourceEntryId?: number
   /** Autosave delay in milliseconds. Set to 0 to disable autosave. Default: 3000ms */
   autosaveDelay?: number
+  /** When true, autosave saves to localStorage as a draft instead of calling API. Default: false */
+  isDraft?: boolean
+  /** Callback to clear draft from localStorage after successful save */
+  onDraftClear?: () => void
+  /** Initial draft data to restore from localStorage */
+  initialDraft?: DraftData | null
 }
 
 const MOOD_LABELS = ['Low', 'Down', 'Neutral', 'Good', 'Great']
 const MOOD_EMOJIS = ['😢', '😕', '😐', '🙂', '😊']
 
-export function WritingEditor({ entry, onSave, saving = false, initialPrompt, promptType, sourceEntryId, autosaveDelay = 3000 }: WritingEditorProps) {
-  const [title, setTitle] = useState(entry?.title ?? '')
-  const [content, setContent] = useState(entry?.content ?? '')
-  const [tags, setTags] = useState<string[]>(entry?.tags ?? [])
+const DRAFT_STORAGE_KEY = 'echovault_draft'
+
+export interface DraftData {
+  title: string
+  content: string
+  tags: string[]
+  mood: number
+  useLlmPrediction: boolean
+  savedAt: string
+}
+
+export function saveDraftToStorage(draft: DraftData): void {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft))
+  } catch (error) {
+    console.error('Failed to save draft:', error)
+  }
+}
+
+export function loadDraftFromStorage(): DraftData | null {
+  try {
+    const stored = localStorage.getItem(DRAFT_STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored) as DraftData
+    }
+  } catch (error) {
+    console.error('Failed to load draft:', error)
+  }
+  return null
+}
+
+export function clearDraftFromStorage(): void {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY)
+  } catch (error) {
+    console.error('Failed to clear draft:', error)
+  }
+}
+
+export function WritingEditor({ entry, onSave, saving = false, initialPrompt, promptType, sourceEntryId, autosaveDelay = 3000, isDraft = false, onDraftClear, initialDraft }: WritingEditorProps) {
+  // Initialize from entry (existing), initialDraft (restored draft), or empty state
+  const [title, setTitle] = useState(entry?.title ?? initialDraft?.title ?? '')
+  const [content, setContent] = useState(entry?.content ?? initialDraft?.content ?? '')
+  const [tags, setTags] = useState<string[]>(entry?.tags ?? initialDraft?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  const [mood, setMood] = useState(entry?.mood_user ?? 3)
-  const [useLlmPrediction, setUseLlmPrediction] = useState(entry?.mood_user == null)
+  const [mood, setMood] = useState(entry?.mood_user ?? initialDraft?.mood ?? 3)
+  const [useLlmPrediction, setUseLlmPrediction] = useState(entry?.mood_user == null && (initialDraft?.useLlmPrediction ?? true))
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showPrompt, setShowPrompt] = useState(!!initialPrompt)
   const [isAutosaving, setIsAutosaving] = useState(false)
-  const [lastSavedContent, setLastSavedContent] = useState(entry?.content ?? '')
-  const [lastSavedTitle, setLastSavedTitle] = useState(entry?.title ?? '')
+  const [lastSavedContent, setLastSavedContent] = useState(entry?.content ?? initialDraft?.content ?? '')
+  const [lastSavedTitle, setLastSavedTitle] = useState(entry?.title ?? initialDraft?.title ?? '')
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -104,12 +150,25 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
     autosaveTimerRef.current = setTimeout(async () => {
       setIsAutosaving(true)
       try {
-        await onSave({
-          title: title.trim() || undefined,
-          content,
-          tags,
-          mood_user: useLlmPrediction ? undefined : mood
-        })
+        if (isDraft) {
+          // Save to localStorage as draft instead of API
+          saveDraftToStorage({
+            title,
+            content,
+            tags,
+            mood,
+            useLlmPrediction,
+            savedAt: new Date().toISOString()
+          })
+        } else {
+          // Save to API for existing entries
+          await onSave({
+            title: title.trim() || undefined,
+            content,
+            tags,
+            mood_user: useLlmPrediction ? undefined : mood
+          })
+        }
         setLastSavedContent(content)
         setLastSavedTitle(title)
       } catch (error) {
@@ -124,7 +183,7 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
         clearTimeout(autosaveTimerRef.current)
       }
     }
-  }, [content, title, autosaveDelay, saving, isAutosaving, lastSavedContent, lastSavedTitle, tags, mood, useLlmPrediction, onSave])
+  }, [content, title, autosaveDelay, saving, isAutosaving, lastSavedContent, lastSavedTitle, tags, mood, useLlmPrediction, onSave, isDraft])
 
   // Focus content on mount
   useEffect(() => {
@@ -189,6 +248,12 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
     setLastSavedContent(content)
     setLastSavedTitle(title)
 
+    // Clear draft from localStorage after successful save
+    if (isDraft) {
+      clearDraftFromStorage()
+      onDraftClear?.()
+    }
+
     // Log completion interaction if this entry was created from a prompt
     if (initialPrompt && promptType) {
       promptsApi.logInteraction({
@@ -208,13 +273,13 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
       <div className="writing-editor__header">
         <div className="writing-editor__status">
           {saving ? (
-            <span className="writing-editor__saving">Saving...</span>
+            <span className="writing-editor__saving">{isDraft ? 'Adding...' : 'Saving...'}</span>
           ) : isAutosaving ? (
-            <span className="writing-editor__saving">Autosaving...</span>
+            <span className="writing-editor__saving">{isDraft ? 'Saving draft...' : 'Autosaving...'}</span>
           ) : hasChanges ? (
-            <span className="writing-editor__unsaved">Unsaved changes</span>
-          ) : entry ? (
-            <span className="writing-editor__saved">Saved</span>
+            <span className="writing-editor__unsaved">{isDraft ? 'Draft' : 'Unsaved changes'}</span>
+          ) : (entry || (isDraft && lastSavedContent)) ? (
+            <span className="writing-editor__saved">{isDraft ? 'Draft saved' : 'Saved'}</span>
           ) : null}
         </div>
 
@@ -239,7 +304,7 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
             onClick={handleSave}
             disabled={saving || !content.trim()}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? (isDraft ? 'Adding...' : 'Saving...') : (isDraft ? 'Add Entry' : 'Save')}
           </button>
         </div>
       </div>

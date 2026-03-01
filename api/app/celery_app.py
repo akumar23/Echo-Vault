@@ -17,8 +17,6 @@ celery_config = {
     "enable_utc": True,
     # No results stored (all tasks use ignore_result=True)
     "task_ignore_result": True,
-    # Worker heartbeat - only needed for failure detection
-    "broker_heartbeat": 120,
     # Disable all worker events to reduce Redis traffic
     "worker_send_task_events": False,
     "task_send_sent_event": False,
@@ -29,10 +27,15 @@ celery_config = {
         # Reduce fanout prefix operations
         "fanout_prefix": True,
         "fanout_patterns": True,
-        # Use BRPOP with longer timeout to reduce polling
-        "socket_timeout": 30,
-        "socket_connect_timeout": 5,
+        # Use BRPOP with long timeout to minimize polling (critical for Upstash)
+        # Worker blocks for up to 5 min waiting for tasks instead of reconnecting
+        "socket_timeout": 300,
+        "socket_connect_timeout": 10,
     },
+    # Reduce broker connection pool to minimize idle connections
+    "broker_pool_limit": 1,
+    # Increase heartbeat interval to reduce keep-alive traffic
+    "broker_heartbeat": 300,
     # Single worker process - sufficient for low-traffic/single-user
     # Override with CELERY_WORKER_CONCURRENCY env var if needed
     "worker_concurrency": 1,
