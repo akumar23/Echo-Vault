@@ -1,31 +1,54 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { useEntries } from '@/hooks/useEntries'
-import { Line } from 'react-chartjs-2'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  TooltipItem,
-} from 'chart.js'
 import { format, subDays } from 'date-fns'
 import { ErrorBoundary } from './ErrorBoundary'
+import dynamic from 'next/dynamic'
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
+// Dynamically import chart components to reduce initial bundle size
+const Line = dynamic(
+  () => import('react-chartjs-2').then(mod => mod.Line),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="skeleton" style={{ height: '200px', width: '100%' }} />
+    )
+  }
 )
+
+// Chart.js registration happens lazily
+let chartJsRegistered = false
+async function registerChartJs() {
+  if (chartJsRegistered) return
+  const {
+    Chart: ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend,
+  } = await import('chart.js')
+
+  ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend
+  )
+  chartJsRegistered = true
+}
+
+// Helper to get CSS variable values
+function getCssVar(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
 
 // Mood scale with emoji indicators
 const MOOD_SCALE = [
@@ -48,9 +71,26 @@ interface TrendsChartContentProps {
 
 function TrendsChartContent({ days }: TrendsChartContentProps) {
   const { data: entries, isLoading } = useEntries(0, 200)
+  const [chartReady, setChartReady] = useState(false)
 
-  if (isLoading) {
-    return <div className="loading">Loading chart...</div>
+  // Register Chart.js on mount
+  useEffect(() => {
+    registerChartJs().then(() => setChartReady(true))
+  }, [])
+
+  // Get theme colors from CSS variables
+  const colors = useMemo(() => ({
+    accent: getCssVar('--accent', '#E07A5A'),
+    accentSubtle: getCssVar('--accent-subtle', 'rgba(224, 122, 90, 0.18)'),
+    bgPrimary: getCssVar('--bg-primary', '#131210'),
+    bgSurface: getCssVar('--bg-surface', '#1A1917'),
+    textMuted: getCssVar('--text-muted', '#9A958D'),
+    border: getCssVar('--border', '#3D3A36'),
+    textPrimary: getCssVar('--text-primary', '#E8E4DE'),
+  }), [chartReady]) // Re-compute when chart is ready (client-side)
+
+  if (isLoading || !chartReady) {
+    return <div className="skeleton" style={{ height: '200px', width: '100%' }} />
   }
 
   // Process chart data with metadata for tooltips
@@ -107,11 +147,11 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
         {
           label: 'Mood',
           data: moodData,
-          borderColor: '#00ff88',
-          backgroundColor: 'rgba(0, 255, 136, 0.1)',
+          borderColor: colors.accent,
+          backgroundColor: colors.accentSubtle,
           borderWidth: 2,
-          pointBackgroundColor: moodData.map(m => m !== null ? '#00ff88' : 'transparent'),
-          pointBorderColor: moodData.map(m => m !== null ? '#0a0a0a' : 'transparent'),
+          pointBackgroundColor: moodData.map(m => m !== null ? colors.accent : 'transparent'),
+          pointBorderColor: moodData.map(m => m !== null ? colors.bgPrimary : 'transparent'),
           pointBorderWidth: 2,
           pointRadius: moodData.map(m => m !== null ? 5 : 0),
           pointHoverRadius: 8,
@@ -122,13 +162,13 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
     }
 
     return { chartData: data, entryMetadata: metadata, dateRange }
-  }, [entries, days])
+  }, [entries, days, colors])
 
   if (!entries || entries.length === 0 || !chartData) {
     return <p className="text-muted">No data available for trends</p>
   }
 
-  const options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: true,
     interaction: {
@@ -144,31 +184,31 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
       },
       tooltip: {
         enabled: true,
-        backgroundColor: '#1a1a1a',
-        titleColor: '#00ff88',
-        bodyColor: '#f0f0f0',
-        borderColor: '#00ff88',
+        backgroundColor: colors.bgSurface,
+        titleColor: colors.accent,
+        bodyColor: colors.textPrimary,
+        borderColor: colors.accent,
         borderWidth: 2,
         padding: 12,
         titleFont: {
-          family: "'JetBrains Mono', monospace",
+          family: 'var(--font-sans), system-ui, sans-serif',
           size: 13,
           weight: 'bold' as const,
         },
         bodyFont: {
-          family: "'JetBrains Mono', monospace",
+          family: 'var(--font-sans), system-ui, sans-serif',
           size: 12,
         },
-        cornerRadius: 0,
+        cornerRadius: 4,
         displayColors: false,
         callbacks: {
-          title: (items: TooltipItem<'line'>[]) => {
+          title: (items: import('chart.js').TooltipItem<'line'>[]) => {
             if (items.length === 0) return ''
             const idx = items[0].dataIndex
             const date = dateRange[idx]
             return format(date, 'EEEE, MMM d')
           },
-          label: (item: TooltipItem<'line'>) => {
+          label: (item: import('chart.js').TooltipItem<'line'>) => {
             const idx = item.dataIndex
             const meta = entryMetadata[idx]
             if (!meta) return 'No entries'
@@ -192,9 +232,9 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
         max: 5,
         ticks: {
           stepSize: 1,
-          color: '#888888',
+          color: colors.textMuted,
           font: {
-            family: "'JetBrains Mono', monospace",
+            family: 'var(--font-sans), system-ui, sans-serif',
             size: 11,
           },
           callback: (value: number | string) => {
@@ -204,19 +244,19 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
           },
         },
         grid: {
-          color: '#333333',
+          color: colors.border,
           lineWidth: 1,
         },
         border: {
-          color: '#333333',
+          color: colors.border,
           width: 2,
         },
       },
       x: {
         ticks: {
-          color: '#888888',
+          color: colors.textMuted,
           font: {
-            family: "'JetBrains Mono', monospace",
+            family: 'var(--font-sans), system-ui, sans-serif',
             size: 10,
           },
           maxRotation: 0,
@@ -227,12 +267,12 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
           display: false,
         },
         border: {
-          color: '#333333',
+          color: colors.border,
           width: 2,
         },
       },
     },
-  }
+  }), [colors, days, dateRange, entryMetadata])
 
   return (
     <div>

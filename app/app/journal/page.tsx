@@ -10,13 +10,13 @@ import { Header } from '@/components/Header'
 import { Modal } from '@/components/Modal'
 import { MoodNudge } from '@/components/MoodNudge'
 import { SimilarEntries } from '@/components/SimilarEntries'
+import { EntryItem, EntryItemSkeleton } from '@/components/EntryItem'
 import { Entry } from '@/lib/api'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import {
   Clock,
   MessageSquare,
-  FileText,
   Sparkles,
   ArrowRight,
   MessageCircle,
@@ -28,15 +28,6 @@ export default function JournalDashboard() {
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null)
   const [isReflectionModalOpen, setIsReflectionModalOpen] = useState(false)
   const [isChatModalOpen, setIsChatModalOpen] = useState(false)
-
-  const getPreview = (content: string, maxLength = 80) => {
-    if (!content) return ''
-    const firstSentence = content.split(/[.!?]/)[0]
-    if (firstSentence.length <= maxLength) {
-      return firstSentence.trim() + (content.length > firstSentence.length ? '...' : '')
-    }
-    return firstSentence.slice(0, maxLength).trim() + '...'
-  }
 
   const MOOD_EMOJIS: Record<number, string> = {
     1: '😢',
@@ -82,33 +73,22 @@ export default function JournalDashboard() {
               <h2>Recent Entries</h2>
             </div>
             {entriesLoading ? (
-              <p className="loading">Loading...</p>
+              <div className="scrollable-content flex-1">
+                <ul style={{ listStyle: 'none' }}>
+                  {[1, 2, 3].map((i) => (
+                    <EntryItemSkeleton key={i} />
+                  ))}
+                </ul>
+              </div>
             ) : entries && entries.length > 0 ? (
               <div className="scrollable-content flex-1">
                 <ul style={{ listStyle: 'none' }}>
                   {entries.slice(0, 5).map((entry) => (
-                    <li
+                    <EntryItem
                       key={entry.id}
-                      className="entry-item"
-                      onClick={() => setSelectedEntry(entry)}
-                      style={{
-                        paddingBottom: 'var(--space-4)',
-                        borderBottom: '1px solid var(--border)',
-                      }}
-                    >
-                      <div className="entry-item__icon">
-                        <FileText size={18} />
-                      </div>
-                      <div className="entry-item__content">
-                        <span className="entry-item__title">{entry.title || 'Untitled'}</span>
-                        {entry.content && (
-                          <p className="entry-item__preview">{getPreview(entry.content)}</p>
-                        )}
-                        <div className="entry-item__meta">
-                          {format(new Date(entry.created_at), 'MMM d, yyyy')}
-                        </div>
-                      </div>
-                    </li>
+                      entry={entry}
+                      onClick={setSelectedEntry}
+                    />
                   ))}
                 </ul>
                 <div className="expand-hint">
