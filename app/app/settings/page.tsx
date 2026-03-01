@@ -19,6 +19,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useInsightVoice, InsightVoice } from "@/contexts/InsightVoiceContext";
+import { useToast } from "@/contexts/ToastContext";
 
 interface LLMSettingsSectionProps {
   title: string;
@@ -154,6 +155,7 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
   const updateMutation = useUpdateSettings();
   const { voice, setVoice } = useInsightVoice();
+  const { toast } = useToast();
 
   // Search settings
   const [halfLife, setHalfLife] = useState(30);
@@ -243,7 +245,7 @@ export default function SettingsPage() {
 
     updateMutation.mutate(update, {
       onSuccess: () => {
-        alert("Settings updated!");
+        toast({ message: "Settings updated!", type: "success" });
         // Clear token fields after save
         setGenerationToken("");
         setEmbeddingToken("");
@@ -259,9 +261,10 @@ export default function SettingsPage() {
 
     updateMutation.mutate(update, {
       onSuccess: () => {
-        alert(
-          `${type === "generation" ? "Generation" : "Embedding"} API token cleared!`,
-        );
+        toast({
+          message: `${type === "generation" ? "Generation" : "Embedding"} API token cleared!`,
+          type: "success",
+        });
       },
     });
   };
