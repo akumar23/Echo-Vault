@@ -122,7 +122,9 @@ services:
         condition: service_healthy
     networks:
       - echovault_network
-    command: celery -A app.celery_app worker --loglevel=info
+    # --concurrency=1 reduces Redis operations significantly for single-user deployments
+    # Increase if you have multiple concurrent users
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=1
 
   web:
     build:
