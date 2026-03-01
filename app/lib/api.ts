@@ -23,15 +23,39 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
+// Track if we're already redirecting to prevent multiple redirects
+let isRedirectingToLogin = false
+
+// Helper to clear auth and redirect to login
+function handleAuthError() {
+  if (typeof window === 'undefined') return
+
+  // Prevent multiple redirects from concurrent failed requests
+  if (isRedirectingToLogin) return
+
+  // Don't redirect if already on auth pages
+  const currentPath = window.location.pathname
+  if (currentPath === '/login' || currentPath === '/register') return
+
+  isRedirectingToLogin = true
+
+  // Clear token from localStorage
+  localStorage.removeItem('token')
+
+  // Clear token cookie
+  document.cookie = 'token=; path=/; max-age=0'
+
+  // Redirect to login
+  window.location.href = '/login'
+}
+
 // Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Clear invalid token on auth errors
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token')
-      }
+    // Handle auth errors by redirecting to login
+    if (error.response?.status === 401) {
+      handleAuthError()
     }
     return Promise.reject(error)
   }
