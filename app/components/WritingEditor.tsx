@@ -11,12 +11,14 @@ interface WritingEditorProps {
   initialPrompt?: string
   promptType?: 'question' | 'prompt' | 'continuation'
   sourceEntryId?: number
+  /** Autosave delay in milliseconds. Set to 0 to disable autosave. Default: 3000ms */
+  autosaveDelay?: number
 }
 
 const MOOD_LABELS = ['Low', 'Down', 'Neutral', 'Good', 'Great']
 const MOOD_EMOJIS = ['😢', '😕', '😐', '🙂', '😊']
 
-export function WritingEditor({ entry, onSave, saving = false, initialPrompt, promptType, sourceEntryId }: WritingEditorProps) {
+export function WritingEditor({ entry, onSave, saving = false, initialPrompt, promptType, sourceEntryId, autosaveDelay = 3000 }: WritingEditorProps) {
   const [title, setTitle] = useState(entry?.title ?? '')
   const [content, setContent] = useState(entry?.content ?? '')
   const [tags, setTags] = useState<string[]>(entry?.tags ?? [])
@@ -26,9 +28,13 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
   const [toolbarOpen, setToolbarOpen] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showPrompt, setShowPrompt] = useState(!!initialPrompt)
+  const [isAutosaving, setIsAutosaving] = useState(false)
+  const [lastSavedContent, setLastSavedContent] = useState(entry?.content ?? '')
+  const [lastSavedTitle, setLastSavedTitle] = useState(entry?.title ?? '')
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Handle voice transcription
   const handleVoiceTranscript = useCallback((transcript: string) => {
@@ -48,6 +54,9 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
       setTags(entry?.tags ?? [])
       setMood(entry?.mood_user ?? 3)
       setUseLlmPrediction(entry?.mood_user == null)
+      // Update last saved state when entry changes
+      setLastSavedContent(entry?.content ?? '')
+      setLastSavedTitle(entry?.title ?? '')
     }
   }, [entry])
 
@@ -59,6 +68,63 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
       : hasContent
     setHasChanges(isDifferent)
   }, [content, title, entry])
+
+  // Warn user about unsaved changes when navigating away
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChanges && !saving && !isAutosaving) {
+        e.preventDefault()
+        // Modern browsers show a generic message, but this is required for some older browsers
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasChanges, saving, isAutosaving])
+
+  // Autosave functionality
+  useEffect(() => {
+    // Skip autosave if disabled, saving in progress, or no meaningful changes
+    if (autosaveDelay === 0 || saving || isAutosaving) return
+
+    // Only autosave if there's actual content and changes from last saved state
+    const hasContent = content.trim().length > 0
+    const hasNewChanges = content !== lastSavedContent || title !== lastSavedTitle
+
+    if (!hasContent || !hasNewChanges) return
+
+    // Clear existing timer
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+    }
+
+    // Set new autosave timer
+    autosaveTimerRef.current = setTimeout(async () => {
+      setIsAutosaving(true)
+      try {
+        await onSave({
+          title: title.trim() || undefined,
+          content,
+          tags,
+          mood_user: useLlmPrediction ? undefined : mood
+        })
+        setLastSavedContent(content)
+        setLastSavedTitle(title)
+      } catch (error) {
+        console.error('Autosave failed:', error)
+      } finally {
+        setIsAutosaving(false)
+      }
+    }, autosaveDelay)
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+      }
+    }
+  }, [content, title, autosaveDelay, saving, isAutosaving, lastSavedContent, lastSavedTitle, tags, mood, useLlmPrediction, onSave])
 
   // Focus content on mount
   useEffect(() => {
@@ -119,6 +185,10 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
       mood_user: useLlmPrediction ? undefined : mood
     })
 
+    // Update last saved state to prevent unnecessary autosaves
+    setLastSavedContent(content)
+    setLastSavedTitle(title)
+
     // Log completion interaction if this entry was created from a prompt
     if (initialPrompt && promptType) {
       promptsApi.logInteraction({
@@ -139,6 +209,8 @@ export function WritingEditor({ entry, onSave, saving = false, initialPrompt, pr
         <div className="writing-editor__status">
           {saving ? (
             <span className="writing-editor__saving">Saving...</span>
+          ) : isAutosaving ? (
+            <span className="writing-editor__saving">Autosaving...</span>
           ) : hasChanges ? (
             <span className="writing-editor__unsaved">Unsaved changes</span>
           ) : entry ? (

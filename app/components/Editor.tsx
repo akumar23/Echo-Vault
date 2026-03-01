@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { Entry } from '@/lib/api'
+import { useEntryEditor } from '@/hooks/useEntryEditor'
 
 interface EditorProps {
   entry?: Entry
@@ -10,42 +10,27 @@ interface EditorProps {
 }
 
 export function Editor({ entry, onSave, saving = false }: EditorProps) {
-  const [title, setTitle] = useState(entry?.title ?? '')
-  const [content, setContent] = useState(entry?.content ?? '')
-  const [tags, setTags] = useState<string[]>(entry?.tags ?? [])
-  const [tagInput, setTagInput] = useState('')
-  const [mood, setMood] = useState(entry?.mood_user ?? 3)
-  const [useLlmPrediction, setUseLlmPrediction] = useState(entry?.mood_user == null)
-
-  useEffect(() => {
-    if (entry) {
-      setTitle(entry?.title ?? '')
-      setContent(entry?.content ?? '')
-      setTags(entry?.tags ?? [])
-      setMood(entry?.mood_user ?? 3)
-      setUseLlmPrediction(entry?.mood_user == null)
-    }
-  }, [entry])
-
-  const handleAddTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()])
-      setTagInput('')
-    }
-  }
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove))
-  }
+  const {
+    title,
+    setTitle,
+    content,
+    setContent,
+    tags,
+    tagInput,
+    setTagInput,
+    mood,
+    setMood,
+    useLlmPrediction,
+    setUseLlmPrediction,
+    handleAddTag,
+    handleRemoveTag,
+    getEntryData,
+    hasContent,
+  } = useEntryEditor({ entry, normalizeTags: false })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await onSave({
-      title,
-      content,
-      tags,
-      mood_user: useLlmPrediction ? undefined : mood
-    })
+    await onSave(getEntryData())
   }
 
   return (
@@ -119,7 +104,7 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
             className="input flex-1"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
-            onKeyPress={(e) => {
+            onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
                 handleAddTag()
@@ -150,7 +135,7 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
         )}
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={saving || !content.trim()}>
+      <button type="submit" className="btn btn-primary" disabled={saving || !hasContent}>
         {saving ? 'Saving...' : 'Save Entry'}
       </button>
     </form>
