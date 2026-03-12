@@ -97,7 +97,7 @@ async def stream_reflection(
     SSE endpoint for real-time reflection status updates.
 
     Eliminates client-side polling by streaming updates from the server.
-    The server checks Redis every 2 seconds internally (vs client polling every 5s).
+    The server checks Redis every 5 seconds internally.
     Connection auto-closes when reflection is complete or errored.
 
     Query Parameters:
@@ -115,7 +115,7 @@ async def stream_reflection(
         last_status = None
         last_reflection = None
         check_count = 0
-        max_checks = 150  # 5 minutes max (150 * 2s = 300s)
+        max_checks = 60  # 5 minutes max (60 * 5s = 300s)
 
         while check_count < max_checks:
             check_count += 1
@@ -147,8 +147,8 @@ async def stream_reflection(
                     logger.debug(f"SSE stream ending for user {user_id}: status={current_status}")
                     break
 
-                # Check every 2 seconds (server-side interval)
-                await asyncio.sleep(2)
+                # Check every 5 seconds to reduce Redis operations
+                await asyncio.sleep(5)
 
             except Exception as e:
                 logger.error(f"SSE stream error for user {user_id}: {e}")

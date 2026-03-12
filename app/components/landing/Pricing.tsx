@@ -80,7 +80,7 @@ export function Pricing() {
             </motion.div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Link
-                href="https://github.com/aryankumar/echo-vault"
+                href="https://github.com/akumar23/Echo-Vault"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-glass"

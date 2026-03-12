@@ -13,7 +13,7 @@ const productLinks = [
 ]
 
 const resourceLinks = [
-  { href: 'https://github.com/yourusername/echovault', label: 'GitHub', icon: Github, external: true },
+  { href: 'https://github.com/akumar23/Echo-Vault', label: 'GitHub', icon: Github, external: true },
   { href: '/docs', label: 'Docs', icon: FileText, external: false },
   { href: 'mailto:contact@echovault.app', label: 'Contact', icon: Mail, external: true },
 ]

@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://echovault.app',
+    url: 'https://echo-vault-one.vercel.app',
     siteName: 'EchoVault',
     title: 'EchoVault - Privacy-First AI Journal',
     description:
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || 'https://echovault.app'
+    process.env.NEXT_PUBLIC_APP_URL || 'https://echo-vault-one.vercel.app'
   ),
 }
 

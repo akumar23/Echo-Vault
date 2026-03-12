@@ -99,7 +99,7 @@ export default function DocsPage() {
             <h2>Quick Start</h2>
             <pre>
 {`# Clone the repository
-git clone https://github.com/yourusername/echovault.git
+git clone https://github.com/akumar23/Echo-Vault.git
 cd echovault
 
 # Start all services with Docker Compose
@@ -252,7 +252,7 @@ DEFAULT_EMBEDDING_MODEL=mxbai-embed-large`}
 
       <div className="docs-page__footer">
         <a
-          href="https://github.com/yourusername/echovault"
+          href="https://github.com/akumar23/Echo-Vault"
           target="_blank"
           rel="noopener noreferrer"
           className="btn btn-secondary"
@@ -261,7 +261,7 @@ DEFAULT_EMBEDDING_MODEL=mxbai-embed-large`}
           View on GitHub
         </a>
         <a
-          href="https://github.com/yourusername/echovault/blob/main/docs/API.md"
+          href="https://github.com/akumar23/Echo-Vault/blob/main/docs/API.md"
           target="_blank"
           rel="noopener noreferrer"
           className="btn btn-ghost"

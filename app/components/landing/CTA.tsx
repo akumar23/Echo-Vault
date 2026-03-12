@@ -46,7 +46,7 @@ export function CTA() {
 
           <div className="cta-card-new__actions">
             <motion.a
-              href="https://github.com/yourusername/echovault/releases"
+              href="https://github.com/akumar23/Echo-Vault/releases"
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-gradient"

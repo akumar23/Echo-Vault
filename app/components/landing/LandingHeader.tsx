@@ -22,7 +22,7 @@ export function LandingHeader() {
             Docs
           </Link>
           <a
-            href="https://github.com/yourusername/echovault"
+            href="https://github.com/akumar23/Echo-Vault"
             target="_blank"
             rel="noopener noreferrer"
             className="landing-header__link"
@@ -58,7 +58,7 @@ export function LandingHeader() {
             Docs
           </Link>
           <a
-            href="https://github.com/yourusername/echovault"
+            href="https://github.com/akumar23/Echo-Vault"
             target="_blank"
             rel="noopener noreferrer"
             className="landing-header__mobile-link"

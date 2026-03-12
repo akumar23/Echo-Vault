@@ -102,7 +102,7 @@
 
 :root {
   /* Typography */
-  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -323,6 +323,8 @@ label {
 .card-elevated {
   box-shadow: var(--shadow-md);
   border-left: 3px solid var(--accent);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .card-elevated:hover {
@@ -754,22 +756,32 @@ label {
 .mood-indicator--1 {
   border-left: 3px solid var(--mood-1);
   background: linear-gradient(135deg, rgba(193, 127, 89, 0.08) 0%, var(--bg-elevated) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .mood-indicator--2 {
   border-left: 3px solid var(--mood-2);
   background: linear-gradient(135deg, rgba(212, 165, 116, 0.08) 0%, var(--bg-elevated) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .mood-indicator--3 {
   border-left: 3px solid var(--mood-3);
   background: linear-gradient(135deg, rgba(154, 149, 141, 0.08) 0%, var(--bg-elevated) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .mood-indicator--4 {
   border-left: 3px solid var(--mood-4);
   background: linear-gradient(135deg, rgba(139, 154, 125, 0.08) 0%, var(--bg-elevated) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .mood-indicator--5 {
   border-left: 3px solid var(--mood-5);
   background: linear-gradient(135deg, rgba(123, 163, 143, 0.08) 0%, var(--bg-elevated) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -1080,22 +1092,32 @@ label {
 .entry-card--mood-1 {
   border-left: 3px solid var(--mood-1);
   background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(193, 127, 89, 0.06) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .entry-card--mood-2 {
   border-left: 3px solid var(--mood-2);
   background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(212, 165, 116, 0.06) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .entry-card--mood-3 {
   border-left: 3px solid var(--mood-3);
   background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(154, 149, 141, 0.06) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .entry-card--mood-4 {
   border-left: 3px solid var(--mood-4);
   background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(139, 154, 125, 0.08) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .entry-card--mood-5 {
   border-left: 3px solid var(--mood-5);
   background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(123, 163, 143, 0.1) 100%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 /* Hover state enhances the gradient */
@@ -2082,7 +2104,7 @@ label {
   background: transparent;
   border: 2px solid var(--border);
   color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
@@ -2122,7 +2144,7 @@ label {
 }
 
 .mood-scale-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }

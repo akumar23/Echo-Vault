@@ -85,11 +85,28 @@ app.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 
 @app.get("/health")
 async def health(db: Session = Depends(get_db)):
-    """Health check endpoint that verifies database and Redis connectivity."""
+    """Health check endpoint - database only to minimize Redis costs.
+
+    Railway/Render hit this endpoint every 10-30 seconds.
+    Use /health/full for complete health check including Redis.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Health check - database failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+        )
+
+
+@app.get("/health/full")
+async def health_full(db: Session = Depends(get_db)):
+    """Full health check including Redis. Use sparingly."""
     results = {"database": "unknown", "redis": "unknown"}
     errors = []
 
-    # Check database
     try:
         db.execute(text("SELECT 1"))
         results["database"] = "connected"
@@ -98,7 +115,6 @@ async def health(db: Session = Depends(get_db)):
         errors.append(f"database: {str(e)}")
         logger.error(f"Health check - database failed: {e}")
 
-    # Check Redis
     try:
         if reflection_cache.ping():
             results["redis"] = "connected"
