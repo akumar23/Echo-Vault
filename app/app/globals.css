@@ -2680,6 +2680,8 @@ label {
   border: 1px solid var(--accent);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-lg);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
   padding: var(--space-3);
   margin-bottom: var(--space-5);
   animation: nudge-appear 500ms ease-out;
@@ -5758,6 +5760,8 @@ label {
 
 .toast--success {
   border-left: 3px solid var(--success);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .toast--success .toast__icon {
@@ -5766,6 +5770,8 @@ label {
 
 .toast--error {
   border-left: 3px solid var(--error);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .toast--error .toast__icon {
@@ -5774,6 +5780,8 @@ label {
 
 .toast--warning {
   border-left: 3px solid var(--warning);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .toast--warning .toast__icon {
@@ -5782,6 +5790,8 @@ label {
 
 .toast--info {
   border-left: 3px solid var(--accent);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .toast--info .toast__icon {
