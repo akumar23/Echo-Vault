@@ -12,10 +12,9 @@ A privacy-first journaling application with local LLM inference, vector search, 
 
 | Feature | Description |
 |---------|-------------|
-| **Local LLM Processing** | All AI features powered by Ollama running on your machine. Embeddings, reflections, mood inference, and insights - all processed locally for complete privacy. |
-| **Custom LLM Support** | Bring your own LLM or use any OpenAI API-compatible provider (OpenAI, Groq, Together.ai, LM Studio, vLLM). Configure generation and embedding models separately with optional API tokens. |
+| **Bring Your Own LLM** | Connect any OpenAI API-compatible model server — Ollama, vLLM, LM Studio, or cloud providers like OpenAI, Groq, and Together.ai. Generation and embedding endpoints are configured separately per account, each with an optional API token. |
 | **Interactive Chat** | Real-time WebSocket-based chat with your reflection assistant. Ask follow-up questions about your entries and receive streaming responses with context from semantically related entries. |
-| **Streaming Reflections** | Watch AI-generated reflections appear token-by-token. The assistant analyzes your entries and provides insights about themes, emotional patterns, and actionable suggestions. |
+| **Reflections** | AI-generated reflections that analyze your recent entries and surface insights about themes, emotional patterns, and actionable suggestions. Cached in Redis and polled by the frontend — regenerated on demand or after writing new entries. |
 | **Mood Inference** | Automatic mood detection (1-5 scale) from entry content. Set your mood manually or let the AI infer it from your writing. |
 | **Automated Insights** | Nightly generation of summaries, themes, and actionable recommendations based on your recent journal entries. |
 
@@ -58,9 +57,9 @@ A privacy-first journaling application with local LLM inference, vector search, 
 
 | Feature | Description |
 |---------|-------------|
-| **Celery Task Queue** | Asynchronous processing for embeddings, mood inference, and insights generation. Non-blocking entry creation. |
-| **Scheduled Jobs** | Celery Beat scheduler for nightly insight generation and other periodic tasks. |
-| **Redis Broker** | Fast, reliable message passing between the API and background workers. |
+| **Celery Task Queue** | Asynchronous processing for embeddings, mood inference, and insights generation. Non-blocking entry creation with automatic retries on failure. |
+| **Scheduled Jobs** | Weekly insights triggered via external cron calling `POST /insights/cron/weekly`. No Celery Beat required. |
+| **Redis Broker** | Fast, reliable message passing between the API and background workers. Also used as the reflection cache store. |
 
 ---
 
@@ -102,13 +101,13 @@ AI-generated analysis of your mood patterns and correlations with writing topics
 
 If you are new to LLMs (Large Language Models) and vector search, here is what these features actually do for you:
 
-### LLM Processing (Local AI)
+### LLM Processing
 
-**What it is**: An LLM is like having a smart assistant that reads and understands your journal entries. Unlike ChatGPT or other online services, this runs entirely on your computer - your private thoughts never leave your machine.
+**What it is**: An LLM is like having a smart assistant that reads and understands your journal entries. EchoVault works with any OpenAI API-compatible model server — run Ollama or vLLM locally so your data never leaves your machine, or point it at a cloud provider like OpenAI or Groq if you prefer.
 
 **What it does for you**:
 
-1. **Reflections**: After you write entries, the AI reads them and provides thoughtful insights. For example, if you wrote about work stress, it might notice patterns like "You have mentioned feeling overwhelmed on Mondays" and suggest actionable advice.
+1. **Reflections**: After you write entries, the AI reads them and provides thoughtful insights — cached so they load instantly on return visits and regenerated automatically when you add new entries. For example, if you wrote about work stress, it might notice patterns like "You have mentioned feeling overwhelmed on Mondays" and suggest actionable advice.
 
 2. **Mood Inference**: The AI automatically detects the emotional tone of your entries (on a scale of 1-5) even if you forget to set it manually. This helps track your mood over time.
 
@@ -227,9 +226,8 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design.
 | web | 3000 | Next.js frontend |
 | api | 8000 | FastAPI backend |
 | worker | - | Celery background jobs |
-| beat | - | Celery scheduler |
 | db | 5432 | PostgreSQL 16 + pgvector |
-| redis | 6379 | Celery broker |
+| redis | 6379 | Celery broker + reflection cache |
 | ollama | 11434 | Local LLM inference |
 
 ---
