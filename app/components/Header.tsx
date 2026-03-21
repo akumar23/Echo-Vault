@@ -2,10 +2,11 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
 import { PersonalizedGreeting } from './PersonalizedGreeting'
-import { PenLine, BookOpen, Settings, HelpCircle, Home, Menu, X } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { PenLine, BookOpen, Settings, HelpCircle, Home, Menu, X, LogOut } from 'lucide-react'
 
 interface HeaderProps {
   title?: string
@@ -15,7 +16,14 @@ interface HeaderProps {
 
 export function Header({ title, showNav = true, showGreeting = false }: HeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const handleLogout = useCallback(() => {
+    logout()
+    router.push('/login')
+  }, [logout, router])
 
   const toggleMobileMenu = useCallback(() => {
     setMobileMenuOpen(prev => !prev)
@@ -51,6 +59,14 @@ export function Header({ title, showNav = true, showGreeting = false }: HeaderPr
             <Home size={16} />
             <span className="hidden-mobile">Home</span>
           </Link>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={handleLogout}
+            aria-label="Log out"
+          >
+            <LogOut size={16} />
+            <span className="hidden-mobile">Log out</span>
+          </button>
           {showNav && (
             <button
               className="header__menu-toggle"
