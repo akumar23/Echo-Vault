@@ -1,11 +1,15 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from app.core.rate_limit import limiter
 from app.database import engine, Base, get_db
 from app.routers import auth, entries, search, insights, settings, forget, export, reflections, chat, prompts
 from app.services.reflection_cache import reflection_cache
@@ -51,6 +55,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS middleware configuration
 cors_origins_env = os.getenv("CORS_ORIGINS", "")
