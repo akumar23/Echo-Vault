@@ -46,8 +46,14 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
+    cookie_kwargs = dict(
+        httponly=True,
+        samesite=settings.cookie_same_site,
+        secure=settings.cookie_secure,
+        path="/",
+    )
+    response.delete_cookie("access_token", **cookie_kwargs)
+    response.delete_cookie("refresh_token", **cookie_kwargs)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
