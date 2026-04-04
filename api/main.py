@@ -27,12 +27,9 @@ _db_url = os.getenv("DATABASE_URL", "NOT_SET")
 _masked_url = _db_url[:30] + "..." if len(_db_url) > 30 else _db_url
 logger.info(f"DATABASE_URL from env: {_masked_url}")
 
-# Create tables
-try:
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created/verified successfully")
-except Exception as e:
-    logger.error(f"Error creating database tables: {str(e)}", exc_info=True)
+# Schema is managed exclusively by Alembic migrations.
+# Run `alembic upgrade head` before starting the server (handled by docker-compose entrypoint).
+# create_all() is intentionally removed to prevent silent schema drift.
 
 
 @asynccontextmanager

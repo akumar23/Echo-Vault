@@ -13,7 +13,7 @@ x-common-env: &common-env
 x-api-worker-env: &api-worker-env
   <<: *common-env
   UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
-  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
 
 services:
   db:
@@ -97,9 +97,9 @@ services:
         condition: service_healthy
     networks:
       - echovault_network
-    # Development: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-    # Production: gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-    command: ${API_CMD:-uvicorn main:app --host 0.0.0.0 --port 8000}
+    # Runs migrations then starts the server — schema is never auto-created from models.
+    # Override API_CMD for production: gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    command: ${API_CMD:-sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"}
 
   worker:
     build:
