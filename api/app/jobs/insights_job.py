@@ -71,6 +71,9 @@ def generate_insights_task(user_id: int, days: int = 7):
         db.close()
 
 
+_NIGHTLY_BATCH_SIZE = 100  # Users per batch — prevents OOM on large deployments
+
+
 @celery_app.task(
     name="insights.nightly_insights",
     ignore_result=True,
@@ -78,13 +81,29 @@ def generate_insights_task(user_id: int, days: int = 7):
     soft_time_limit=45,
 )
 def nightly_insights_task():
-    """Nightly task to generate insights for all active users"""
+    """
+    Enqueue insights generation for all active users.
+
+    Uses cursor-based batching (BATCH_SIZE rows at a time) to avoid loading
+    the entire user table into memory. Only fetches user IDs, not full rows.
+    """
     db = SessionLocal()
     try:
-        users = db.query(User).filter(User.is_active == True).all()
-        for user in users:
-            generate_insights_task.delay(user.id, days=7)
-            generate_insights_task.delay(user.id, days=30)
+        last_id = 0
+        while True:
+            batch = (
+                db.query(User.id)
+                .filter(User.is_active == True, User.id > last_id)
+                .order_by(User.id)
+                .limit(_NIGHTLY_BATCH_SIZE)
+                .all()
+            )
+            if not batch:
+                break
+            for (user_id,) in batch:
+                generate_insights_task.delay(user_id, days=7)
+                generate_insights_task.delay(user_id, days=30)
+            last_id = batch[-1][0]
     finally:
         db.close()
 
