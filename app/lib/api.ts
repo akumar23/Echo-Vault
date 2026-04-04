@@ -1,6 +1,11 @@
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Tauri static builds have no Next.js server, so proxy rewrites don't work — use direct URL.
+// All other deployments (Vercel, Docker) proxy /api/* to the backend via next.config.js rewrites,
+// making cookies same-origin and bypassing cross-origin Set-Cookie restrictions.
+const API_URL = process.env.NEXT_PUBLIC_TAURI_BUILD === 'true'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+  : '/api'
 
 const api = axios.create({
   baseURL: API_URL,

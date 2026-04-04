@@ -63,8 +63,9 @@ export function useReflection({
 
     closeConnection()
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    const url = `${apiUrl}/reflections/stream`
+    const url = process.env.NEXT_PUBLIC_TAURI_BUILD === 'true'
+      ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/reflections/stream`
+      : '/api/reflections/stream'
 
     try {
       // withCredentials sends the httpOnly access_token cookie automatically
