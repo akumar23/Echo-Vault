@@ -1,49 +1,56 @@
 """
 WebSocket chat router for streaming conversations about reflections.
 
-Provides a real-time chat interface where users can ask follow-up questions
-about their journal reflections. Includes semantic search for related entries
-to provide context to the LLM.
+Auth: client must first call GET /auth/ws-ticket (cookie-authenticated) to obtain
+a short-lived one-time ticket, then connect with ?ticket=<ticket> in the URL.
+This avoids exposing long-lived JWTs in server logs.
 """
 import json
 import logging
-from typing import List, Dict, Optional
+import time
+from collections import deque
+from contextlib import contextmanager
+from typing import Deque, Dict, List, Optional
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from contextlib import contextmanager
 from app.database import SessionLocal
-from app.core.security import decode_access_token
-from app.models.user import User
-from app.models.entry import Entry
 from app.models.embedding import EntryEmbedding
-from app.services.llm_service import get_generation_service_for_user, get_embedding_service_for_user
+from app.models.entry import Entry
+from app.models.user import User
+from app.services.llm_service import get_embedding_service_for_user, get_generation_service_for_user
 from app.services.reflection_cache import reflection_cache
+from app.services.token_store import token_store
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-
-@contextmanager
-def get_db_session():
-    """Context manager for short-lived DB sessions in WebSocket handlers.
-
-    Unlike HTTP requests, WebSocket connections are long-lived. Using a single
-    DB session for the entire connection would exhaust the connection pool.
-    Instead, we create short-lived sessions for each database operation.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# WebSocket close codes
 WS_NORMAL_CLOSE = 1000
 WS_AUTH_FAILED = 4001
 WS_USER_NOT_FOUND = 4002
 WS_SERVER_ERROR = 1011
+
+# Per-connection rate limiting
+_MAX_MESSAGE_LENGTH = 2000      # chars — reject longer messages
+_MAX_MESSAGES_PER_MINUTE = 10  # sliding window per connection
+
+
+def _check_rate_limit(timestamps: Deque[float]) -> bool:
+    """
+    Sliding-window rate limiter for WebSocket messages.
+
+    Returns True if the message should be allowed, False if rate limited.
+    Mutates `timestamps` in place.
+    """
+    now = time.monotonic()
+    # Evict entries older than 60 seconds
+    while timestamps and timestamps[0] < now - 60:
+        timestamps.popleft()
+    if len(timestamps) >= _MAX_MESSAGES_PER_MINUTE:
+        return False
+    timestamps.append(now)
+    return True
 
 CHAT_SYSTEM_PROMPT = """You are a thoughtful journaling assistant helping the user reflect on their journal entries.
 
@@ -62,35 +69,32 @@ Guidelines:
 """
 
 
-async def authenticate_websocket(
-    websocket: WebSocket,
-    token: Optional[str]
-) -> Optional[int]:
-    """Authenticate WebSocket connection using JWT token from query parameter.
-
-    Returns user_id instead of User object to avoid holding DB session.
-    """
-    if not token:
-        await websocket.close(code=WS_AUTH_FAILED, reason="Missing authentication token")
-        return None
-
-    payload = decode_access_token(token)
-    if payload is None:
-        await websocket.close(code=WS_AUTH_FAILED, reason="Invalid or expired token")
-        return None
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        await websocket.close(code=WS_AUTH_FAILED, reason="Invalid token payload")
-        return None
-
+@contextmanager
+def get_db_session():
+    """Short-lived DB session for WebSocket handlers (avoids pool exhaustion)."""
+    db = SessionLocal()
     try:
-        user_id = int(user_id)
-    except (ValueError, TypeError):
-        await websocket.close(code=WS_AUTH_FAILED, reason="Invalid user ID")
+        yield db
+    finally:
+        db.close()
+
+
+async def authenticate_websocket(websocket: WebSocket, ticket: Optional[str]) -> Optional[int]:
+    """
+    Authenticate a WebSocket connection using a one-time ticket.
+
+    The ticket must be obtained first via GET /auth/ws-ticket (cookie-authenticated).
+    Tickets are consumed immediately on use (one-time only, 60s TTL).
+    """
+    if not ticket:
+        await websocket.close(code=WS_AUTH_FAILED, reason="Missing authentication ticket")
         return None
 
-    # Verify user exists with a short-lived session
+    user_id = token_store.consume_ws_ticket(ticket)
+    if user_id is None:
+        await websocket.close(code=WS_AUTH_FAILED, reason="Invalid or expired ticket")
+        return None
+
     with get_db_session() as db:
         user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
         if user is None:
@@ -100,24 +104,12 @@ async def authenticate_websocket(
     return user_id
 
 
-async def get_related_entries(
-    user_id: int,
-    query: str,
-    embedding_service,
-    k: int = 3
-) -> List[Dict]:
-    """Get semantically related entries using pgvector.
-
-    Uses a short-lived DB session to avoid holding connections during
-    long-lived WebSocket connections.
-    """
+async def get_related_entries(user_id: int, query: str, embedding_service, k: int = 3) -> List[Dict]:
+    """Get semantically related entries using pgvector (short-lived session)."""
     try:
-        # Get query embedding
         query_embedding = await embedding_service.get_embedding(query)
 
-        # Use short-lived session for DB query
         with get_db_session() as db:
-            # Calculate cosine distance and similarity
             distance = EntryEmbedding.embedding.cosine_distance(query_embedding)
             similarity_expr = 1 - (distance / 2)
 
@@ -125,22 +117,21 @@ async def get_related_entries(
                 Entry.title,
                 Entry.content,
                 Entry.created_at,
-                similarity_expr.label("score")
+                similarity_expr.label("score"),
             ).join(
                 EntryEmbedding, Entry.id == EntryEmbedding.entry_id
             ).filter(
                 Entry.user_id == user_id,
                 Entry.is_deleted == False,
-                EntryEmbedding.is_active == True
+                EntryEmbedding.is_active == True,
             ).order_by(distance).limit(k).all()
 
-            # Extract data while session is open
             return [
                 {
                     "title": r.title,
-                    "content": r.content[:500] if r.content else "",  # Truncate for context
+                    "content": r.content[:500] if r.content else "",
                     "created_at": r.created_at.isoformat(),
-                    "score": float(r.score)
+                    "score": float(r.score),
                 }
                 for r in results
             ]
@@ -150,29 +141,24 @@ async def get_related_entries(
 
 
 def format_related_entries(entries: List[Dict]) -> str:
-    """Format related entries for the system prompt."""
     if not entries:
         return "No related entries found."
-
-    formatted = []
-    for i, entry in enumerate(entries, 1):
-        title = entry.get("title") or "Untitled"
-        content = entry.get("content", "")
-        formatted.append(f"{i}. [{title}]: {content}")
-
-    return "\n".join(formatted)
+    return "\n".join(
+        f"{i}. [{e.get('title') or 'Untitled'}]: {e.get('content', '')}"
+        for i, e in enumerate(entries, 1)
+    )
 
 
 @router.websocket("/ws/chat")
 async def chat_websocket(
     websocket: WebSocket,
-    token: Optional[str] = Query(default=None)
+    ticket: Optional[str] = Query(default=None),
 ):
     """
     WebSocket endpoint for streaming chat about reflections.
 
     Query Parameters:
-        token: JWT authentication token
+        ticket: One-time auth ticket obtained from GET /auth/ws-ticket
 
     Client Messages:
         {"type": "chat_message", "content": "user message"}
@@ -182,41 +168,33 @@ async def chat_websocket(
         {"type": "token", "content": "..."}
         {"type": "complete"}
         {"type": "error", "message": "..."}
-
-    Note: Uses short-lived DB sessions per operation to avoid exhausting the
-    connection pool during long-lived WebSocket connections.
     """
     websocket_accepted = False
 
     try:
-        # Authenticate before accepting (uses short-lived session internally)
-        user_id = await authenticate_websocket(websocket, token)
+        user_id = await authenticate_websocket(websocket, ticket)
         if user_id is None:
             return
 
         await websocket.accept()
         websocket_accepted = True
 
-        # Get current reflection from cache (Redis, no DB needed)
         cached = reflection_cache.get_reflection(user_id)
         reflection_text = cached.get("reflection", "") if cached else ""
 
-        # Get LLM services for this user (short-lived session)
         with get_db_session() as db:
             generation_service = get_generation_service_for_user(db, user_id)
             embedding_service = get_embedding_service_for_user(db, user_id)
 
-        # Send initial context
         await websocket.send_json({
             "type": "context",
             "reflection": reflection_text,
-            "related_entries": []
+            "related_entries": [],
         })
 
-        # Conversation history for context (kept in memory)
         conversation_history: List[Dict[str, str]] = []
+        message_timestamps: Deque[float] = deque()
 
-        # Main message loop
         while True:
             try:
                 data = await websocket.receive_json()
@@ -228,63 +206,49 @@ async def chat_websocket(
                 if not user_message:
                     continue
 
-                # Add user message to history
-                conversation_history.append({
-                    "role": "user",
-                    "content": user_message
-                })
+                # Enforce message length limit
+                if len(user_message) > _MAX_MESSAGE_LENGTH:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Message too long (max {_MAX_MESSAGE_LENGTH} characters)"
+                    })
+                    continue
 
-                # Get related entries based on user message (uses short-lived session)
-                related_entries = await get_related_entries(
-                    user_id, user_message, embedding_service, k=3
-                )
+                # Enforce per-connection rate limit
+                if not _check_rate_limit(message_timestamps):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Too many messages. Please wait before sending another."
+                    })
+                    continue
 
-                # Build system prompt
+                conversation_history.append({"role": "user", "content": user_message})
+
+                related_entries = await get_related_entries(user_id, user_message, embedding_service, k=3)
+
                 system_prompt = CHAT_SYSTEM_PROMPT.format(
                     reflection=reflection_text,
-                    related_entries=format_related_entries(related_entries)
+                    related_entries=format_related_entries(related_entries),
                 )
 
-                # Build messages for LLM (system + last 10 conversation messages)
-                messages = [
-                    {"role": "system", "content": system_prompt}
-                ] + conversation_history[-10:]
+                messages = [{"role": "system", "content": system_prompt}] + conversation_history[-10:]
 
-                # Stream response
                 full_response = ""
-                async for token_content in generation_service.chat_completion_stream(
-                    messages,
-                    temperature=0.7
-                ):
+                async for token_content in generation_service.chat_completion_stream(messages, temperature=0.7):
                     full_response += token_content
-                    await websocket.send_json({
-                        "type": "token",
-                        "content": token_content
-                    })
+                    await websocket.send_json({"type": "token", "content": token_content})
 
-                # Add assistant response to history
-                conversation_history.append({
-                    "role": "assistant",
-                    "content": full_response
-                })
-
-                # Send completion signal
+                conversation_history.append({"role": "assistant", "content": full_response})
                 await websocket.send_json({"type": "complete"})
 
             except WebSocketDisconnect:
                 logger.info(f"WebSocket disconnected for user {user_id}")
                 break
             except json.JSONDecodeError:
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Invalid JSON message"
-                })
+                await websocket.send_json({"type": "error", "message": "Invalid JSON message"})
             except Exception as e:
                 logger.error(f"Error processing chat message: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Failed to process message"
-                })
+                await websocket.send_json({"type": "error", "message": "Failed to process message"})
 
     except Exception as e:
         logger.error(f"Chat WebSocket error: {e}")

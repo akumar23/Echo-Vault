@@ -4,59 +4,72 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true, // Send httpOnly cookies with every request
 })
 
-// Add auth token to requests
-api.interceptors.request.use(
-  (config) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-    }
-    return config
-  },
-  (error) => Promise.reject(error)
-)
+// --- Token refresh interceptor ---
 
-// Track if we're already redirecting to prevent multiple redirects
+let isRefreshing = false
+let refreshSubscribers: Array<(success: boolean) => void> = []
+
+function notifySubscribers(success: boolean) {
+  refreshSubscribers.forEach(cb => cb(success))
+  refreshSubscribers = []
+}
+
 let isRedirectingToLogin = false
 
-// Helper to clear auth and redirect to login
 function handleAuthError() {
   if (typeof window === 'undefined') return
-
-  // Prevent multiple redirects from concurrent failed requests
   if (isRedirectingToLogin) return
 
-  // Don't redirect if already on auth pages
   const currentPath = window.location.pathname
   if (currentPath === '/login' || currentPath === '/register') return
 
   isRedirectingToLogin = true
-
-  // Clear token from localStorage
-  localStorage.removeItem('token')
-
-  // Clear token cookie
-  document.cookie = 'token=; path=/; max-age=0'
-
-  // Redirect to login
   window.location.href = '/login'
 }
 
-// Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Handle auth errors by redirecting to login
-    if (error.response?.status === 401) {
-      handleAuthError()
+  async (error) => {
+    const originalRequest = error.config
+
+    // Don't intercept auth endpoints to avoid infinite loops
+    if (originalRequest?.url?.includes('/auth/')) {
+      if (originalRequest.url.includes('/auth/refresh')) {
+        handleAuthError()
+      }
+      return Promise.reject(error)
     }
+
+    if (error.response?.status === 401 && !originalRequest?._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          refreshSubscribers.push((success) => {
+            if (success) resolve(api(originalRequest))
+            else reject(error)
+          })
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        await api.post('/auth/refresh')
+        notifySubscribers(true)
+        isRefreshing = false
+        return api(originalRequest)
+      } catch {
+        notifySubscribers(false)
+        isRefreshing = false
+        handleAuthError()
+        return Promise.reject(error)
+      }
+    }
+
     return Promise.reject(error)
   }
 )
@@ -111,13 +124,9 @@ export interface Settings {
   user_id: number
   search_half_life_days: number
   privacy_hard_delete: boolean
-
-  // Generation LLM settings
   generation_url: string | null
   generation_api_token_set: boolean
   generation_model: string | null
-
-  // Embedding LLM settings
   embedding_url: string | null
   embedding_api_token_set: boolean
   embedding_model: string | null
@@ -126,13 +135,9 @@ export interface Settings {
 export interface SettingsUpdate {
   search_half_life_days?: number
   privacy_hard_delete?: boolean
-
-  // Generation LLM settings (token is write-only)
   generation_url?: string | null
   generation_api_token?: string | null
   generation_model?: string | null
-
-  // Embedding LLM settings (token is write-only)
   embedding_url?: string | null
   embedding_api_token?: string | null
   embedding_model?: string | null
@@ -152,7 +157,6 @@ export interface SearchResult {
   tags?: string[]
 }
 
-// Prompts
 export interface WritingSuggestion {
   id: string
   text: string
@@ -198,9 +202,19 @@ export const authApi = {
     const response = await api.post('/auth/login', { email, password })
     return response.data
   },
-  getMe: async () => {
+  logout: async () => {
+    await api.post('/auth/logout')
+  },
+  refresh: async () => {
+    await api.post('/auth/refresh')
+  },
+  getMe: async (): Promise<User> => {
     const response = await api.get('/auth/me')
     return response.data
+  },
+  getWsTicket: async (): Promise<string> => {
+    const response = await api.get('/auth/ws-ticket')
+    return response.data.ticket
   },
 }
 
@@ -298,4 +312,3 @@ export const promptsApi = {
 }
 
 export default api
-

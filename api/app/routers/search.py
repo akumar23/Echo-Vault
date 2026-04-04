@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, cast, Float
 from typing import List
@@ -10,6 +10,7 @@ from app.models.embedding import EntryEmbedding
 from app.models.settings import Settings
 from app.schemas.search import SearchRequest, SearchResult
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from app.services.llm_service import get_embedding_service_for_user
 from pgvector.sqlalchemy import Vector
 
@@ -17,10 +18,12 @@ router = APIRouter()
 
 
 @router.post("/semantic", response_model=List[SearchResult])
+@limiter.limit("20/minute")
 async def semantic_search(
+    request: Request,
     search_request: SearchRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     # Get user settings for half-life
     settings = db.query(Settings).filter(Settings.user_id == current_user.id).first()

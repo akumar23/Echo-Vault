@@ -2,32 +2,28 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 
-client = TestClient(app)
-
 
 @pytest.fixture
-def auth_token():
-    # Register and get token
-    client.post(
-        "/auth/register",
-        json={
-            "email": "entries@example.com",
-            "username": "entriesuser",
-            "password": "testpass123"
-        }
-    )
-    response = client.post(
-        "/auth/login",
-        json={
-            "email": "entries@example.com",
-            "password": "testpass123"
-        }
-    )
-    return response.json()["access_token"]
+def auth_client():
+    """Returns an authenticated TestClient (cookie-based session)."""
+    with TestClient(app) as session_client:
+        session_client.post(
+            "/auth/register",
+            json={
+                "email": "entries@example.com",
+                "username": "entriesuser",
+                "password": "testpass123"
+            }
+        )
+        session_client.post(
+            "/auth/login",
+            json={"email": "entries@example.com", "password": "testpass123"}
+        )
+        yield session_client
 
 
-def test_create_entry(auth_token):
-    response = client.post(
+def test_create_entry(auth_client):
+    response = auth_client.post(
         "/entries",
         json={
             "title": "Test Entry",
@@ -35,7 +31,6 @@ def test_create_entry(auth_token):
             "tags": ["test", "example"],
             "mood_user": 4
         },
-        headers={"Authorization": f"Bearer {auth_token}"}
     )
     assert response.status_code == 201
     data = response.json()
@@ -45,72 +40,41 @@ def test_create_entry(auth_token):
     assert data["mood_user"] == 4
 
 
-def test_list_entries(auth_token):
-    # Create an entry first
-    client.post(
-        "/entries",
-        json={
-            "content": "Test entry for listing",
-        },
-        headers={"Authorization": f"Bearer {auth_token}"}
-    )
-    # List entries
-    response = client.get(
-        "/entries",
-        headers={"Authorization": f"Bearer {auth_token}"}
-    )
+def test_list_entries(auth_client):
+    auth_client.post("/entries", json={"content": "Test entry for listing"})
+    response = auth_client.get("/entries")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
 
 
-def test_get_entry(auth_token):
-    # Create an entry
-    create_response = client.post(
+def test_get_entry(auth_client):
+    create_response = auth_client.post(
         "/entries",
-        json={
-            "title": "Get Test",
-            "content": "Content for get test",
-        },
-        headers={"Authorization": f"Bearer {auth_token}"}
+        json={"title": "Get Test", "content": "Content for get test"},
     )
     entry_id = create_response.json()["id"]
-    
-    # Get the entry
-    response = client.get(
-        f"/entries/{entry_id}",
-        headers={"Authorization": f"Bearer {auth_token}"}
-    )
+
+    response = auth_client.get(f"/entries/{entry_id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == entry_id
     assert data["title"] == "Get Test"
 
 
-def test_update_entry(auth_token):
-    # Create an entry
-    create_response = client.post(
+def test_update_entry(auth_client):
+    create_response = auth_client.post(
         "/entries",
-        json={
-            "title": "Update Test",
-            "content": "Original content",
-        },
-        headers={"Authorization": f"Bearer {auth_token}"}
+        json={"title": "Update Test", "content": "Original content"},
     )
     entry_id = create_response.json()["id"]
-    
-    # Update the entry
-    response = client.put(
+
+    response = auth_client.put(
         f"/entries/{entry_id}",
-        json={
-            "title": "Updated Title",
-            "content": "Updated content",
-        },
-        headers={"Authorization": f"Bearer {auth_token}"}
+        json={"title": "Updated Title", "content": "Updated content"},
     )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Updated Title"
     assert data["content"] == "Updated content"
-

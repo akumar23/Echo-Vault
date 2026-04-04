@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { authApi } from '@/lib/api'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -40,8 +41,10 @@ interface UseChatReturn {
 
 /**
  * Hook for managing WebSocket chat with the reflection assistant.
- * Connects to the chat WebSocket when enabled and manages message state.
- * Includes automatic reconnection with exponential backoff.
+ *
+ * Auth flow: fetches a short-lived one-time ticket from /auth/ws-ticket
+ * (authenticated via httpOnly cookie) and passes it as a query param.
+ * The ticket is consumed server-side on connection, so it never accumulates in logs.
  */
 export function useChat({
   enabled,
@@ -62,7 +65,6 @@ export function useChat({
   const mountedRef = useRef(true)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const shouldReconnectRef = useRef(true)
-  // Store onError in a ref to avoid recreating callbacks
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
 
@@ -95,27 +97,25 @@ export function useChat({
     setReconnectAttempt(0)
   }, [clearReconnectTimeout])
 
-  const connect = useCallback(() => {
-    // Get token from localStorage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-    if (!token) {
+  const connect = useCallback(async () => {
+    if (wsRef.current) {
+      const state = wsRef.current.readyState
+      if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return
+    }
+
+    // Fetch a one-time ticket (authenticated via httpOnly cookie)
+    let ticket: string
+    try {
+      ticket = await authApi.getWsTicket()
+    } catch {
       onErrorRef.current?.('Not authenticated')
       return
     }
 
-    // Don't reconnect if already connected or connecting
-    if (wsRef.current) {
-      const state = wsRef.current.readyState
-      if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) {
-        return
-      }
-    }
-
-    // Build WebSocket URL
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws'
     const wsHost = apiUrl.replace(/^https?:\/\//, '')
-    const wsUrl = `${wsProtocol}://${wsHost}/chat/ws/chat?token=${encodeURIComponent(token)}`
+    const wsUrl = `${wsProtocol}://${wsHost}/chat/ws/chat?ticket=${encodeURIComponent(ticket)}`
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
@@ -136,10 +136,7 @@ export function useChat({
 
         switch (data.type) {
           case 'context':
-            setContext({
-              reflection: data.reflection,
-              related_entries: data.related_entries
-            })
+            setContext({ reflection: data.reflection, related_entries: data.related_entries })
             break
 
           case 'token':
@@ -148,20 +145,16 @@ export function useChat({
             setStreamingContent(streamingContentRef.current)
             break
 
-          case 'complete':
-            // Move streaming content to messages
-            // Capture value before clearing to avoid race condition with async state update
+          case 'complete': {
             const finalContent = streamingContentRef.current
             if (finalContent) {
-              setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: finalContent
-              }])
+              setMessages(prev => [...prev, { role: 'assistant', content: finalContent }])
             }
             streamingContentRef.current = ''
             setStreamingContent('')
             setIsStreaming(false)
             break
+          }
 
           case 'error':
             onErrorRef.current?.(data.message)
@@ -185,7 +178,6 @@ export function useChat({
       setIsConnected(false)
       setIsStreaming(false)
 
-      // Handle specific close codes - don't reconnect for auth errors
       if (event.code === 4001) {
         onErrorRef.current?.('Authentication failed. Please log in again.')
         shouldReconnectRef.current = false
@@ -196,22 +188,14 @@ export function useChat({
         return
       }
 
-      // Don't reconnect for normal closures (1000 = normal, 1001 = going away)
-      if (event.code === 1000 || event.code === 1001) {
-        return
-      }
+      if (event.code === 1000 || event.code === 1001) return
 
-      // Attempt reconnection with exponential backoff
       setReconnectAttempt(prev => {
         const nextAttempt = prev + 1
 
         if (nextAttempt <= maxReconnectAttempts && shouldReconnectRef.current) {
           setIsReconnecting(true)
-          // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 30s)
-          const delay = Math.min(
-            reconnectBaseDelay * Math.pow(2, prev),
-            30000
-          )
+          const delay = Math.min(reconnectBaseDelay * Math.pow(2, prev), 30000)
 
           reconnectTimeoutRef.current = setTimeout(() => {
             if (mountedRef.current && shouldReconnectRef.current) {
@@ -226,7 +210,7 @@ export function useChat({
         return nextAttempt
       })
     }
-  }, [maxReconnectAttempts, reconnectBaseDelay]) // Dependencies for reconnection config
+  }, [maxReconnectAttempts, reconnectBaseDelay])
 
   const sendMessage = useCallback((content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -235,21 +219,12 @@ export function useChat({
     }
 
     const trimmedContent = content.trim()
-    if (!trimmedContent) {
-      return
-    }
+    if (!trimmedContent) return
 
-    // Add user message immediately for responsive UI
     setMessages(prev => [...prev, { role: 'user', content: trimmedContent }])
-
-    // Send to server
-    wsRef.current.send(JSON.stringify({
-      type: 'chat_message',
-      content: trimmedContent
-    }))
+    wsRef.current.send(JSON.stringify({ type: 'chat_message', content: trimmedContent }))
   }, [])
 
-  // Connect when enabled, disconnect when disabled
   useEffect(() => {
     mountedRef.current = true
 
@@ -276,6 +251,6 @@ export function useChat({
     reconnectAttempt,
     context,
     sendMessage,
-    reset
+    reset,
   }
 }

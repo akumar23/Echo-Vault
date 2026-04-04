@@ -20,8 +20,8 @@ export function Header({ title, showNav = true, showGreeting = false }: HeaderPr
   const { logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const handleLogout = useCallback(() => {
-    logout()
+  const handleLogout = useCallback(async () => {
+    await logout()
     router.push('/login')
   }, [logout, router])
 

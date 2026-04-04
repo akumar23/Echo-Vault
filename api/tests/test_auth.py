@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 from app.database import Base, engine, SessionLocal
 from main import app
 
-# Create test database
 Base.metadata.create_all(bind=engine)
 
 client = TestClient(app)
@@ -35,7 +34,6 @@ def test_register():
 
 
 def test_register_duplicate():
-    # Register first time
     client.post(
         "/auth/register",
         json={
@@ -44,7 +42,6 @@ def test_register_duplicate():
             "password": "testpass123"
         }
     )
-    # Try to register again
     response = client.post(
         "/auth/register",
         json={
@@ -57,7 +54,6 @@ def test_register_duplicate():
 
 
 def test_login():
-    # Register first
     client.post(
         "/auth/register",
         json={
@@ -66,22 +62,18 @@ def test_login():
             "password": "testpass123"
         }
     )
-    # Then login
     response = client.post(
         "/auth/login",
-        json={
-            "email": "login@example.com",
-            "password": "testpass123"
-        }
+        json={"email": "login@example.com", "password": "testpass123"}
     )
     assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
+    assert response.json()["message"] == "Login successful"
+    # Auth is now delivered via httpOnly cookies, not response body
+    assert "access_token" in response.cookies
+    assert "refresh_token" in response.cookies
 
 
 def test_login_wrong_password():
-    # Register first
     client.post(
         "/auth/register",
         json={
@@ -90,72 +82,54 @@ def test_login_wrong_password():
             "password": "testpass123"
         }
     )
-    # Try wrong password
     response = client.post(
         "/auth/login",
-        json={
-            "email": "wrongpass@example.com",
-            "password": "wrongpassword"
-        }
+        json={"email": "wrongpass@example.com", "password": "wrongpassword"}
     )
     assert response.status_code == 401
 
 
 def test_full_registration_flow():
-    """Test complete registration flow: register -> login -> get user info"""
-    # 1. Register a new user
-    register_response = client.post(
-        "/auth/register",
-        json={
-            "email": "fullflow@example.com",
-            "username": "fullflow",
-            "password": "testpass123"
-        }
-    )
-    assert register_response.status_code == 201
-    user_data = register_response.json()
-    assert user_data["email"] == "fullflow@example.com"
-    assert user_data["username"] == "fullflow"
-    user_id = user_data["id"]
+    """Test complete registration flow: register -> login (cookie) -> get user info"""
+    with TestClient(app) as session_client:
+        register_response = session_client.post(
+            "/auth/register",
+            json={
+                "email": "fullflow@example.com",
+                "username": "fullflow",
+                "password": "testpass123"
+            }
+        )
+        assert register_response.status_code == 201
+        user_data = register_response.json()
+        user_id = user_data["id"]
 
-    # 2. Login with the new user credentials
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "fullflow@example.com",
-            "password": "testpass123"
-        }
-    )
-    assert login_response.status_code == 200
-    login_data = login_response.json()
-    assert "access_token" in login_data
-    assert login_data["token_type"] == "bearer"
-    token = login_data["access_token"]
+        login_response = session_client.post(
+            "/auth/login",
+            json={"email": "fullflow@example.com", "password": "testpass123"}
+        )
+        assert login_response.status_code == 200
+        # Cookie is now set in the session
+        assert "access_token" in login_response.cookies
 
-    # 3. Use the token to get user info from /auth/me
-    me_response = client.get(
-        "/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert me_response.status_code == 200
-    me_data = me_response.json()
-    assert me_data["id"] == user_id
-    assert me_data["email"] == "fullflow@example.com"
-    assert me_data["username"] == "fullflow"
-    assert me_data["is_active"] is True
+        # /auth/me uses the cookie automatically
+        me_response = session_client.get("/auth/me")
+        assert me_response.status_code == 200
+        me_data = me_response.json()
+        assert me_data["id"] == user_id
+        assert me_data["email"] == "fullflow@example.com"
+        assert me_data["is_active"] is True
 
 
 def test_get_me_without_token():
-    """Test that /auth/me returns 401 when no token is provided"""
-    response = client.get("/auth/me")
-    assert response.status_code == 401
+    with TestClient(app) as fresh_client:
+        response = fresh_client.get("/auth/me")
+        assert response.status_code == 401
 
 
 def test_get_me_with_invalid_token():
-    """Test that /auth/me returns 401 with invalid token"""
     response = client.get(
         "/auth/me",
         headers={"Authorization": "Bearer invalid_token_here"}
     )
     assert response.status_code == 401
-

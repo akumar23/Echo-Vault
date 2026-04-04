@@ -3,9 +3,10 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
+from app.core.rate_limit import limiter
 
 from app.database import get_db
 from app.models.user import User
@@ -109,7 +110,9 @@ async def get_prompt_stats(
 
 
 @router.get("/suggestions", response_model=SuggestionsResponse)
+@limiter.limit("10/minute")
 async def get_writing_suggestions(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

@@ -15,11 +15,21 @@ class Settings(BaseSettings):
         if v.startswith("postgresql://") and "+psycopg" not in v:
             return v.replace("postgresql://", "postgresql+psycopg://", 1)
         return v
+
     redis_url: str = "redis://redis:6379/0"
     jwt_secret: str = "change_me"  # MUST be changed in production!
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 10080  # 1 week (7 days * 24 hours * 60 minutes)
+    jwt_access_token_expire_minutes: int = 15  # Short-lived; refreshed automatically
+    jwt_refresh_token_expire_days: int = 7
     upload_dir: str = "/data/uploads"
+
+    # Cookie settings — set COOKIE_SECURE=true and COOKIE_SAME_SITE=none in production (HTTPS + cross-origin)
+    cookie_secure: bool = False
+    cookie_same_site: str = "lax"
+
+    # Fernet key for encrypting LLM API tokens at rest.
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    encryption_key: str = ""
 
     # Default LLM settings (used when user has no custom settings)
     default_generation_url: str = "http://ollama:11434"

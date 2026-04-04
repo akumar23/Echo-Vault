@@ -394,16 +394,18 @@ def get_embedding_service(
 
 def get_generation_service_for_user(db, user_id: int) -> LLMService:
     """Get a generation LLM service for a specific user."""
+    from app.core.encryption import decrypt_token
     from app.models.settings import Settings
 
     user_settings = db.query(Settings).filter(Settings.user_id == user_id).first()
 
     if user_settings:
+        raw_token = user_settings.generation_api_token
         return LLMService(
             base_url=user_settings.generation_url or app_settings.default_generation_url,
             model=user_settings.generation_model or app_settings.default_generation_model,
-            api_token=user_settings.generation_api_token,
-            service_type="generation"
+            api_token=decrypt_token(raw_token) if raw_token else None,
+            service_type="generation",
         )
 
     return get_generation_service()
@@ -411,16 +413,18 @@ def get_generation_service_for_user(db, user_id: int) -> LLMService:
 
 def get_embedding_service_for_user(db, user_id: int) -> LLMService:
     """Get an embedding LLM service for a specific user."""
+    from app.core.encryption import decrypt_token
     from app.models.settings import Settings
 
     user_settings = db.query(Settings).filter(Settings.user_id == user_id).first()
 
     if user_settings:
+        raw_token = user_settings.embedding_api_token
         return LLMService(
             base_url=user_settings.embedding_url or app_settings.default_embedding_url,
             model=user_settings.embedding_model or app_settings.default_embedding_model,
-            api_token=user_settings.embedding_api_token,
-            service_type="embedding"
+            api_token=decrypt_token(raw_token) if raw_token else None,
+            service_type="embedding",
         )
 
     return get_embedding_service()

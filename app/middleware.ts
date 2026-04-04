@@ -23,8 +23,8 @@ export function middleware(request: NextRequest) {
   )
 
   if (isProtectedPath) {
-    // Check for authentication token in cookies
-    const token = request.cookies.get('token')?.value
+    // Check for authentication token in cookies (set by the API as httpOnly)
+    const token = request.cookies.get('access_token')?.value
 
     if (!token) {
       // Redirect to login page with return URL
