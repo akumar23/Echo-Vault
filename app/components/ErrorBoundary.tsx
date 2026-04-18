@@ -40,13 +40,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }
 
       return (
-        <div className="container text-center" style={{ paddingTop: 'var(--space-8)' }}>
-          <h1 className="text-error mb-4">Something went wrong</h1>
-          <p className="text-muted mb-5">
+        <div className="mx-auto max-w-md px-6 pt-16 text-center">
+          <h1 className="mb-3 text-xl font-semibold text-destructive">
+            Something went wrong
+          </h1>
+          <p className="mb-6 text-sm text-muted-foreground">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
           <button
-            className="btn btn-primary"
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-[color:var(--accent-dim)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => this.setState({ hasError: false, error: null })}
           >
             Try again

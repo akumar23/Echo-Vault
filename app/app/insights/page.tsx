@@ -6,19 +6,35 @@ import ReactMarkdown from 'react-markdown'
 import { useInsights } from '@/hooks/useInsights'
 import { insightsApi } from '@/lib/api'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import Link from 'next/link'
+import { Header } from '@/components/Header'
 import { format } from 'date-fns'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Sparkles,
-  Home,
   Lightbulb,
   Tag,
   CheckCircle,
   Calendar,
   Loader2,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
 } from 'lucide-react'
+
+const DAY_OPTIONS = [
+  { value: 3, label: '3 days' },
+  { value: 7, label: '7 days' },
+  { value: 14, label: '14 days' },
+  { value: 30, label: '30 days' },
+]
 
 export default function InsightsPage() {
   const { data: insights, isLoading } = useInsights(10)
@@ -34,150 +50,173 @@ export default function InsightsPage() {
 
   return (
     <ProtectedRoute>
-      <div className="container">
-        <div className="page-header">
-          <div className="flex items-center gap-4">
-            <div className="section-header__icon" style={{ width: '48px', height: '48px' }}>
-              <Sparkles size={24} />
-            </div>
-            <h1>Insights</h1>
-          </div>
-          <div className="page-header-actions">
-            <Link href="/" className="btn btn-ghost">
-              <Home size={16} />
-              Home
-            </Link>
-          </div>
+      <Header />
+      <main className="mx-auto w-full max-w-5xl px-6 py-8">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Insights
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            AI-generated themes and patterns from your journal.
+          </p>
         </div>
 
-        <div className="card card-elevated" style={{ marginBottom: '1.5rem' }}>
-          <div className="section-header">
-            <div className="section-header__icon">
-              <Lightbulb />
+        <Card variant="bordered" className="mb-6">
+          <CardHeader className="flex-row items-center gap-3 space-y-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Lightbulb className="h-4 w-4" />
             </div>
-            <h3 style={{ margin: 0, padding: 0, border: 'none' }}>Generate New Insights</h3>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Calendar size={16} className="text-muted" />
-              Analyze past
-              <select
-                value={generateDays}
-                onChange={(e) => setGenerateDays(Number(e.target.value))}
-                className="input"
-                style={{ width: 'auto' }}
+            <div>
+              <CardTitle>Generate New Insights</CardTitle>
+              <CardDescription>
+                Ask the assistant to find themes across recent entries.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                Analyze past
+                <select
+                  value={generateDays}
+                  onChange={(e) => setGenerateDays(Number(e.target.value))}
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Days to analyze"
+                >
+                  {DAY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                onClick={() => generateMutation.mutate(generateDays)}
+                disabled={generateMutation.isPending}
               >
-                <option value={3}>3 days</option>
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-                <option value={30}>30 days</option>
-              </select>
-            </label>
-            <button
-              onClick={() => generateMutation.mutate(generateDays)}
-              disabled={generateMutation.isPending}
-              className="btn btn-cta"
-            >
-              {generateMutation.isPending ? (
-                <>
-                  <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Generate Insights
-                </>
-              )}
-            </button>
-          </div>
-          {generateMutation.isSuccess && (
-            <div className="alert alert--success alert--sm" style={{ marginTop: '0.75rem' }}>
-              <CheckCircle2 size={16} />
-              Insight generation queued! It may take a moment to appear.
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate Insights
+                  </>
+                )}
+              </Button>
             </div>
-          )}
-          {generateMutation.isError && (
-            <div className="alert alert--error alert--sm" style={{ marginTop: '0.75rem' }}>
-              <AlertCircle size={16} />
-              Failed to generate insights. Please try again.
-            </div>
-          )}
-        </div>
+            {generateMutation.isSuccess && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>
+                  Insight generation queued! It may take a moment to appear.
+                </AlertDescription>
+              </Alert>
+            )}
+            {generateMutation.isError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to generate insights. Please try again.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
 
         {isLoading ? (
-          <div className="flex items-center gap-2">
-            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-            <span className="text-muted">Loading insights...</span>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading insights...</span>
           </div>
         ) : insights && insights.length > 0 ? (
-          <div>
+          <div className="space-y-4">
             {insights.map((insight) => (
-              <div key={insight.id} className="card" style={{ marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', alignItems: 'center' }}>
-                  <div className="flex items-center gap-2">
-                    <Calendar size={14} className="text-muted" />
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                      {format(new Date(insight.period_start), 'MMM d')} - {format(new Date(insight.period_end), 'MMM d, yyyy')}
+              <Card key={insight.id} variant="bordered">
+                <CardContent className="space-y-4 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>
+                        {format(new Date(insight.period_start), 'MMM d')} -{' '}
+                        {format(new Date(insight.period_end), 'MMM d, yyyy')}
+                      </span>
+                    </div>
+                    <span>
+                      Generated{' '}
+                      {format(new Date(insight.created_at), 'MMM d, yyyy')}
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                    Generated {format(new Date(insight.created_at), 'MMM d, yyyy')}
-                  </span>
-                </div>
 
-                <div style={{ marginBottom: '1rem' }}>
-                  <div className="flex items-center gap-2" style={{ marginBottom: '0.5rem' }}>
-                    <Lightbulb size={16} className="text-accent" />
-                    <h4 style={{ margin: 0 }}>Summary</h4>
-                  </div>
-                  <div className="prose prose-sm">
-                    <ReactMarkdown>{insight.summary}</ReactMarkdown>
-                  </div>
-                </div>
-
-                {insight.themes && insight.themes.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div className="flex items-center gap-2" style={{ marginBottom: '0.5rem' }}>
-                      <Tag size={16} className="text-accent" />
-                      <h4 style={{ margin: 0 }}>Themes</h4>
-                    </div>
-                    <div className="tags-container">
-                      {insight.themes.map((theme, i) => (
-                        <span key={i} className="tag">{theme}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {insight.actions && insight.actions.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-2" style={{ marginBottom: '0.5rem' }}>
-                      <CheckCircle size={16} className="text-accent" />
-                      <h4 style={{ margin: 0 }}>Suggested Actions</h4>
+                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Lightbulb className="h-4 w-4 text-primary" />
+                      Summary
                     </div>
-                    <div className="prose prose-sm">
-                      <ul>
-                        {insight.actions.map((action, i) => (
-                          <li key={i}>
-                            <ReactMarkdown>{action}</ReactMarkdown>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="prose prose-sm max-w-none text-muted-foreground">
+                      <ReactMarkdown>{insight.summary}</ReactMarkdown>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {insight.themes && insight.themes.length > 0 && (
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Tag className="h-4 w-4 text-primary" />
+                        Themes
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {insight.themes.map((theme, i) => (
+                          <Badge key={i} variant="secondary">
+                            {theme}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {insight.actions && insight.actions.length > 0 && (
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                        <CheckCircle className="h-4 w-4 text-primary" />
+                        Suggested Actions
+                      </div>
+                      <div className="prose prose-sm max-w-none text-muted-foreground">
+                        <ul>
+                          {insight.actions.map((action, i) => (
+                            <li key={i}>
+                              <ReactMarkdown>{action}</ReactMarkdown>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : (
-          <div className="empty-state">
-            <Sparkles size={48} className="text-muted" style={{ marginBottom: 'var(--space-4)' }} />
-            <p>No insights yet.</p>
-            <p>Generate your first insight to see patterns in your journal entries.</p>
-          </div>
+          <Card variant="bordered">
+            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  No insights yet
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Generate your first insight to see patterns in your journal
+                  entries.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         )}
-      </div>
+      </main>
     </ProtectedRoute>
   )
 }

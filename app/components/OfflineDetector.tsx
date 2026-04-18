@@ -45,7 +45,11 @@ export function OfflineDetector() {
   if (!isOffline) return null
 
   return (
-    <div className="offline-banner" role="alert" aria-live="assertive">
+    <div
+      className="fixed inset-x-0 bottom-0 z-[9998] bg-[color:var(--warning)] px-4 py-3 text-center text-sm font-medium text-white shadow-lg"
+      role="alert"
+      aria-live="assertive"
+    >
       You are currently offline. Changes may not be saved.
     </div>
   )

@@ -1,107 +1,223 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ThemeToggle } from './ThemeToggle'
-import { PersonalizedGreeting } from './PersonalizedGreeting'
 import { useAuth } from '@/contexts/AuthContext'
-import { PenLine, BookOpen, Settings, HelpCircle, Home, Menu, X, LogOut } from 'lucide-react'
+import {
+  PenLine,
+  BookOpen,
+  Settings,
+  HelpCircle,
+  Menu,
+  LogOut,
+  BarChart3,
+  User,
+  Home,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
 
 interface HeaderProps {
+  /**
+   * Retained for backward-compat with a few pages that still pass `title` or
+   * `showNav={false}`. The new header is a pure chrome strip; page titles now
+   * live in the page body. These props are no-ops visually.
+   */
   title?: string
   showNav?: boolean
+  /** Deprecated — kept only so existing call sites don't break. */
   showGreeting?: boolean
 }
 
-export function Header({ title, showNav = true, showGreeting = false }: HeaderProps) {
+const NAV_LINKS = [
+  { href: '/journal', label: 'Dashboard', icon: Home },
+  { href: '/entries', label: 'Entries', icon: BookOpen },
+  { href: '/insights', label: 'Insights', icon: BarChart3 },
+  { href: '/new', label: 'New', icon: PenLine, primary: true as const },
+]
+
+/**
+ * Header — modern horizontal app chrome.
+ *
+ * Sticky top bar with logo on the left, nav links in the middle, and
+ * user/theme actions on the right. Nav links use muted foreground with
+ * hover to foreground; terracotta is reserved for the primary CTA ("New")
+ * and the currently-active route indicator.
+ */
+export function Header({ showNav = true }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { logout } = useAuth()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { logout, user } = useAuth()
 
   const handleLogout = useCallback(async () => {
     await logout()
     router.push('/login')
   }, [logout, router])
 
-  const toggleMobileMenu = useCallback(() => {
-    setMobileMenuOpen(prev => !prev)
-  }, [])
-
-  const closeMobileMenu = useCallback(() => {
-    setMobileMenuOpen(false)
-  }, [])
-
-  const navLinks = [
-    { href: '/new', label: 'New Entry', icon: PenLine },
-    { href: '/entries', label: 'All Entries', icon: BookOpen },
-    { href: '/settings', label: 'Settings', icon: Settings },
-    { href: '/help', label: 'Help', icon: HelpCircle },
-  ]
-
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
-    return pathname.startsWith(href)
+    return pathname?.startsWith(href) ?? false
   }
 
   return (
-    <header className="header">
-      <div className="header__top">
-        {showGreeting ? (
-          <PersonalizedGreeting />
-        ) : title ? (
-          <h1 className="header__title">{title}</h1>
-        ) : null}
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link href="/" className="btn btn-ghost btn-sm">
-            <Home size={16} />
-            <span className="hidden-mobile">Home</span>
-          </Link>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={handleLogout}
-            aria-label="Log out"
-          >
-            <LogOut size={16} />
-            <span className="hidden-mobile">Log out</span>
-          </button>
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-sm">
+      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-6">
+        {/* Left: app name */}
+        <Link
+          href="/journal"
+          className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-foreground/80"
+        >
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-foreground text-background">
+            <span className="text-[10px] font-bold">EV</span>
+          </span>
+          <span>EchoVault</span>
+        </Link>
+
+        {/* Center: nav links — hidden on mobile */}
+        {showNav && (
+          <nav className="hidden items-center gap-1 md:flex">
+            {NAV_LINKS.filter((l) => !l.primary).map((link) => {
+              const active = isActive(link.href)
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    active
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {link.label}
+                </Link>
+              )
+            })}
+          </nav>
+        )}
+
+        {/* Right: actions */}
+        <div className="flex items-center gap-1.5">
           {showNav && (
-            <button
-              className="header__menu-toggle"
-              onClick={toggleMobileMenu}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-nav"
-              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-            >
-              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
+            <Button asChild size="sm" className="hidden md:inline-flex">
+              <Link href="/new">
+                <PenLine className="h-3.5 w-3.5" />
+                New entry
+              </Link>
+            </Button>
+          )}
+          <ThemeToggle />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Account menu"
+                className="hidden md:inline-flex"
+              >
+                <User className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {user && (
+                <>
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    {user.username ?? user.email}
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="flex w-full items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/help" className="flex w-full items-center gap-2">
+                  <HelpCircle className="h-4 w-4" />
+                  Help
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={handleLogout}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Mobile menu */}
+          {showNav && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden"
+                  aria-label="Open menu"
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {NAV_LINKS.map((link) => {
+                  const Icon = link.icon
+                  return (
+                    <DropdownMenuItem key={link.href} asChild>
+                      <Link
+                        href={link.href}
+                        className={cn(
+                          'flex w-full items-center gap-2',
+                          isActive(link.href) &&
+                            'text-foreground',
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {link.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  )
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="flex w-full items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/help" className="flex w-full items-center gap-2">
+                    <HelpCircle className="h-4 w-4" />
+                    Help
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={handleLogout}
+                  className="flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
-
-      {showNav && (
-        <nav
-          id="mobile-nav"
-          className={`header__nav ${mobileMenuOpen ? 'header__nav--open' : ''}`}
-        >
-          {navLinks.map((link) => {
-            const Icon = link.icon
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`nav-link ${isActive(link.href) ? 'nav-link--active' : ''}`}
-                onClick={closeMobileMenu}
-              >
-                <Icon size={18} />
-                {link.label}
-              </Link>
-            )
-          })}
-        </nav>
-      )}
     </header>
   )
 }

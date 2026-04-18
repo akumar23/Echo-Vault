@@ -3,58 +3,53 @@
 import ReactMarkdown from 'react-markdown'
 import { useReflection } from '@/hooks/useReflection'
 import { ErrorBoundary } from './ErrorBoundary'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, AlertCircle, FileText } from 'lucide-react'
 
-interface ReflectionsPanelProps {}
-
-function ReflectionsPanelContent({}: ReflectionsPanelProps) {
+function ReflectionsPanelContent() {
   const { reflection, isLoading, isStreaming, error } = useReflection()
 
   if (isLoading) {
     return (
-      <div className="scrollable-content flex-1">
-        <div className="flex items-center gap-2">
-          <Loader2 size={18} className="loading" style={{ animation: 'spin 1s linear infinite' }} />
-          <span className="text-muted">Loading reflection...</span>
-        </div>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Loading reflection...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="scrollable-content flex-1">
-        <div className="reflection reflection--error flex items-center gap-2">
-          <AlertCircle size={18} />
-          {error}
-        </div>
-      </div>
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
     )
   }
 
   if (!reflection) {
     return (
-      <div className="scrollable-content flex-1">
-        <div className="flex items-center gap-2 text-muted">
-          <FileText size={18} />
-          <p>No reflection available.</p>
-        </div>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <FileText className="h-4 w-4" />
+        <p>No reflection available.</p>
       </div>
     )
   }
 
   if (reflection.status === 'generating') {
     return (
-      <div className="scrollable-content flex-1">
-        <div className="flex items-center gap-2 mb-4">
-          <Loader2 size={18} className="text-accent" style={{ animation: 'spin 1s linear infinite' }} />
-          <span className="text-accent">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-primary">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>
             Generating reflection...
-            {isStreaming && <span className="text-muted ml-2">(streaming)</span>}
+            {isStreaming && (
+              <span className="ml-2 text-muted-foreground">(streaming)</span>
+            )}
           </span>
         </div>
         {reflection.reflection && (
-          <div className="reflection reflection--loading prose prose-sm">
+          <div className="prose prose-sm max-w-none text-foreground opacity-80">
             <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
           </div>
         )}
@@ -64,38 +59,41 @@ function ReflectionsPanelContent({}: ReflectionsPanelProps) {
 
   if (reflection.status === 'error') {
     return (
-      <div className="scrollable-content flex-1">
-        <div className="reflection reflection--error prose prose-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle size={18} />
-            <span>Error</span>
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          <div className="prose prose-sm max-w-none">
+            <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
           </div>
-          <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
-        </div>
-      </div>
+        </AlertDescription>
+      </Alert>
     )
   }
 
   return (
-    <div className="scrollable-content flex-1">
+    <div>
       {reflection.reflection ? (
-        <div className="reflection prose prose-sm">
+        <div className="prose prose-sm max-w-none text-foreground">
           <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
         </div>
       ) : (
-        <p className="text-muted">No reflection available. Create an entry to generate a reflection.</p>
+        <p className="text-muted-foreground">
+          No reflection available. Create an entry to generate a reflection.
+        </p>
       )}
     </div>
   )
 }
 
-export function ReflectionsPanel({}: ReflectionsPanelProps) {
+export function ReflectionsPanel() {
   return (
     <ErrorBoundary
       fallback={
-        <div className="alert alert--error">
-          Failed to load reflection. Please try refreshing the page.
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load reflection. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
       }
     >
       <ReflectionsPanelContent />

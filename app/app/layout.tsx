@@ -1,14 +1,9 @@
 import type { Metadata } from 'next'
-import { Instrument_Sans } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
 import './globals.css'
 import { Providers } from './providers'
 import { ThemeProvider } from '@/contexts/ThemeContext'
-
-const instrumentSans = Instrument_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-sans',
-})
+import { CommandPalette } from '@/components/CommandPalette'
 
 export const metadata: Metadata = {
   title: {
@@ -72,10 +67,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={instrumentSans.className}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={GeistSans.variable}
+    >
+      <body className="font-sans antialiased">
         <ThemeProvider>
-          <Providers>{children}</Providers>
+          <Providers>
+            {children}
+            <CommandPalette />
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

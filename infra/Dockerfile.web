@@ -25,9 +25,16 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY app/ .
 
-# Build argument for API URL (can be overridden at build time)
+# Build arguments for API URLs.
+# NEXT_PUBLIC_API_URL: browser-facing URL (used by Tauri builds only — other
+#   deployments use the same-origin /api proxy via next.config.js rewrites).
+# API_PROXY_URL: server-side rewrite target. Baked in at build time because
+#   Next.js evaluates rewrites() during build and serializes destinations into
+#   the routing manifest. In Docker this must be the api service name.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG API_PROXY_URL
+ENV API_PROXY_URL=$API_PROXY_URL
 
 RUN pnpm run build
 

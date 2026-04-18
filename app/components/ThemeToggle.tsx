@@ -1,7 +1,13 @@
 'use client'
 
+import { Moon, Sun } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { Button } from '@/components/ui/button'
 
+/**
+ * Cycles theme between light, dark, and system. Uses shadcn `Button` ghost
+ * variant so colors and focus rings come from the design tokens.
+ */
 export function ThemeToggle() {
   const { resolvedTheme, setTheme, theme } = useTheme()
 
@@ -12,32 +18,25 @@ export function ThemeToggle() {
   }
 
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon"
       onClick={cycleTheme}
-      className="theme-toggle"
       aria-label={`Current theme: ${theme}. Click to change.`}
       title={`Theme: ${theme}`}
+      className="relative"
     >
       {resolvedTheme === 'dark' ? (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
+        <Moon className="h-[1.125rem] w-[1.125rem]" />
       ) : (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-        </svg>
+        <Sun className="h-[1.125rem] w-[1.125rem]" />
       )}
       {theme === 'system' && (
-        <span className="theme-toggle__indicator">auto</span>
+        <span className="absolute -bottom-0.5 right-0 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+          auto
+        </span>
       )}
-    </button>
+      <span className="sr-only">Toggle theme</span>
+    </Button>
   )
 }

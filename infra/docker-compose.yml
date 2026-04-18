@@ -130,11 +130,17 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        API_PROXY_URL: ${API_PROXY_URL:-http://api:8000}
     container_name: echovault_web
     env_file:
       - ../.env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Server-side proxy target for Next.js rewrites. Must be reachable from
+      # inside the web container — use the Docker service name, not localhost.
+      API_PROXY_URL: ${API_PROXY_URL:-http://api:8000}
     ports:
       - "3000:3000"
     # Note: Volume mounts removed for production standalone build

@@ -156,29 +156,28 @@ export function VoiceInput({ onTranscript, disabled = false }: VoiceInputProps) 
   }
 
   return (
-    <div className="voice-input">
+    <div className="flex items-center gap-3">
       <button
         type="button"
-        className={`voice-input__button ${isListening ? 'voice-input__button--active' : ''}`}
+        className={
+          isListening
+            ? 'inline-flex h-9 w-9 items-center justify-center rounded-md border border-primary bg-primary text-primary-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50'
+            : 'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground transition-colors hover:border-border-light hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+        }
         onClick={toggleListening}
         disabled={disabled}
         aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
         title={isListening ? 'Stop listening' : 'Voice input'}
       >
-        {isListening ? (
-          <>
-            <span className="voice-input__pulse" />
-            <MicOff size={18} />
-          </>
-        ) : (
-          <Mic size={18} />
-        )}
+        {isListening ? <MicOff size={16} /> : <Mic size={16} />}
       </button>
 
       {isListening && interimTranscript && (
-        <div className="voice-input__preview">
-          <Loader2 size={12} className="voice-input__loading" />
-          <span className="voice-input__interim">{interimTranscript}</span>
+        <div className="inline-flex max-w-xs items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5">
+          <Loader2 size={12} className="animate-spin text-primary shrink-0" />
+          <span className="truncate text-sm italic text-muted-foreground">
+            {interimTranscript}
+          </span>
         </div>
       )}
     </div>

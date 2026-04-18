@@ -5,28 +5,38 @@ import { searchApi, SearchResult } from '@/lib/api'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ErrorBoundary } from './ErrorBoundary'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // Memoized search result item to prevent unnecessary re-renders
-const SearchResultItem = memo(function SearchResultItem({ result }: { result: SearchResult }) {
+const SearchResultItem = memo(function SearchResultItem({
+  result,
+}: {
+  result: SearchResult
+}) {
   return (
     <Link
       href={`/entries/${result.entry_id}`}
-      className="search-result"
-      style={{ display: 'block' }}
+      className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
     >
-      <div className="search-result__title">
-        {result.title || 'Untitled'}
-      </div>
-      <div className="search-result__meta">
-        <span>{format(new Date(result.created_at), 'MMM d, yyyy')}</span>
-        <span className="search-result__score">
-          Score: {result.score.toFixed(3)}
-        </span>
-      </div>
-      <p className="search-result__preview">
-        {result.content.substring(0, 200)}
-        {result.content.length > 200 ? '...' : ''}
-      </p>
+      <Card variant="bordered" className="transition-colors hover:bg-muted/40">
+        <CardContent className="space-y-2 p-4">
+          <div className="font-medium text-foreground">
+            {result.title || 'Untitled'}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>{format(new Date(result.created_at), 'MMM d, yyyy')}</span>
+            <span>Score: {result.score.toFixed(3)}</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {result.content.substring(0, 200)}
+            {result.content.length > 200 ? '...' : ''}
+          </p>
+        </CardContent>
+      </Card>
     </Link>
   )
 })
@@ -34,12 +44,14 @@ const SearchResultItem = memo(function SearchResultItem({ result }: { result: Se
 // Skeleton loader for search results
 function SearchResultSkeleton() {
   return (
-    <div className="search-result search-result--skeleton" aria-hidden="true">
-      <div className="skeleton skeleton--text skeleton--title" />
-      <div className="skeleton skeleton--text skeleton--meta" />
-      <div className="skeleton skeleton--text skeleton--preview" />
-      <div className="skeleton skeleton--text skeleton--preview-short" />
-    </div>
+    <Card variant="bordered" aria-hidden="true">
+      <CardContent className="space-y-2 p-4">
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-3 w-1/4" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-4/5" />
+      </CardContent>
+    </Card>
   )
 }
 
@@ -67,38 +79,42 @@ function SemanticSearchBoxContent() {
   }
 
   return (
-    <div>
-      <form onSubmit={handleSearch} className="search-form mb-5">
-        <input
+    <div className="space-y-4">
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <Input
           type="text"
-          className="input"
+          className="flex-1"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search your entries semantically..."
         />
-        <button type="submit" className="btn btn-primary" disabled={loading}>
+        <Button type="submit" disabled={loading}>
           {loading ? 'Searching...' : 'Search'}
-        </button>
+        </Button>
       </form>
 
       {searched && (
-        <div className="search-results">
+        <div className="space-y-3">
           {loading ? (
-            <div>
-              <h3 className="mb-4">Searching...</h3>
+            <>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Searching...
+              </h3>
               {[1, 2, 3].map((i) => (
                 <SearchResultSkeleton key={i} />
               ))}
-            </div>
+            </>
           ) : results.length > 0 ? (
-            <div>
-              <h3 className="mb-4">Results ({results.length})</h3>
+            <>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Results ({results.length})
+              </h3>
               {results.map((result) => (
                 <SearchResultItem key={result.entry_id} result={result} />
               ))}
-            </div>
+            </>
           ) : (
-            <p className="text-muted">No results found.</p>
+            <p className="text-muted-foreground">No results found.</p>
           )}
         </div>
       )}
@@ -110,9 +126,11 @@ export function SemanticSearchBox() {
   return (
     <ErrorBoundary
       fallback={
-        <div className="alert alert--error">
-          Failed to load semantic search. Please try refreshing the page.
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load semantic search. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
       }
     >
       <SemanticSearchBoxContent />

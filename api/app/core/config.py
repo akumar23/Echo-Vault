@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     default_embedding_url: str = "http://ollama:11434"
     default_embedding_model: str = "mxbai-embed-large"
 
+    # Dimension of embedding vectors produced by default_embedding_model.
+    # Must match the pgvector column width — changing this requires a migration.
+    embedding_dim: int = 1024
+
 
 settings = Settings()
 

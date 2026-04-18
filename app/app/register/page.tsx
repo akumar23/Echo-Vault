@@ -7,122 +7,159 @@ import Link from 'next/link'
 import { getErrorMessage } from '@/lib/errors'
 import { registerSchema, type RegisterFormData } from '@/lib/validation'
 import { PasswordStrength } from '@/components/PasswordStrength'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
+/**
+ * Register — editorial, no card chrome.
+ */
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [errors, setErrors] = useState<Partial<Record<keyof RegisterFormData, string>>>({})
+  const [formError, setFormError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<keyof RegisterFormData, string>>
+  >({})
+  const [submitting, setSubmitting] = useState(false)
   const { register } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setErrors({})
-    setError('')
+    setFieldErrors({})
+    setFormError('')
 
-    // Validate with Zod
     const result = registerSchema.safeParse({ email, username, password })
     if (!result.success) {
-      const fieldErrors: Partial<Record<keyof RegisterFormData, string>> = {}
+      const errors: Partial<Record<keyof RegisterFormData, string>> = {}
       result.error.errors.forEach((err) => {
         if (err.path[0]) {
-          fieldErrors[err.path[0] as keyof RegisterFormData] = err.message
+          errors[err.path[0] as keyof RegisterFormData] = err.message
         }
       })
-      setErrors(fieldErrors)
+      setFieldErrors(errors)
       return
     }
 
-    // Proceed with registration
+    setSubmitting(true)
     try {
-      await register(result.data.email, result.data.username, result.data.password)
+      await register(
+        result.data.email,
+        result.data.username,
+        result.data.password,
+      )
       router.push('/journal')
     } catch (err) {
-      setError(getErrorMessage(err))
+      setFormError(getErrorMessage(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
-    <div className="container" style={{ maxWidth: '450px', marginTop: '10vh' }}>
-      <div className="card card--accent">
-        <h1 className="mb-6">Register</h1>
-
-        <form onSubmit={handleSubmit}>
-          {error && (
-            <div className="alert alert--error mb-5">{error}</div>
-          )}
-
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              aria-invalid={!!errors.email}
-              aria-describedby={errors.email ? 'email-error' : undefined}
-              required
-            />
-            {errors.email && (
-              <p id="email-error" className="form-error">
-                {errors.email}
-              </p>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="username">Username</label>
-            <input
-              id="username"
-              type="text"
-              className="input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              aria-invalid={!!errors.username}
-              aria-describedby={errors.username ? 'username-error' : undefined}
-              required
-            />
-            {errors.username && (
-              <p id="username-error" className="form-error">
-                {errors.username}
-              </p>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? 'password-error' : 'password-strength'}
-              required
-            />
-            <div id="password-strength">
-              <PasswordStrength password={password} />
-            </div>
-            {errors.password && (
-              <p id="password-error" className="form-error">
-                {errors.password}
-              </p>
-            )}
-          </div>
-
-          <button type="submit" className="btn btn-primary w-full">
-            Register
-          </button>
-        </form>
-
-        <p className="text-center mt-5 text-muted">
-          Already have an account? <Link href="/login">Login</Link>
-        </p>
+    <div className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center px-6 py-12">
+      <div className="mb-8 flex flex-col items-center gap-3">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-foreground text-background">
+          <span className="text-xs font-bold">EV</span>
+        </span>
+        <div className="space-y-1 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Create your account
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            A private journal that remembers you.
+          </p>
+        </div>
       </div>
+
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        {formError && (
+          <Alert variant="destructive">
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={!!fieldErrors.email}
+            aria-describedby={fieldErrors.email ? 'email-error' : undefined}
+            required
+            autoComplete="email"
+          />
+          {fieldErrors.email && (
+            <p id="email-error" className="text-sm text-destructive">
+              {fieldErrors.email}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            aria-invalid={!!fieldErrors.username}
+            aria-describedby={
+              fieldErrors.username ? 'username-error' : undefined
+            }
+            required
+            autoComplete="username"
+          />
+          {fieldErrors.username && (
+            <p id="username-error" className="text-sm text-destructive">
+              {fieldErrors.username}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={!!fieldErrors.password}
+            aria-describedby={
+              fieldErrors.password ? 'password-error' : 'password-strength'
+            }
+            required
+            autoComplete="new-password"
+          />
+          <div id="password-strength">
+            <PasswordStrength password={password} />
+          </div>
+          {fieldErrors.password && (
+            <p id="password-error" className="text-sm text-destructive">
+              {fieldErrors.password}
+            </p>
+          )}
+        </div>
+
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? 'Creating account...' : 'Create account'}
+        </Button>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <Link
+            href="/login"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Sign in
+          </Link>
+        </p>
+      </form>
     </div>
   )
 }

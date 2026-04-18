@@ -2,6 +2,14 @@
 
 import { Entry } from '@/lib/api'
 import { useEntryEditor } from '@/hooks/useEntryEditor'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { X } from 'lucide-react'
 
 interface EditorProps {
   entry?: Entry
@@ -34,74 +42,80 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="form-group">
-        <label htmlFor="title">Title (optional)</label>
-        <input
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="title">Title (optional)</Label>
+        <Input
           id="title"
           type="text"
-          className="input"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Entry title..."
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="content">Content</label>
-        <textarea
+      <div className="space-y-2">
+        <Label htmlFor="content">Content</Label>
+        <Textarea
           id="content"
-          className="textarea"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Write your entry here..."
           required
+          className="min-h-[200px]"
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="mood">Mood (1-5)</label>
-
-        <label className="checkbox mb-4">
-          <input
-            type="checkbox"
-            checked={useLlmPrediction}
-            onChange={(e) => setUseLlmPrediction(e.target.checked)}
-            aria-label="Let AI predict mood automatically"
-          />
-          Let AI Predict Mood
-        </label>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="mood">Mood (1-5)</Label>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="ai-mood"
+              checked={useLlmPrediction}
+              onCheckedChange={setUseLlmPrediction}
+              aria-label="Let AI predict mood automatically"
+            />
+            <Label htmlFor="ai-mood" className="text-sm font-normal">
+              Let AI Predict Mood
+            </Label>
+          </div>
+        </div>
 
         <div className="flex items-center gap-4">
-          <input
+          <Slider
             id="mood"
-            type="range"
-            min="1"
-            max="5"
-            value={mood}
-            onChange={(e) => setMood(parseInt(e.target.value))}
-            className="range-slider flex-1"
+            min={1}
+            max={5}
+            step={1}
+            value={[mood]}
+            onValueChange={(values) => setMood(values[0] ?? 3)}
             disabled={useLlmPrediction}
             aria-describedby="mood-helper"
+            className="flex-1"
           />
-          <span className={useLlmPrediction ? 'text-muted' : 'text-accent'}>
+          <span
+            className={
+              useLlmPrediction ? 'text-muted-foreground' : 'text-primary'
+            }
+          >
             {mood}
           </span>
         </div>
-        <p id="mood-helper" className="form-helper">
+        <p id="mood-helper" className="text-xs text-muted-foreground">
           {useLlmPrediction
             ? 'AI will automatically infer your mood from the entry content'
             : '1 = bad mood, 5 = good mood'}
         </p>
       </div>
 
-      <div className="form-group">
-        <label htmlFor="tags">Tags</label>
-        <div className="flex gap-2 mb-4">
-          <input
+      <div className="space-y-3">
+        <Label htmlFor="tags">Tags</Label>
+        <div className="flex gap-2">
+          <Input
             id="tags"
             type="text"
-            className="input flex-1"
+            className="flex-1"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => {
@@ -112,32 +126,36 @@ export function Editor({ entry, onSave, saving = false }: EditorProps) {
             }}
             placeholder="Add a tag..."
           />
-          <button type="button" onClick={handleAddTag} className="btn btn-secondary">
+          <Button type="button" onClick={handleAddTag} variant="secondary">
             Add
-          </button>
+          </Button>
         </div>
         {tags.length > 0 && (
-          <div className="tags-container">
+          <div className="flex flex-wrap gap-1.5">
             {tags.map((tag, i) => (
-              <span key={i} className="tag">
+              <Badge
+                key={i}
+                variant="secondary"
+                className="inline-flex items-center gap-1 pr-1"
+              >
                 {tag}
                 <button
                   type="button"
                   onClick={() => handleRemoveTag(tag)}
-                  className="tag-remove"
+                  className="rounded-sm p-0.5 hover:bg-background/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   aria-label={`Remove tag ${tag}`}
                 >
-                  &times;
+                  <X className="h-3 w-3" />
                 </button>
-              </span>
+              </Badge>
             ))}
           </div>
         )}
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={saving || !hasContent}>
+      <Button type="submit" disabled={saving || !hasContent}>
         {saving ? 'Saving...' : 'Save Entry'}
-      </button>
+      </Button>
     </form>
   )
 }

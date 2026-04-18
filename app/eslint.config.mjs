@@ -1,16 +1,27 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
+/**
+ * Flat ESLint config for Next.js 16.
+ *
+ * eslint-config-next v16 exports native flat-config arrays, so we consume
+ * them directly instead of going through FlatCompat (which pulled in the
+ * legacy eslintrc loader and crashed on circular references).
+ */
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals"),
-];
+  ...nextCoreWebVitals,
+  {
+    ignores: [
+      '.next/**',
+      'out/**',
+      'build/**',
+      'next-env.d.ts',
+      'node_modules/**',
+      'src-tauri/**',
+      'test-results/**',
+      'playwright-report/**',
+      'tsconfig.tsbuildinfo',
+    ],
+  },
+]
 
-export default eslintConfig;
+export default eslintConfig

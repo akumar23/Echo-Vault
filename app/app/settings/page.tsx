@@ -18,8 +18,26 @@ import {
   Trash2,
   MessageCircle,
 } from "lucide-react";
-import { useInsightVoice, InsightVoice } from "@/contexts/InsightVoiceContext";
+import {
+  useInsightVoice,
+  InsightVoice,
+} from "@/contexts/InsightVoiceContext";
 import { useToast } from "@/contexts/ToastContext";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
 
 interface LLMSettingsSectionProps {
   title: string;
@@ -59,23 +77,17 @@ function LLMSettingsSection({
   onClearToken,
 }: LLMSettingsSectionProps) {
   return (
-    <div
-      className="mb-6"
-      style={{
-        paddingTop: "var(--space-5)",
-        borderTop: "1px solid var(--border)",
-      }}
-    >
-      <h3 className="mb-2">{title}</h3>
-      <p className="text-muted mb-5">{description}</p>
+    <div className="space-y-5 border-t border-border pt-5">
+      <div>
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
 
-      {/* URL */}
-      <div className="form-group">
-        <label htmlFor={`${type}-url`}>API URL</label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor={`${type}-url`}>API URL</Label>
+        <Input
           id={`${type}-url`}
           type="url"
-          className={`input ${urlError ? "input--error" : ""}`}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value);
@@ -85,58 +97,71 @@ function LLMSettingsSection({
           placeholder="http://host.docker.internal:11434"
           aria-invalid={!!urlError}
         />
-        {urlError && <p className="form-error">{urlError}</p>}
-        <p className="form-helper">Leave empty to use the default server</p>
+        {urlError && <p className="text-sm text-destructive">{urlError}</p>}
+        <p className="text-xs text-muted-foreground">
+          Leave empty to use the default server
+        </p>
       </div>
 
-      {/* API Token */}
-      <div className="form-group">
-        <label htmlFor={`${type}-token`}>
+      <div className="space-y-2">
+        <Label htmlFor={`${type}-token`}>
           API Token{" "}
-          {tokenSet && <span className="text-accent">(configured)</span>}
-        </label>
+          {tokenSet && (
+            <span className="text-xs font-normal text-primary">
+              (configured)
+            </span>
+          )}
+        </Label>
         <div className="flex gap-2">
-          <input
+          <Input
             id={`${type}-token`}
             type={showToken ? "text" : "password"}
-            className="input flex-1"
+            className="flex-1"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder={
               tokenSet ? "********" : "Optional - for cloud providers"
             }
           />
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon"
             onClick={() => setShowToken(!showToken)}
-            className="btn btn-secondary btn-sm"
             title={showToken ? "Hide token" : "Show token"}
           >
-            {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
+            {showToken ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+            <span className="sr-only">
+              {showToken ? "Hide token" : "Show token"}
+            </span>
+          </Button>
           {tokenSet && (
-            <button
+            <Button
               type="button"
+              variant="destructive"
+              size="icon"
               onClick={() => onClearToken(type)}
-              className="btn btn-danger btn-sm"
               title="Clear token"
             >
-              <Trash2 size={14} />
-            </button>
+              <Trash2 className="h-4 w-4" />
+              <span className="sr-only">Clear token</span>
+            </Button>
           )}
         </div>
-        <p className="form-helper">
+        <p className="text-xs text-muted-foreground">
           Required for OpenAI, Anthropic, etc. Optional for local Ollama.
         </p>
       </div>
 
-      {/* Model Name */}
-      <div className="form-group mb-0">
-        <label htmlFor={`${type}-model`}>Model Name</label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor={`${type}-model`}>Model Name</Label>
+        <Input
           id={`${type}-model`}
           type="text"
-          className="input"
           value={model}
           onChange={(e) => setModel(e.target.value)}
           placeholder={
@@ -145,7 +170,9 @@ function LLMSettingsSection({
               : "mxbai-embed-large, text-embedding-3-small, etc."
           }
         />
-        <p className="form-helper">Leave empty to use the default model</p>
+        <p className="text-xs text-muted-foreground">
+          Leave empty to use the default model
+        </p>
       </div>
     </div>
   );
@@ -184,12 +211,15 @@ export default function SettingsPage() {
       setGenerationModel(settings.generation_model ?? "");
       setEmbeddingUrl(settings.embedding_url ?? "");
       setEmbeddingModel(settings.embedding_model ?? "");
-      // Don't set tokens - they are write-only
+      // Tokens are write-only — never hydrated.
     }
   }, [settings]);
 
-  const validateUrl = (url: string, setError: (e: string) => void): boolean => {
-    if (!url) return true; // Empty is valid (uses default)
+  const validateUrl = (
+    url: string,
+    setError: (e: string) => void,
+  ): boolean => {
+    if (!url) return true;
     try {
       const parsed = new URL(url);
       if (!["http:", "https:"].includes(parsed.protocol)) {
@@ -209,15 +239,13 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <ProtectedRoute>
-        <div className="container">
+        <Header />
+        <main className="mx-auto w-full max-w-5xl px-6 py-8">
           <div className="flex items-center gap-2">
-            <Loader2
-              size={18}
-              style={{ animation: "spin 1s linear infinite" }}
-            />
-            <span className="text-muted">Loading...</span>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-muted-foreground">Loading...</span>
           </div>
-        </div>
+        </main>
       </ProtectedRoute>
     );
   }
@@ -235,18 +263,12 @@ export default function SettingsPage() {
       embedding_model: embeddingModel || null,
     };
 
-    // Only send token if user entered a new one
-    if (generationToken) {
-      update.generation_api_token = generationToken;
-    }
-    if (embeddingToken) {
-      update.embedding_api_token = embeddingToken;
-    }
+    if (generationToken) update.generation_api_token = generationToken;
+    if (embeddingToken) update.embedding_api_token = embeddingToken;
 
     updateMutation.mutate(update, {
       onSuccess: () => {
         toast({ message: "Settings updated!", type: "success" });
-        // Clear token fields after save
         setGenerationToken("");
         setEmbeddingToken("");
       },
@@ -262,264 +284,339 @@ export default function SettingsPage() {
     updateMutation.mutate(update, {
       onSuccess: () => {
         toast({
-          message: `${type === "generation" ? "Generation" : "Embedding"} API token cleared!`,
+          message: `${
+            type === "generation" ? "Generation" : "Embedding"
+          } API token cleared!`,
           type: "success",
         });
       },
     });
   };
 
+  const voiceOptions: {
+    id: InsightVoice;
+    name: string;
+    emoji: string;
+    description: string;
+    example: string;
+  }[] = [
+    {
+      id: "gentle",
+      name: "Gentle",
+      emoji: "🌿",
+      description: "Warm, supportive, and encouraging",
+      example: '"You\'ve been on a great streak lately"',
+    },
+    {
+      id: "direct",
+      name: "Direct",
+      emoji: "📊",
+      description: "Concise, factual, no-nonsense",
+      example: '"Mood up. Strong momentum."',
+    },
+    {
+      id: "playful",
+      name: "Playful",
+      emoji: "✨",
+      description: "Fun, upbeat, with emojis",
+      example: '"Look at you go! On fire! 🔥"',
+    },
+  ];
+
   return (
     <ProtectedRoute>
-      <div className="container container--narrow">
-        <Header title="Settings" showNav={false} />
-        <div className="text-right mb-5">
-          <Link href="/help" className="nav-link">
-            <HelpCircle size={16} />
-            Need help? View Help Page
-          </Link>
+      <Header />
+      <main className="mx-auto w-full max-w-5xl px-6 py-8">
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Settings
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Configure your journal, AI, and privacy preferences.
+            </p>
+          </div>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/help">
+              <HelpCircle className="h-4 w-4" />
+              Help
+            </Link>
+          </Button>
         </div>
 
-        {/* Search Settings */}
-        <div className="card">
-          <div className="section-header">
-            <div className="section-header__icon">
-              <Search />
-            </div>
-            <h2>Search Settings</h2>
-          </div>
-          <div className="form-group">
-            <label htmlFor="half-life">
-              Search Half-Life: <span className="text-accent">{halfLife}</span>{" "}
-              days
-            </label>
-            <input
-              id="half-life"
-              type="range"
-              min="1"
-              max="365"
-              value={halfLife}
-              onChange={(e) => setHalfLife(parseFloat(e.target.value))}
-              className="range-slider"
-            />
-            <div className="alert alert--info mt-4">
-              <p className="mb-2">
-                <strong>What does this do?</strong>
-              </p>
-              <p className="mb-4">
-                Controls how search results balance relevance vs. recency. When
-                you search for entries, the system considers both how similar
-                they are to your query AND how recent they are.
-              </p>
-              <ul style={{ marginLeft: "var(--space-5)" }}>
-                <li>
-                  <strong>Lower values (1-15 days):</strong> Recent entries rank
-                  higher
-                </li>
-                <li>
-                  <strong>Medium values (15-60 days):</strong> Balanced approach
-                </li>
-                <li>
-                  <strong>Higher values (60-365 days):</strong> Only relevance
-                  matters
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        <Tabs defaultValue="search" className="gap-6">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="search" className="gap-2">
+              <Search className="h-4 w-4" />
+              Search
+            </TabsTrigger>
+            <TabsTrigger value="llm" className="gap-2">
+              <Bot className="h-4 w-4" />
+              LLM
+            </TabsTrigger>
+            <TabsTrigger value="privacy" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Privacy
+            </TabsTrigger>
+            <TabsTrigger value="voice" className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              Voice
+            </TabsTrigger>
+          </TabsList>
 
-        {/* LLM Settings */}
-        <div className="card">
-          <div className="section-header">
-            <div className="section-header__icon">
-              <Bot />
-            </div>
-            <h2>LLM Settings</h2>
-          </div>
-          <p className="text-muted mb-5">
-            Configure the AI models used for reflections, insights, mood
-            analysis, and semantic search. Uses OpenAI-compatible API format.
-          </p>
-
-          <LLMSettingsSection
-            title="Text Generation"
-            description="Used for reflections, insights, and mood analysis"
-            url={generationUrl}
-            setUrl={setGenerationUrl}
-            urlError={generationUrlError}
-            validateUrl={validateUrl}
-            setUrlError={setGenerationUrlError}
-            token={generationToken}
-            setToken={setGenerationToken}
-            showToken={showGenerationToken}
-            setShowToken={setShowGenerationToken}
-            model={generationModel}
-            setModel={setGenerationModel}
-            tokenSet={settings?.generation_api_token_set ?? false}
-            type="generation"
-            onClearToken={clearToken}
-          />
-
-          <LLMSettingsSection
-            title="Embeddings"
-            description="Used for semantic search to find related entries"
-            url={embeddingUrl}
-            setUrl={setEmbeddingUrl}
-            urlError={embeddingUrlError}
-            validateUrl={validateUrl}
-            setUrlError={setEmbeddingUrlError}
-            token={embeddingToken}
-            setToken={setEmbeddingToken}
-            showToken={showEmbeddingToken}
-            setShowToken={setShowEmbeddingToken}
-            model={embeddingModel}
-            setModel={setEmbeddingModel}
-            tokenSet={settings?.embedding_api_token_set ?? false}
-            type="embedding"
-            onClearToken={clearToken}
-          />
-
-          <div className="alert alert--info">
-            <strong>Tip:</strong> For local Ollama with Docker, use{" "}
-            <code>http://host.docker.internal:11434</code> as the URL. Make sure
-            the models are pulled (e.g., <code>ollama pull llama3.1:8b</code>).
-          </div>
-        </div>
-
-        {/* Privacy Settings */}
-        <div className="card">
-          <div className="section-header">
-            <div className="section-header__icon">
-              <Shield />
-            </div>
-            <h2>Privacy Settings</h2>
-          </div>
-          <div className="form-group">
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={hardDelete}
-                onChange={(e) => setHardDelete(e.target.checked)}
-              />
-              Enable Hard Delete
-            </label>
-            <div className="alert alert--warning mt-4">
-              <p className="mb-2">
-                <strong>What does this do?</strong>
-              </p>
-              <p className="mb-4">
-                Controls what happens when you use the "Forget" feature on an
-                entry.
-              </p>
-
-              <p className="mb-2">
-                <strong>When disabled (Soft Delete):</strong>
-              </p>
-              <ul
-                style={{
-                  marginLeft: "var(--space-5)",
-                  marginBottom: "var(--space-4)",
-                }}
-              >
-                <li>Entry is removed from search results</li>
-                <li>Content is preserved in your journal</li>
-                <li>Embedding vector is zeroed out</li>
-              </ul>
-
-              <p className="mb-2">
-                <strong>When enabled (Hard Delete):</strong>
-              </p>
-              <ul style={{ marginLeft: "var(--space-5)" }}>
-                <li>Entry is permanently deleted</li>
-                <li>This action cannot be undone</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Insight Voice Settings */}
-        <div className="card">
-          <div className="section-header">
-            <div className="section-header__icon">
-              <MessageCircle />
-            </div>
-            <h2>Insight Voice</h2>
-          </div>
-          <p className="text-muted mb-5">
-            Choose how EchoVault speaks to you. This affects greetings,
-            insights, and nudges.
-          </p>
-
-          <div className="voice-selector">
-            {[
-              {
-                id: "gentle" as InsightVoice,
-                name: "Gentle",
-                emoji: "🌿",
-                description: "Warm, supportive, and encouraging",
-                example: '"You\'ve been on a great streak lately"',
-              },
-              {
-                id: "direct" as InsightVoice,
-                name: "Direct",
-                emoji: "📊",
-                description: "Concise, factual, no-nonsense",
-                example: '"Mood up. Strong momentum."',
-              },
-              {
-                id: "playful" as InsightVoice,
-                name: "Playful",
-                emoji: "✨",
-                description: "Fun, upbeat, with emojis",
-                example: '"Look at you go! On fire! 🔥"',
-              },
-            ].map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={`voice-option ${voice === option.id ? "voice-option--active" : ""}`}
-                onClick={() => setVoice(option.id)}
-              >
-                <span className="voice-option__emoji">{option.emoji}</span>
-                <div className="voice-option__content">
-                  <span className="voice-option__name">{option.name}</span>
-                  <span className="voice-option__description">
-                    {option.description}
-                  </span>
-                  <span className="voice-option__example">
-                    {option.example}
-                  </span>
+          <TabsContent value="search">
+            <Card variant="bordered">
+              <CardHeader>
+                <CardTitle>Search Settings</CardTitle>
+                <CardDescription>
+                  Control how semantic search balances relevance and recency.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="half-life">
+                    Search Half-Life:{" "}
+                    <span className="text-primary">{halfLife}</span> days
+                  </Label>
+                  <Slider
+                    id="half-life"
+                    min={1}
+                    max={365}
+                    step={1}
+                    value={[halfLife]}
+                    onValueChange={(values) =>
+                      setHalfLife(values[0] ?? halfLife)
+                    }
+                  />
                 </div>
-                {voice === option.id && (
-                  <span className="voice-option__check">✓</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+                <Alert>
+                  <AlertDescription>
+                    <p className="mb-2">
+                      <strong>What does this do?</strong>
+                    </p>
+                    <p className="mb-4">
+                      Controls how search results balance relevance vs.
+                      recency. When you search for entries, the system
+                      considers both how similar they are to your query AND
+                      how recent they are.
+                    </p>
+                    <ul className="ml-5 list-disc space-y-1">
+                      <li>
+                        <strong>Lower values (1-15 days):</strong> Recent
+                        entries rank higher
+                      </li>
+                      <li>
+                        <strong>Medium values (15-60 days):</strong> Balanced
+                        approach
+                      </li>
+                      <li>
+                        <strong>Higher values (60-365 days):</strong> Only
+                        relevance matters
+                      </li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <button
+          <TabsContent value="llm">
+            <Card variant="bordered">
+              <CardHeader>
+                <CardTitle>LLM Settings</CardTitle>
+                <CardDescription>
+                  Configure the AI models used for reflections, insights, mood
+                  analysis, and semantic search. Uses OpenAI-compatible API
+                  format.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <LLMSettingsSection
+                  title="Text Generation"
+                  description="Used for reflections, insights, and mood analysis"
+                  url={generationUrl}
+                  setUrl={setGenerationUrl}
+                  urlError={generationUrlError}
+                  validateUrl={validateUrl}
+                  setUrlError={setGenerationUrlError}
+                  token={generationToken}
+                  setToken={setGenerationToken}
+                  showToken={showGenerationToken}
+                  setShowToken={setShowGenerationToken}
+                  model={generationModel}
+                  setModel={setGenerationModel}
+                  tokenSet={settings?.generation_api_token_set ?? false}
+                  type="generation"
+                  onClearToken={clearToken}
+                />
+
+                <LLMSettingsSection
+                  title="Embeddings"
+                  description="Used for semantic search to find related entries"
+                  url={embeddingUrl}
+                  setUrl={setEmbeddingUrl}
+                  urlError={embeddingUrlError}
+                  validateUrl={validateUrl}
+                  setUrlError={setEmbeddingUrlError}
+                  token={embeddingToken}
+                  setToken={setEmbeddingToken}
+                  showToken={showEmbeddingToken}
+                  setShowToken={setShowEmbeddingToken}
+                  model={embeddingModel}
+                  setModel={setEmbeddingModel}
+                  tokenSet={settings?.embedding_api_token_set ?? false}
+                  type="embedding"
+                  onClearToken={clearToken}
+                />
+
+                <Alert>
+                  <AlertDescription>
+                    <strong>Tip:</strong> For local Ollama with Docker, use{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                      http://host.docker.internal:11434
+                    </code>{" "}
+                    as the URL. Make sure the models are pulled (e.g.,{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                      ollama pull llama3.1:8b
+                    </code>
+                    ).
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="privacy">
+            <Card variant="bordered">
+              <CardHeader>
+                <CardTitle>Privacy Settings</CardTitle>
+                <CardDescription>
+                  Control what happens when you forget an entry.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-muted/30 p-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="hard-delete" className="text-sm">
+                      Enable Hard Delete
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Permanently delete entries instead of soft-deleting.
+                    </p>
+                  </div>
+                  <Switch
+                    id="hard-delete"
+                    checked={hardDelete}
+                    onCheckedChange={setHardDelete}
+                  />
+                </div>
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    <p className="mb-2">
+                      <strong>What does this do?</strong>
+                    </p>
+                    <p className="mb-4">
+                      Controls what happens when you use the &ldquo;Forget&rdquo;
+                      feature on an entry.
+                    </p>
+
+                    <p className="mb-2">
+                      <strong>When disabled (Soft Delete):</strong>
+                    </p>
+                    <ul className="mb-4 ml-5 list-disc space-y-1">
+                      <li>Entry is removed from search results</li>
+                      <li>Content is preserved in your journal</li>
+                      <li>Embedding vector is zeroed out</li>
+                    </ul>
+
+                    <p className="mb-2">
+                      <strong>When enabled (Hard Delete):</strong>
+                    </p>
+                    <ul className="ml-5 list-disc space-y-1">
+                      <li>Entry is permanently deleted</li>
+                      <li>This action cannot be undone</li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="voice">
+            <Card variant="bordered">
+              <CardHeader>
+                <CardTitle>Insight Voice</CardTitle>
+                <CardDescription>
+                  Choose how EchoVault speaks to you. This affects greetings,
+                  insights, and nudges.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3">
+                  {voiceOptions.map((option) => {
+                    const active = voice === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setVoice(option.id)}
+                        aria-pressed={active}
+                        className={cn(
+                          "flex w-full items-start gap-4 rounded-lg border p-4 text-left transition-colors",
+                          "hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          active
+                            ? "border-primary bg-primary/5"
+                            : "border-border",
+                        )}
+                      >
+                        <span className="text-2xl">{option.emoji}</span>
+                        <div className="flex-1 space-y-1">
+                          <div className="font-medium text-foreground">
+                            {option.name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {option.description}
+                          </div>
+                          <div className="text-sm italic text-muted-foreground">
+                            {option.example}
+                          </div>
+                        </div>
+                        {active && (
+                          <span
+                            className="text-primary"
+                            aria-hidden="true"
+                          >
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <Button
           onClick={handleSave}
-          className="btn btn-cta btn-lg"
           disabled={updateMutation.isPending}
-          style={{ width: "100%" }}
+          size="lg"
+          className="mt-8 w-full"
         >
           {updateMutation.isPending ? (
             <>
-              <Loader2
-                size={18}
-                style={{ animation: "spin 1s linear infinite" }}
-              />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Saving...
             </>
           ) : (
             <>
-              <Save size={18} />
+              <Save className="h-4 w-4" />
               Save Settings
             </>
           )}
-        </button>
-      </div>
+        </Button>
+      </main>
     </ProtectedRoute>
   );
 }

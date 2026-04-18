@@ -1,37 +1,15 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { useMood, MoodProvider } from '@/contexts/MoodContext'
-import { AmbientBackground } from './AmbientBackground'
+import { MoodProvider } from '@/contexts/MoodContext'
 
-interface MoodResponsiveContentProps {
-  children: ReactNode
-}
-
-function MoodResponsiveContent({ children }: MoodResponsiveContentProps) {
-  const { currentMood } = useMood()
-
-  return (
-    <div
-      className="mood-responsive-container"
-      data-mood-tint={currentMood ?? undefined}
-    >
-      <AmbientBackground mood={currentMood} />
-      {children}
-    </div>
-  )
-}
-
-interface MoodResponsiveLayoutProps {
-  children: ReactNode
-}
-
-export function MoodResponsiveLayout({ children }: MoodResponsiveLayoutProps) {
-  return (
-    <MoodProvider>
-      <MoodResponsiveContent>
-        {children}
-      </MoodResponsiveContent>
-    </MoodProvider>
-  )
+/**
+ * MoodResponsiveLayout — provides mood context to the tree.
+ *
+ * Previously this also mounted <AmbientBackground /> globally; we now only
+ * render AmbientBackground on the /journal page to keep writing surfaces
+ * distraction-free. Downstream consumers can still read mood via useMood().
+ */
+export function MoodResponsiveLayout({ children }: { children: ReactNode }) {
+  return <MoodProvider>{children}</MoodProvider>
 }

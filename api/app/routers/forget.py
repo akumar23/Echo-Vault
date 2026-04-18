@@ -73,7 +73,7 @@ async def forget_entry(
         # The row is kept for referential integrity but contains no recoverable content.
         embeddings = db.query(EntryEmbedding).filter(EntryEmbedding.entry_id == entry_id).all()
         for embedding in embeddings:
-            embedding.embedding = [0.0] * 1024
+            embedding.embedding = [0.0] * app_settings.embedding_dim
             embedding.is_active = False
 
         entry.content = ""

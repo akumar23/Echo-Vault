@@ -56,12 +56,35 @@ export function PasswordStrength({ password }: PasswordStrengthProps) {
 
   if (!password) return null
 
+  const widths: Record<StrengthLevel, string> = {
+    weak: 'w-1/4',
+    fair: 'w-1/2',
+    good: 'w-3/4',
+    strong: 'w-full',
+  }
+
+  const colors: Record<StrengthLevel, string> = {
+    weak: 'bg-destructive',
+    fair: 'bg-[color:var(--warning)]',
+    good: 'bg-primary',
+    strong: 'bg-[color:var(--success)]',
+  }
+
+  const labelColors: Record<StrengthLevel, string> = {
+    weak: 'text-destructive',
+    fair: 'text-[color:var(--warning)]',
+    good: 'text-primary',
+    strong: 'text-[color:var(--success)]',
+  }
+
   return (
-    <div className="password-strength" aria-live="polite">
-      <div className="password-strength__bar">
-        <div className={`password-strength__fill password-strength__fill--${strength.level}`} />
+    <div className="mt-2" aria-live="polite">
+      <div className="mb-1 h-1 overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full transition-all duration-200 ${widths[strength.level]} ${colors[strength.level]}`}
+        />
       </div>
-      <span className={`password-strength__label password-strength__label--${strength.level}`}>
+      <span className={`text-xs ${labelColors[strength.level]}`}>
         {strength.label}
       </span>
     </div>

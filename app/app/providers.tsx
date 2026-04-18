@@ -10,6 +10,8 @@ import { ToastProvider } from '@/contexts/ToastContext'
 import { BackendStatus } from '@/components/BackendStatus'
 import { SkipLink } from '@/components/SkipLink'
 import { OfflineDetector } from '@/components/OfflineDetector'
+import { Toaster } from '@/components/ui/sonner'
+import { PromptSuggestionToast } from '@/components/PromptSuggestionToast'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -33,10 +35,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <BackendStatus />
               <OfflineDetector />
               <MoodResponsiveLayout>
-                <main id="main-content">
+                <div id="main-content">
                   {children}
-                </main>
+                </div>
               </MoodResponsiveLayout>
+              <Toaster position="bottom-right" />
+              <PromptSuggestionToast />
             </ToastProvider>
           </InsightVoiceProvider>
         </AuthProvider>

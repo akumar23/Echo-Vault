@@ -280,11 +280,11 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
   return (
     <div>
       {/* Mood Scale Legend */}
-      <div className="mood-scale-legend">
+      <div className="mb-4 flex flex-wrap gap-3 rounded-md border border-border bg-muted/40 p-3">
         {MOOD_SCALE.map(({ value, emoji, label }) => (
-          <div key={value} className="mood-scale-item">
-            <span className="mood-scale-emoji">{emoji}</span>
-            <span className="mood-scale-label">{value} - {label}</span>
+          <div key={value} className="flex items-center gap-2">
+            <span className="text-base">{emoji}</span>
+            <span className="text-xs text-muted-foreground">{value} - {label}</span>
           </div>
         ))}
       </div>
@@ -302,7 +302,7 @@ export function TrendsChart({ days = 30 }: TrendsChartProps) {
   return (
     <ErrorBoundary
       fallback={
-        <div className="alert alert--error">
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Failed to load trends chart. Please try refreshing the page.
         </div>
       }

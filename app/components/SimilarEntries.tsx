@@ -4,13 +4,15 @@ import { useMemo } from 'react'
 import { useEntries } from '@/hooks/useEntries'
 import Link from 'next/link'
 import { format, formatDistanceToNow } from 'date-fns'
+import { Card, CardContent } from '@/components/ui/card'
+import { Sparkles } from 'lucide-react'
 
 const MOOD_EMOJIS: Record<number, string> = {
-  1: '😢',
-  2: '😕',
-  3: '😐',
-  4: '🙂',
-  5: '😊',
+  1: '\u{1F622}',
+  2: '\u{1F615}',
+  3: '\u{1F610}',
+  4: '\u{1F642}',
+  5: '\u{1F60A}',
 }
 
 interface SimilarEntry {
@@ -32,7 +34,7 @@ export function SimilarEntries() {
     // Get recent mood (average of last 3 entries)
     const recentMoods = entries
       .slice(0, 3)
-      .map(e => e.mood_user ?? e.mood_inferred)
+      .map((e) => e.mood_user ?? e.mood_inferred)
       .filter((m): m is number => m !== null)
 
     if (recentMoods.length === 0) {
@@ -47,15 +49,15 @@ export function SimilarEntries() {
     }
 
     // Find past entries with similar high mood (excluding recent ones)
-    const recentIds = new Set(entries.slice(0, 3).map(e => e.id))
+    const recentIds = new Set(entries.slice(0, 3).map((e) => e.id))
     const similarEntries: SimilarEntry[] = entries
-      .filter(e => {
+      .filter((e) => {
         if (recentIds.has(e.id)) return false
         const mood = e.mood_user ?? e.mood_inferred
         return mood !== null && mood >= 4
       })
       .slice(0, 3)
-      .map(e => ({
+      .map((e) => ({
         id: e.id,
         title: e.title,
         content: e.content,
@@ -77,7 +79,9 @@ export function SimilarEntries() {
   const getTimeAgo = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+    const diffDays = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
+    )
 
     if (diffDays < 7) {
       return formatDistanceToNow(date, { addSuffix: true })
@@ -95,41 +99,52 @@ export function SimilarEntries() {
   }
 
   return (
-    <div className="similar-entries">
-      <div className="similar-entries__header">
-        <span className="similar-entries__icon">✨</span>
-        <div>
-          <h3 className="similar-entries__title">You're in a good place!</h3>
-          <p className="similar-entries__subtitle">
-            Here are some past moments when you felt this good
-          </p>
+    <Card variant="bordered" className="mb-6 border-primary/30 bg-primary/5">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex items-start gap-3">
+          <Sparkles className="mt-1 h-5 w-5 text-primary" />
+          <div>
+            <h3 className="font-semibold text-foreground">
+              You&apos;re in a good place!
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Here are some past moments when you felt this good
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="similar-entries__list">
-        {analysis.similarEntries.map((entry) => (
-          <Link
-            key={entry.id}
-            href={`/entries/${entry.id}`}
-            className="similar-entry-card"
-          >
-            <span className="similar-entry-card__emoji">
-              {MOOD_EMOJIS[entry.mood]}
-            </span>
-            <div className="similar-entry-card__content">
-              <h4 className="similar-entry-card__title">
-                {entry.title || 'Untitled'}
-              </h4>
-              <p className="similar-entry-card__meta">
-                {getTimeAgo(entry.created_at)}
-              </p>
-              <p className="similar-entry-card__preview">
-                {getPreview(entry.content)}
-              </p>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {analysis.similarEntries.map((entry) => (
+            <Link
+              key={entry.id}
+              href={`/entries/${entry.id}`}
+              className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+            >
+              <Card variant="bordered" className="h-full transition-colors hover:bg-background/60">
+                <CardContent className="space-y-1.5 p-3">
+                  <div className="flex items-start gap-2">
+                    <span
+                      className="text-lg leading-none"
+                      aria-hidden="true"
+                    >
+                      {MOOD_EMOJIS[entry.mood]}
+                    </span>
+                    <h4 className="flex-1 line-clamp-1 text-sm font-medium text-foreground">
+                      {entry.title || 'Untitled'}
+                    </h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {getTimeAgo(entry.created_at)}
+                  </p>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {getPreview(entry.content)}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

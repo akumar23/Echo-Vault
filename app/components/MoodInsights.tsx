@@ -16,6 +16,7 @@ import {
   Loader2,
   BarChart3
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type TimeRange = 7 | 30 | 90
 
@@ -39,17 +40,19 @@ function InsightIcon({ iconType, className }: { iconType: MoodInsight['iconType'
   }
 
   const colorClass: Record<MoodInsight['iconType'], string> = {
-    up: 'mood-insight-icon-wrapper--success',
-    down: 'mood-insight-icon-wrapper--warning',
-    steady: '',
-    star: '',
-    streak: '',
-    plus: 'mood-insight-icon-wrapper--success',
-    average: ''
+    up: 'bg-[color:var(--success)]/15 text-[color:var(--success)]',
+    down: 'bg-[color:var(--warning)]/15 text-[color:var(--warning)]',
+    steady: 'bg-muted text-muted-foreground',
+    star: 'bg-primary/10 text-primary',
+    streak: 'bg-primary/10 text-primary',
+    plus: 'bg-[color:var(--success)]/15 text-[color:var(--success)]',
+    average: 'bg-muted text-muted-foreground'
   }
 
   return (
-    <div className={`mood-insight-icon-wrapper ${colorClass[iconType]} ${className || ''}`}>
+    <div
+      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${colorClass[iconType]} ${className || ''}`}
+    >
       {icons[iconType]}
     </div>
   )
@@ -210,64 +213,59 @@ export function MoodInsights() {
 
   if (isLoading) {
     return (
-      <div className="card">
-        <div className="section-header">
-          <div className="section-header__icon">
-            <TrendingUp />
-          </div>
-          <h2>Mood Insights</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-          <span className="text-muted">Loading...</span>
-        </div>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Loading...</span>
       </div>
     )
   }
 
-  if (!entries || entries.length === 0) {
+  const entriesWithMood = entries?.filter(
+    (e) => e.mood_user !== null || e.mood_inferred !== null,
+  ) ?? []
+
+  if (!entries || entries.length === 0 || entriesWithMood.length < 2) {
     return (
-      <div className="card">
-        <div className="section-header">
-          <div className="section-header__icon">
-            <TrendingUp />
-          </div>
-          <h2>Mood Insights</h2>
-        </div>
-        <p className="text-muted">Start journaling to see mood insights</p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        {entries && entries.length > 0
+          ? 'Not enough mood data yet. Log a few more entries to see trends.'
+          : 'Start journaling to see mood insights.'}
+      </p>
     )
   }
 
   return (
-    <div className="card">
-      <div className="section-header">
-        <div className="section-header__icon">
-          <TrendingUp />
-        </div>
-        <h2>Mood Insights</h2>
-      </div>
-
+    <div className="space-y-5">
       {insights.length > 0 ? (
-        <ul className="mood-insights-list">
+        <ul className="flex flex-col gap-2">
           {insights.map((insight, i) => (
-            <li key={i} className="mood-insight-item">
+            <li
+              key={i}
+              className="flex items-center gap-3 rounded-md bg-muted/50 px-3 py-2 text-sm text-foreground"
+            >
               <InsightIcon iconType={insight.iconType} />
               <span>{insight.text}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-muted">Not enough data yet for insights</p>
+        <p className="text-sm text-muted-foreground">
+          Not enough data yet for insights.
+        </p>
       )}
 
       {/* Time Range Filter Tabs */}
-      <div className="mood-chart-filters">
+      <div className="inline-flex rounded-md border border-border bg-muted/50 p-0.5">
         {TIME_RANGES.map(({ value, label }) => (
           <button
             key={value}
             onClick={() => setTimeRange(value)}
-            className={`mood-chart-filter-btn ${timeRange === value ? 'mood-chart-filter-btn--active' : ''}`}
+            className={cn(
+              'rounded-md px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              timeRange === value
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
           >
             {label}
           </button>
@@ -275,7 +273,7 @@ export function MoodInsights() {
       </div>
 
       {/* Always visible chart */}
-      <div className="mood-insights-chart" style={{ marginTop: 'var(--space-3)' }}>
+      <div>
         <TrendsChart days={timeRange} />
       </div>
     </div>
