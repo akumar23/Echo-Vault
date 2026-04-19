@@ -52,12 +52,12 @@ def _check_rate_limit(timestamps: Deque[float]) -> bool:
     timestamps.append(now)
     return True
 
-CHAT_SYSTEM_PROMPT = """You are a thoughtful journaling assistant helping the user reflect on their journal entries.
+CHAT_SYSTEM_PROMPT_ALL = """You are a thoughtful journaling assistant helping the user reflect across their full journal.
 
 Current Reflection:
 {reflection}
 
-Related Journal Entries (for context):
+Related Journal Entries (surfaced by semantic search for this question):
 {related_entries}
 
 Guidelines:
@@ -67,6 +67,26 @@ Guidelines:
 - Keep responses concise (2-3 paragraphs max)
 - Never make assumptions about information not in the entries
 """
+
+CHAT_SYSTEM_PROMPT_ENTRY = """You are a thoughtful journaling assistant helping the user reflect on one specific journal entry.
+
+The conversation is anchored to this single entry. Stay focused on it and what the user says about it; avoid inventing connections to other entries.
+
+Journal Entry (written {entry_date}):
+Title: {entry_title}
+
+{entry_content}
+
+Guidelines:
+- Be empathetic and supportive
+- Reference specific details from this entry
+- Ask clarifying questions to help them reflect deeper
+- Keep responses concise (2-3 paragraphs max)
+- Never make assumptions about information not in the entry
+"""
+
+# Cap pinned-entry content passed to the LLM to keep token budget predictable.
+_MAX_PINNED_ENTRY_CHARS = 4000
 
 
 @contextmanager
@@ -153,18 +173,24 @@ def format_related_entries(entries: List[Dict]) -> str:
 async def chat_websocket(
     websocket: WebSocket,
     ticket: Optional[str] = Query(default=None),
+    entry_id: Optional[int] = Query(default=None),
 ):
     """
-    WebSocket endpoint for streaming chat about reflections.
+    WebSocket endpoint for streaming chat about a user's journal.
 
     Query Parameters:
         ticket: One-time auth ticket obtained from GET /auth/ws-ticket
+        entry_id: Optional — when present, the chat is pinned to this specific
+            entry and the LLM is given only that entry as context. When absent,
+            the chat spans all of the user's entries (current reflection plus
+            semantic-search hits on each message).
 
     Client Messages:
         {"type": "chat_message", "content": "user message"}
 
     Server Messages:
-        {"type": "context", "reflection": "...", "related_entries": [...]}
+        {"type": "context", "scope": "all"|"entry", "reflection": "...",
+         "entry": {...}?, "related_entries": [...]}
         {"type": "token", "content": "..."}
         {"type": "complete"}
         {"type": "error", "message": "..."}
@@ -176,6 +202,27 @@ async def chat_websocket(
         if user_id is None:
             return
 
+        # Resolve optional pinned entry up-front so we can fail fast before
+        # accepting the connection if the caller asked for something they
+        # don't own / that no longer exists.
+        pinned_entry: Optional[Dict] = None
+        if entry_id is not None:
+            with get_db_session() as db:
+                entry = db.query(Entry).filter(
+                    Entry.id == entry_id,
+                    Entry.user_id == user_id,
+                    Entry.is_deleted == False,
+                ).first()
+                if entry is None:
+                    await websocket.close(code=WS_AUTH_FAILED, reason="Entry not found")
+                    return
+                pinned_entry = {
+                    "id": entry.id,
+                    "title": entry.title,
+                    "content": entry.content or "",
+                    "created_at": entry.created_at.isoformat(),
+                }
+
         await websocket.accept()
         websocket_accepted = True
 
@@ -186,11 +233,19 @@ async def chat_websocket(
             generation_service = get_generation_service_for_user(db, user_id)
             embedding_service = get_embedding_service_for_user(db, user_id)
 
-        await websocket.send_json({
+        context_payload: Dict = {
             "type": "context",
+            "scope": "entry" if pinned_entry else "all",
             "reflection": reflection_text,
             "related_entries": [],
-        })
+        }
+        if pinned_entry:
+            context_payload["entry"] = {
+                "id": pinned_entry["id"],
+                "title": pinned_entry["title"],
+                "created_at": pinned_entry["created_at"],
+            }
+        await websocket.send_json(context_payload)
 
         conversation_history: List[Dict[str, str]] = []
         message_timestamps: Deque[float] = deque()
@@ -224,12 +279,18 @@ async def chat_websocket(
 
                 conversation_history.append({"role": "user", "content": user_message})
 
-                related_entries = await get_related_entries(user_id, user_message, embedding_service, k=3)
-
-                system_prompt = CHAT_SYSTEM_PROMPT.format(
-                    reflection=reflection_text,
-                    related_entries=format_related_entries(related_entries),
-                )
+                if pinned_entry:
+                    system_prompt = CHAT_SYSTEM_PROMPT_ENTRY.format(
+                        entry_date=pinned_entry["created_at"],
+                        entry_title=pinned_entry["title"] or "Untitled",
+                        entry_content=pinned_entry["content"][:_MAX_PINNED_ENTRY_CHARS],
+                    )
+                else:
+                    related_entries = await get_related_entries(user_id, user_message, embedding_service, k=3)
+                    system_prompt = CHAT_SYSTEM_PROMPT_ALL.format(
+                        reflection=reflection_text,
+                        related_entries=format_related_entries(related_entries),
+                    )
 
                 messages = [{"role": "system", "content": system_prompt}] + conversation_history[-10:]
 

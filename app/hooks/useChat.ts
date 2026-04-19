@@ -8,8 +8,16 @@ export interface ChatMessage {
   content: string
 }
 
+export type ChatScope = 'all' | 'entry'
+
 interface ChatContext {
+  scope: ChatScope
   reflection: string
+  entry?: {
+    id: number
+    title: string | null
+    created_at: string
+  }
   related_entries: Array<{
     title: string | null
     content: string
@@ -21,6 +29,11 @@ interface ChatContext {
 interface UseChatOptions {
   enabled: boolean
   onError?: (error: string) => void
+  /**
+   * Pin the conversation to a single entry. When unset, the backend scopes
+   * the chat across all of the user's entries via semantic search.
+   */
+  entryId?: number
   /** Maximum number of reconnection attempts. Default: 5 */
   maxReconnectAttempts?: number
   /** Base delay for reconnection in ms. Default: 1000 */
@@ -37,6 +50,11 @@ interface UseChatReturn {
   context: ChatContext | null
   sendMessage: (content: string) => void
   reset: () => void
+  /**
+   * Clear the current conversation history and reopen the websocket so the
+   * backend's per-connection history is dropped too.
+   */
+  newConversation: () => void
 }
 
 /**
@@ -49,6 +67,7 @@ interface UseChatReturn {
 export function useChat({
   enabled,
   onError,
+  entryId,
   maxReconnectAttempts = 5,
   reconnectBaseDelay = 1000,
 }: UseChatOptions): UseChatReturn {
@@ -115,7 +134,9 @@ export function useChat({
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws'
     const wsHost = apiUrl.replace(/^https?:\/\//, '')
-    const wsUrl = `${wsProtocol}://${wsHost}/chat/ws/chat?ticket=${encodeURIComponent(ticket)}`
+    const params = new URLSearchParams({ ticket })
+    if (entryId !== undefined) params.set('entry_id', String(entryId))
+    const wsUrl = `${wsProtocol}://${wsHost}/chat/ws/chat?${params.toString()}`
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
@@ -136,7 +157,12 @@ export function useChat({
 
         switch (data.type) {
           case 'context':
-            setContext({ reflection: data.reflection, related_entries: data.related_entries })
+            setContext({
+              scope: data.scope ?? 'all',
+              reflection: data.reflection ?? '',
+              entry: data.entry,
+              related_entries: data.related_entries ?? [],
+            })
             break
 
           case 'token':
@@ -210,7 +236,7 @@ export function useChat({
         return nextAttempt
       })
     }
-  }, [maxReconnectAttempts, reconnectBaseDelay])
+  }, [entryId, maxReconnectAttempts, reconnectBaseDelay])
 
   const sendMessage = useCallback((content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -224,6 +250,23 @@ export function useChat({
     setMessages(prev => [...prev, { role: 'user', content: trimmedContent }])
     wsRef.current.send(JSON.stringify({ type: 'chat_message', content: trimmedContent }))
   }, [])
+
+  const newConversation = useCallback(() => {
+    // Close the existing socket so the server drops its in-memory history,
+    // then reset local state and reconnect. We deliberately don't call the
+    // exported `disconnect` (which flips shouldReconnect off permanently).
+    clearReconnectTimeout()
+    if (wsRef.current) {
+      wsRef.current.close(1000, 'New conversation')
+      wsRef.current = null
+    }
+    reset()
+    setIsConnected(false)
+    shouldReconnectRef.current = true
+    if (enabled) {
+      connect()
+    }
+  }, [clearReconnectTimeout, connect, enabled, reset])
 
   useEffect(() => {
     mountedRef.current = true
@@ -252,5 +295,6 @@ export function useChat({
     context,
     sendMessage,
     reset,
+    newConversation,
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, FormEvent } from 'react'
+import { useState, useEffect, useRef, FormEvent, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useChat } from '@/hooks/useChat'
 import { Button } from '@/components/ui/button'
@@ -8,16 +8,25 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Send, MessageCircle } from 'lucide-react'
+import {
+  Loader2,
+  Send,
+  MessageCircle,
+  BookOpen,
+  Library,
+  RotateCcw,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ChatPanelProps {
   /**
-   * Reflection text is unused by the panel itself; the backend pulls it from
-   * the reflection cache on connect. The prop is preserved to keep existing
-   * call sites (e.g. legacy modal) compiling.
+   * When provided, pins the chat to this specific entry and tells the backend
+   * to use only that entry as context. When absent, the chat spans all of
+   * the user's entries (default behavior).
    */
-  reflection?: string
+  activeEntryId?: number
+  /** Display-only — used to label the scope pill when an entry is pinned. */
+  activeEntryTitle?: string | null
 }
 
 /**
@@ -25,11 +34,13 @@ interface ChatPanelProps {
  * Uses shadcn primitives + Tailwind utilities; intended for embedding inside
  * a full-page conversations layout.
  */
-export function ChatPanel({}: ChatPanelProps) {
+export function ChatPanel({ activeEntryId, activeEntryTitle }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('')
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
 
   const {
     messages,
@@ -38,52 +49,105 @@ export function ChatPanel({}: ChatPanelProps) {
     isStreaming,
     isReconnecting,
     reconnectAttempt,
+    context,
     sendMessage,
+    newConversation,
   } = useChat({
     enabled: true,
+    entryId: activeEntryId,
     onError: (err) => setError(err),
   })
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+  const scopeLabel = activeEntryId
+    ? `Entry: ${activeEntryTitle || context?.entry?.title || 'Untitled'}`
+    : 'All entries'
+  const ScopeIcon = activeEntryId ? BookOpen : Library
 
-  // Focus input on mount
+  // Auto-scroll to bottom when new content arrives, but only when the user
+  // is already parked at the bottom. This stops us from yanking them away
+  // if they've scrolled up to re-read earlier messages.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRef.current?.focus()
-    }, 100)
-    return () => clearTimeout(timer)
+    if (autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, streamingContent, autoScroll])
+
+  // Track whether the user is pinned to the bottom of the scroll region so
+  // the auto-scroll behavior above knows when to engage.
+  useEffect(() => {
+    const viewport = scrollContainerRef.current?.querySelector<HTMLDivElement>(
+      '[data-slot="scroll-area-viewport"]',
+    )
+    if (!viewport) return
+    const handleScroll = () => {
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+      setAutoScroll(distanceFromBottom < 64)
+    }
+    viewport.addEventListener('scroll', handleScroll, { passive: true })
+    return () => viewport.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!inputValue.trim() || isStreaming) return
+  const handleSubmit = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault()
+      if (!inputValue.trim() || isStreaming) return
 
-    sendMessage(inputValue)
-    setInputValue('')
+      sendMessage(inputValue)
+      setInputValue('')
+      setError(null)
+      setAutoScroll(true)
+    },
+    [inputValue, isStreaming, sendMessage],
+  )
+
+  const handleNewConversation = useCallback(() => {
+    newConversation()
     setError(null)
-  }
+    setInputValue('')
+    setAutoScroll(true)
+    inputRef.current?.focus()
+  }, [newConversation])
 
   const inputDisabled = !isConnected || isStreaming
   const sendDisabled = inputDisabled || !inputValue.trim()
+  const emptyStateCopy = activeEntryId
+    ? 'Ask anything about this entry — themes, feelings, loose ends.'
+    : 'Ask anything about your journal — patterns, memories, recurring themes.'
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {!isConnected && (
-        <div className="border-b border-border bg-muted/30 px-4 py-2">
-          <Badge
-            variant="outline"
-            className="gap-2 border-[color:var(--warning)]/40 text-[color:var(--warning)]"
+      {/* Header: scope + actions */}
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-2">
+        <Badge variant="secondary" className="gap-1.5">
+          <ScopeIcon className="h-3 w-3" />
+          <span className="truncate max-w-[22ch]">{scopeLabel}</span>
+        </Badge>
+        <div className="flex items-center gap-1.5">
+          {!isConnected && (
+            <Badge
+              variant="outline"
+              className="gap-1.5 border-[color:var(--warning)]/40 text-[color:var(--warning)]"
+            >
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {isReconnecting
+                ? `Reconnecting (${reconnectAttempt}/5)`
+                : 'Connecting'}
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewConversation}
+            disabled={isStreaming}
+            className="h-7 gap-1.5 text-xs"
+            aria-label="Start a new conversation"
           >
-            <Loader2 className="h-3 w-3 animate-spin" />
-            {isReconnecting
-              ? `Reconnecting... (attempt ${reconnectAttempt}/5)`
-              : 'Connecting...'}
-          </Badge>
+            <RotateCcw className="h-3 w-3" />
+            <span className="hidden sm:inline">New chat</span>
+          </Button>
         </div>
-      )}
+      </div>
 
       {error && (
         <div className="px-4 pt-3">
@@ -93,25 +157,23 @@ export function ChatPanel({}: ChatPanelProps) {
         </div>
       )}
 
-      <ScrollArea className="flex-1">
+      <ScrollArea ref={scrollContainerRef} className="flex-1">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
           {messages.length === 0 && !streamingContent && (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
               <MessageCircle className="h-8 w-8 opacity-40" />
-              <p className="text-sm">
-                Ask questions about your reflection or journal entries.
-              </p>
+              <p className="text-sm">{emptyStateCopy}</p>
             </div>
           )}
 
           {messages.map((message, index) => (
             <MessageBubble key={index} role={message.role}>
               {message.role === 'assistant' ? (
-                <div className="prose prose-sm max-w-none text-foreground">
+                <div className="prose prose-sm max-w-none break-words text-foreground">
                   <ReactMarkdown>{message.content}</ReactMarkdown>
                 </div>
               ) : (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                   {message.content}
                 </p>
               )}
@@ -119,12 +181,17 @@ export function ChatPanel({}: ChatPanelProps) {
           ))}
 
           {streamingContent && (
-            <MessageBubble role="assistant">
-              <div className="prose prose-sm max-w-none text-foreground">
-                <ReactMarkdown>{streamingContent}</ReactMarkdown>
-              </div>
-              <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-primary align-middle" />
-            </MessageBubble>
+            <div aria-live="polite" aria-atomic="false">
+              <MessageBubble role="assistant">
+                <div className="prose prose-sm max-w-none break-words text-foreground">
+                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                </div>
+                <span
+                  aria-hidden="true"
+                  className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-primary align-middle"
+                />
+              </MessageBubble>
+            </div>
           )}
 
           <div ref={messagesEndRef} />
@@ -139,7 +206,12 @@ export function ChatPanel({}: ChatPanelProps) {
           <Input
             ref={inputRef}
             type="text"
-            placeholder="Ask about your reflection..."
+            autoFocus
+            placeholder={
+              activeEntryId
+                ? 'Ask about this entry…'
+                : 'Ask about your journal…'
+            }
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             disabled={inputDisabled}

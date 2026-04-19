@@ -22,6 +22,9 @@ import { ConversationsLayout } from '../_layout-shell'
 export default function ConversationPage() {
   const params = useParams()
   const entryId = parseInt(params.id as string, 10)
+  // Fetch the entry up-front so the chat header can label the scope with
+  // the entry's title before the first websocket `context` event arrives.
+  const { data: entry } = useEntry(entryId)
 
   return (
     <ProtectedRoute>
@@ -31,6 +34,7 @@ export default function ConversationPage() {
         </div>
         <ConversationsLayout
           activeEntryId={entryId}
+          activeEntryTitle={entry?.title ?? null}
           contextPane={<EntryContext entryId={entryId} />}
         />
       </div>

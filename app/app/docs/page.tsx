@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata = {
   title: 'Documentation | EchoVault',
-  description: 'Technical documentation for EchoVault - architecture, setup, and API reference.',
+  description: 'Technical documentation for EchoVault - architecture and setup.',
 }
 
 export default function DocsPage() {
@@ -26,9 +26,6 @@ export default function DocsPage() {
             <li><a href="#architecture">Architecture</a></li>
             <li><a href="#quick-start">Quick Start</a></li>
             <li><a href="#llm-configuration">LLM Configuration</a></li>
-            <li><a href="#api-reference">API Reference</a></li>
-            <li><a href="#environment-variables">Environment Variables</a></li>
-            <li><a href="#deployment">Deployment</a></li>
           </ul>
         </nav>
 
@@ -149,104 +146,6 @@ DEFAULT_EMBEDDING_MODEL=mxbai-embed-large`}
             </pre>
           </section>
 
-          <section id="api-reference">
-            <h2>API Reference</h2>
-            <p>
-              Full API documentation is available at <code>http://localhost:8000/docs</code> when the API is running.
-            </p>
-
-            <h3>Key Endpoints</h3>
-            <ul>
-              <li><code>POST /auth/register</code>, <code>POST /auth/login</code> - Authentication (returns JWT)</li>
-              <li><code>GET/POST /entries</code> - Journal entries CRUD</li>
-              <li><code>POST /search/semantic</code> - Vector search with time decay</li>
-              <li><code>WS /reflections/ws/{'{entry_id}'}</code> - Streaming reflections</li>
-              <li><code>WS /reflections/chat/ws/{'{entry_id}'}</code> - Interactive chat with follow-up questions</li>
-              <li><code>GET /insights/recent</code> - AI-generated insights</li>
-            </ul>
-
-            <p>
-              WebSocket endpoints accept JWT token via <code>?token=</code> query parameter.
-            </p>
-          </section>
-
-          <section id="environment-variables">
-            <h2>Environment Variables</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Variable</th>
-                  <th>Description</th>
-                  <th>Required</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><code>JWT_SECRET</code></td>
-                  <td>Secret key for JWT signing (generate with <code>openssl rand -hex 32</code>)</td>
-                  <td>Yes</td>
-                </tr>
-                <tr>
-                  <td><code>DATABASE_URL</code></td>
-                  <td>PostgreSQL connection string</td>
-                  <td>Yes</td>
-                </tr>
-                <tr>
-                  <td><code>REDIS_URL</code></td>
-                  <td>Redis connection URL</td>
-                  <td>Yes</td>
-                </tr>
-                <tr>
-                  <td><code>DEFAULT_GENERATION_URL</code></td>
-                  <td>LLM endpoint for text generation</td>
-                  <td>No</td>
-                </tr>
-                <tr>
-                  <td><code>DEFAULT_GENERATION_MODEL</code></td>
-                  <td>Model name for generation</td>
-                  <td>No</td>
-                </tr>
-                <tr>
-                  <td><code>DEFAULT_EMBEDDING_URL</code></td>
-                  <td>LLM endpoint for embeddings</td>
-                  <td>No</td>
-                </tr>
-                <tr>
-                  <td><code>DEFAULT_EMBEDDING_MODEL</code></td>
-                  <td>Model name for embeddings</td>
-                  <td>No</td>
-                </tr>
-                <tr>
-                  <td><code>NEXT_PUBLIC_API_URL</code></td>
-                  <td>API URL for frontend</td>
-                  <td>No</td>
-                </tr>
-                <tr>
-                  <td><code>CORS_ORIGINS</code></td>
-                  <td>Comma-separated allowed origins</td>
-                  <td>Production</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-
-          <section id="deployment">
-            <h2>Deployment</h2>
-            <p>
-              EchoVault is designed to be self-hosted. The recommended deployment is via Docker Compose
-              on your own infrastructure.
-            </p>
-
-            <h3>Production Checklist</h3>
-            <ul>
-              <li>Generate a strong <code>JWT_SECRET</code></li>
-              <li>Configure <code>CORS_ORIGINS</code> for your domain</li>
-              <li>Set up SSL/TLS termination (e.g., with Nginx or Caddy)</li>
-              <li>Configure persistent volumes for PostgreSQL data</li>
-              <li>Set up regular database backups</li>
-              <li>Consider GPU passthrough for Ollama if available</li>
-            </ul>
-          </section>
         </article>
       </div>
 

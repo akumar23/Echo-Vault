@@ -16,7 +16,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { BookOpen, PenLine, Sparkles, TrendingUp } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  MessageCircle,
+  PenLine,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const MOOD_DOT: Record<number, string> = {
@@ -266,6 +273,34 @@ export default function JournalDashboard() {
             </CardHeader>
             <CardContent>
               <ReflectionBlock />
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Chat CTA — entry point into the all-entries conversation */}
+        <section className="mb-8">
+          <Card variant="bordered">
+            <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <MessageCircle className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Chat with your journal
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Ask questions across every entry. Open a single entry to
+                    scope the chat to just that one.
+                  </p>
+                </div>
+              </div>
+              <Button asChild size="sm" className="self-start sm:self-auto">
+                <Link href="/conversations">
+                  Start chatting
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </section>

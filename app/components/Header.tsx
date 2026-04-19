@@ -16,6 +16,7 @@ import {
   User,
   Home,
   Search,
+  MessageCircle,
 } from 'lucide-react'
 import { useCommandPaletteStore } from '@/lib/commandPaletteStore'
 import { Button } from '@/components/ui/button'
@@ -44,6 +45,7 @@ const NAV_LINKS = [
   { href: '/journal', label: 'Dashboard', icon: Home },
   { href: '/entries', label: 'Entries', icon: BookOpen },
   { href: '/insights', label: 'Insights', icon: BarChart3 },
+  { href: '/conversations', label: 'Chat', icon: MessageCircle },
   { href: '/new', label: 'New', icon: PenLine, primary: true as const },
 ]
 

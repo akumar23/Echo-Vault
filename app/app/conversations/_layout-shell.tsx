@@ -24,9 +24,11 @@ import { cn } from '@/lib/utils'
  */
 export function ConversationsLayout({
   activeEntryId,
+  activeEntryTitle,
   contextPane,
 }: {
   activeEntryId?: number
+  activeEntryTitle?: string | null
   contextPane?: React.ReactNode
 }) {
   return (
@@ -65,7 +67,14 @@ export function ConversationsLayout({
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-          <ChatPanel />
+          {/* `key` keys the panel (and its websocket) to the active scope so
+              switching between all-entries and a specific entry always
+              reopens a fresh connection. */}
+          <ChatPanel
+            key={activeEntryId ?? 'all'}
+            activeEntryId={activeEntryId}
+            activeEntryTitle={activeEntryTitle}
+          />
         </Card>
       </main>
 
