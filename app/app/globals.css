@@ -213,19 +213,26 @@
    Tailwind utility classes like mx-auto, breaking layout centering. */
 
 html {
+  overflow-x: clip;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-html, body {
-  overflow-x: clip;
+  /* Canvas background lives on <html>. Keeping body transparent is
+     required so the fixed body::before / ::after backdrop layers
+     (z-index: -2 / -1) render above <body>'s own box. If body has
+     its own background-color, it paints on top of its negative-z
+     pseudo-elements and the blobs disappear. */
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.7;
   transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+body {
+  overflow-x: clip;
+  background-color: transparent;
 }
 
 ::selection {
@@ -240,14 +247,15 @@ html, body {
    the blobs get smeared into an atmospheric wash.
 
    Both layers are fixed — painted once, never scroll, so the blur
-   filter has no per-frame cost. `inset: -10%` extends past the
-   viewport so the filter's soft edge doesn't show at the screen edge.
+   filter has no per-frame cost. `inset: -120px` extends past the
+   viewport by more than the blur radius, so the filter's soft fade
+   edge never shows at the screen edge (even on 375px-wide mobile).
    -------------------------------------------------------------------------- */
 
 body::before {
   content: "";
   position: fixed;
-  inset: -10%;
+  inset: -120px;
   z-index: -2;
   pointer-events: none;
   filter: blur(70px) saturate(115%);
@@ -263,7 +271,9 @@ body::before {
     /* Teal — center-left cool balance */
     radial-gradient(28% 28% at 42% 74%,  var(--blob-5) 0%, transparent 75%),
     var(--bg-primary);
-  transition: background var(--transition-slow);
+  /* No transition: CSS can't interpolate gradient stops, so animating
+     `background` between themes snaps anyway. The `background-color`
+     transition on <html> gives us the cross-fade feel already. */
 }
 
 body::after {

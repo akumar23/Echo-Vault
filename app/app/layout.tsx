@@ -72,6 +72,17 @@ export const metadata: Metadata = {
   ),
 }
 
+/**
+ * Runs before hydration so `data-theme` is set on <html> on the first paint.
+ * Without this, the CSS falls back to the light-theme palette until React
+ * mounts and the ThemeProvider can set the attribute — producing a brief
+ * light-theme flash for system-dark users.
+ *
+ * Kept tiny and wrapped in try/catch so a storage exception (private-mode
+ * Safari, disabled cookies, etc.) never blocks paint.
+ */
+const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');var r=(t==='light'||t==='dark')?t:(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',r);}catch(e){}})();`
+
 export default function RootLayout({
   children,
 }: {
@@ -84,6 +95,10 @@ export default function RootLayout({
       className={GeistSans.variable}
     >
       <body className="font-sans antialiased">
+        {/* Blocking inline script — runs before React renders any
+            content below, so `data-theme` is set on the first paint.
+            Must stay at the top of <body> to beat the body content. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <ThemeProvider>
           <Providers>
             {children}

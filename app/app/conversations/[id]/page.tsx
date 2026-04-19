@@ -28,7 +28,7 @@ export default function ConversationPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
+      <div className="flex h-[100dvh] flex-col overflow-hidden">
         <div className="mx-auto w-full max-w-7xl px-4 pt-4 md:px-6">
           <Header title="Conversations" />
         </div>
