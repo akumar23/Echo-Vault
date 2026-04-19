@@ -25,26 +25,60 @@ export default function LandingPage() {
     <div
       className={`relative min-h-screen overflow-hidden bg-[#0A0A0A] text-[#FAFAFA] ${serif}`}
     >
-      {/* Dot grid — purely decorative, sits behind all content */}
+      {/* Colorful glass blur gradient background */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: '22px 22px',
-        }}
-      />
-
-      {/* Ambient glow — warms the upper-left without feeling Vercel-generic */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -left-40 -top-40 z-0 h-[520px] w-[520px] rounded-full opacity-[0.22] blur-3xl"
-        style={{
-          background:
-            'radial-gradient(circle, rgba(224,122,90,0.55) 0%, rgba(224,122,90,0) 70%)',
-        }}
-      />
+      >
+        {/* Coral — primary brand glow, upper-left */}
+        <div
+          className="absolute -left-40 -top-40 h-[620px] w-[620px] rounded-full opacity-60 blur-3xl"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(224,122,90,0.55) 0%, rgba(224,122,90,0) 70%)',
+          }}
+        />
+        {/* Amber / ochre — warm mid-right */}
+        <div
+          className="absolute right-[-12%] top-[8%] h-[560px] w-[560px] rounded-full opacity-50 blur-3xl"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(242,178,76,0.45) 0%, rgba(242,178,76,0) 70%)',
+          }}
+        />
+        {/* Magenta / rose — lower-left drift */}
+        <div
+          className="absolute -left-[10%] top-[45%] h-[640px] w-[640px] rounded-full opacity-45 blur-3xl"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(198,74,120,0.45) 0%, rgba(198,74,120,0) 70%)',
+          }}
+        />
+        {/* Deep violet — bottom-right depth */}
+        <div
+          className="absolute right-[-8%] bottom-[-10%] h-[680px] w-[680px] rounded-full opacity-55 blur-3xl"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(98,72,170,0.5) 0%, rgba(98,72,170,0) 70%)',
+          }}
+        />
+        {/* Teal accent — center-left, subtle cool balance */}
+        <div
+          className="absolute left-[25%] top-[60%] h-[420px] w-[420px] rounded-full opacity-30 blur-3xl"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(72,138,144,0.45) 0%, rgba(72,138,144,0) 70%)',
+          }}
+        />
+        {/* Soft noise / glass veil to unify the blobs */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse at 50% 40%, rgba(10,10,10,0) 0%, rgba(10,10,10,0.55) 75%, rgba(10,10,10,0.8) 100%)',
+          }}
+        />
+      </div>
 
       {/* Nav */}
       <header className="relative z-10 border-b border-white/[0.08]">
