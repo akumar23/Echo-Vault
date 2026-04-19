@@ -66,23 +66,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative z-10 mx-auto max-w-6xl px-6 pt-16 pb-16 sm:px-10 sm:pt-24 sm:pb-20">
-        <div
-          className={`mb-10 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] uppercase tracking-[0.18em] text-[#A3A3A3] sm:text-xs ${mono}`}
-        >
-          <span className="flex items-center gap-3">
-            <span className="inline-block h-2 w-2 rounded-full bg-[#E07A5A]" />
-            Private-first journal
-          </span>
-          <span aria-hidden>·</span>
-          <span>Open source</span>
-          <span
-            aria-hidden
-            className="hidden h-px w-12 bg-[#A3A3A3]/50 sm:inline-block"
-          />
-          <span>001</span>
-        </div>
-
+      <section className="relative z-10 mx-auto max-w-6xl px-6 pt-10 pb-16 sm:px-10 sm:pt-14 sm:pb-20">
         <h1 className="font-normal leading-[1.04] tracking-tight text-[clamp(3rem,11vw,9rem)]">
           <span className="block">A journal</span>
           <span className="block">
