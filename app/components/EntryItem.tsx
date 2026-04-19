@@ -35,22 +35,22 @@ export const EntryItem = memo(function EntryItem({
 }: EntryItemProps) {
   return (
     <li
-      className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+      className="flex cursor-pointer items-start gap-3 rounded-xl px-4 py-4 transition-colors hover:bg-primary/5"
       onClick={() => onClick(entry)}
     >
-      <div className="mt-0.5 text-muted-foreground">
+      <div className="mt-1 text-muted-foreground">
         <FileText className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">
+        <span className="block truncate text-base font-medium text-foreground">
           {entry.title || 'Untitled'}
         </span>
         {entry.content && (
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+          <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
             {getPreview(entry.content, maxPreviewLength)}
           </p>
         )}
-        <div className="mt-1 text-xs text-muted-foreground">
+        <div className="mt-1.5 text-xs text-muted-foreground">
           {format(new Date(entry.created_at), 'MMM d, yyyy')}
         </div>
       </div>

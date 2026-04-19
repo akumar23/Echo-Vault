@@ -78,7 +78,7 @@ export function Header({ showNav = true }: HeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-sm">
+    <header className="glass sticky top-0 z-40 border-b border-border/50">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Left: app name */}
         <Link

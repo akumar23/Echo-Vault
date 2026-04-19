@@ -41,16 +41,19 @@ export function ConversationsLayout({
         <Sheet>
           <SheetTrigger asChild>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="fixed left-3 top-[4rem] z-30 h-9 w-9 shadow-lg"
+              className="glass fixed left-3 top-[4.25rem] z-30 h-10 w-10 rounded-full border border-border/50 shadow-md"
               aria-label="Open history"
             >
               <Menu className="h-4 w-4" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-80 p-0">
-            <SheetTitle className="border-b border-border px-4 py-3 text-sm font-semibold">
+          <SheetContent
+            side="left"
+            className="glass-strong w-[85%] max-w-sm border-r-border/50 p-0 sm:w-80"
+          >
+            <SheetTitle className="border-b border-border/50 px-5 py-4 text-base font-semibold">
               History
             </SheetTitle>
             <HistoryList activeEntryId={activeEntryId} />
@@ -65,7 +68,7 @@ export function ConversationsLayout({
           isChatExpanded && 'md:hidden',
         )}
       >
-        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Card variant="bordered" className="glass flex min-h-0 flex-1 flex-col overflow-hidden border-border/50">
           <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             History
           </div>
@@ -74,7 +77,7 @@ export function ConversationsLayout({
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+        <Card variant="bordered" className="glass flex min-h-0 flex-1 flex-col overflow-hidden border-border/50 p-0">
           {/* `key` keys the panel (and its websocket) to the active scope so
               switching between all-entries and a specific entry always
               reopens a fresh connection. */}
@@ -94,7 +97,7 @@ export function ConversationsLayout({
           isChatExpanded && 'lg:hidden',
         )}
       >
-        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Card variant="bordered" className="glass flex min-h-0 flex-1 flex-col overflow-hidden border-border/50">
           <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Context
           </div>
@@ -150,16 +153,16 @@ function HistoryList({ activeEntryId }: { activeEntryId?: number }) {
               <Link
                 href={`/conversations/${entry.id}`}
                 className={cn(
-                  'block rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'block rounded-xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   isActive
                     ? 'bg-primary/10 text-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground',
                 )}
               >
-                <div className="line-clamp-1 text-sm font-medium">
+                <div className="line-clamp-1 text-[15px] font-medium">
                   {entry.title || 'Untitled'}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="mt-0.5 text-xs text-muted-foreground">
                   {format(new Date(entry.created_at), 'MMM d, yyyy')}
                 </div>
               </Link>

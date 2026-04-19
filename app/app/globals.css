@@ -71,34 +71,41 @@
 
 :root,
 [data-theme="light"] {
-  /* Clean stone whites — quiet, neutral, Vercel-like */
-  --bg-primary: #FAFAFA;
-  --bg-paper: #FFFFFF;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #F5F5F5;
+  /* Warm cream base + translucent surfaces that let the gradient backdrop
+     bleed through. The raw bg-primary stays as a solid fallback. */
+  --bg-primary: #F3EEE5;
+  --bg-paper: rgba(255, 252, 247, 0.72);
+  --bg-surface: rgba(255, 252, 247, 0.62);
+  --bg-elevated: rgba(255, 252, 247, 0.82);
 
-  /* Accent — terracotta used sparingly for CTAs and active states */
-  --accent: #C9522E;
-  --accent-dim: #A8401F;
-  --accent-subtle: rgba(201, 82, 46, 0.10);
+  /* Gradient blobs (consumed by the fixed .app-backdrop layer) */
+  --blob-1: rgba(245, 197, 160, 0.85);  /* warm peach, top-left   */
+  --blob-2: rgba(233, 185, 185, 0.80);  /* soft rose, top-right   */
+  --blob-3: rgba(230, 212, 183, 0.75);  /* sand, bottom-left      */
+  --blob-4: rgba(240, 178, 155, 0.70);  /* coral tint, bottom-right */
+
+  /* Accent — Claude-style warm coral */
+  --accent: #D97757;
+  --accent-dim: #B55F40;
+  --accent-subtle: rgba(217, 119, 87, 0.12);
 
   /* Secondary accent — muted forest */
   --accent-secondary: #3F7A5B;
   --accent-secondary-dim: #2F5E44;
 
   /* Text — warm neutrals */
-  --text-primary: #0A0A0A;
-  --text-muted: #525252;
-  --text-dim: #737373;
+  --text-primary: #1A1410;
+  --text-muted: #5A4F46;
+  --text-dim: #8A7D71;
 
-  /* Borders — subtle but visible */
-  --border: rgba(10, 10, 10, 0.12);
-  --border-light: rgba(10, 10, 10, 0.20);
+  /* Borders — soft, barely-there against glass surfaces */
+  --border: rgba(26, 20, 16, 0.10);
+  --border-light: rgba(26, 20, 16, 0.18);
 
   /* Semantic */
-  --error: #DC2626;
-  --warning: #D97706;
-  --success: #16A34A;
+  --error: #C44536;
+  --warning: #C77D2F;
+  --success: #3F7A5B;
 
   /* Mood colors */
   --mood-1: #D4886A;
@@ -108,38 +115,44 @@
   --mood-5: #8BAA94;
 
   /* Focus */
-  --focus-ring: 0 0 0 3px rgba(201, 82, 46, 0.25);
+  --focus-ring: 0 0 0 3px rgba(217, 119, 87, 0.28);
 }
 
 [data-theme="dark"] {
-  /* Neutral dark — pure zinc, no warm tint */
-  --bg-primary: #0A0A0A;
-  --bg-paper: #0A0A0A;
-  --bg-surface: #111111;
-  --bg-elevated: #1A1A1A;
+  /* Warm near-black with translucent surfaces over the gradient blend. */
+  --bg-primary: #16120F;
+  --bg-paper: rgba(28, 24, 21, 0.70);
+  --bg-surface: rgba(28, 24, 21, 0.58);
+  --bg-elevated: rgba(38, 32, 28, 0.82);
 
-  /* Accent — terracotta, used sparingly */
-  --accent: #E07A5A;
-  --accent-dim: #C94C2A;
-  --accent-subtle: rgba(224, 122, 90, 0.12);
+  /* Gradient blobs — deep, warm, blended (plum / navy / burgundy / ember) */
+  --blob-1: rgba(56, 34, 52, 0.85);   /* deep plum, top-left      */
+  --blob-2: rgba(28, 40, 58, 0.85);   /* deep navy, top-right     */
+  --blob-3: rgba(44, 32, 26, 0.85);   /* warm charcoal, bottom-left */
+  --blob-4: rgba(58, 28, 34, 0.85);   /* deep burgundy, bottom-right */
+
+  /* Accent — same warm coral, slightly brighter on dark */
+  --accent: #E8866A;
+  --accent-dim: #C9644A;
+  --accent-subtle: rgba(232, 134, 106, 0.14);
 
   /* Secondary accent */
-  --accent-secondary: #52B788;
-  --accent-secondary-dim: #40916C;
+  --accent-secondary: #6FB894;
+  --accent-secondary-dim: #4A9370;
 
-  /* Text — clean neutrals */
-  --text-primary: #FAFAFA;
-  --text-muted: #A3A3A3;
-  --text-dim: #737373;
+  /* Text — warm off-white */
+  --text-primary: #F5EFE7;
+  --text-muted: #B8ADA1;
+  --text-dim: #82786D;
 
-  /* Borders — subtle but visible */
-  --border: rgba(255, 255, 255, 0.12);
-  --border-light: rgba(255, 255, 255, 0.20);
+  /* Borders — barely-there on glass */
+  --border: rgba(245, 239, 231, 0.10);
+  --border-light: rgba(245, 239, 231, 0.18);
 
   /* Semantic */
-  --error: #EF4444;
-  --warning: #F59E0B;
-  --success: #22C55E;
+  --error: #EF6B5C;
+  --warning: #E8A84A;
+  --success: #6FB894;
 
   /* Mood colors */
   --mood-1: #D4886A;
@@ -149,7 +162,7 @@
   --mood-5: #8BAA94;
 
   /* Focus */
-  --focus-ring: 0 0 0 3px rgba(224, 122, 90, 0.3);
+  --focus-ring: 0 0 0 3px rgba(232, 134, 106, 0.32);
 }
 
 :root {
@@ -196,14 +209,52 @@ html, body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.7;
   transition: background-color var(--transition-base), color var(--transition-base);
 }
 
 ::selection {
   background: var(--accent-subtle);
   color: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
+   Glassy blurred backdrop — four soft color blobs layered over the base.
+   Rendered via a fixed ::before on <body> so it sits behind everything and
+   never scrolls. Works for both themes (the blob variables switch with
+   data-theme). No blur filter on the layer itself — the gradients are
+   already soft, and a filter would hurt scroll perf on mobile.
+   -------------------------------------------------------------------------- */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 45% at 12% 8%,  var(--blob-1) 0%, transparent 70%),
+    radial-gradient(50% 45% at 92% 6%,  var(--blob-2) 0%, transparent 70%),
+    radial-gradient(55% 50% at 8%  95%, var(--blob-3) 0%, transparent 70%),
+    radial-gradient(60% 55% at 95% 92%, var(--blob-4) 0%, transparent 72%),
+    var(--bg-primary);
+  transition: background var(--transition-slow);
+}
+
+/* Frosted surface — translucent bg + backdrop blur. Apply to cards,
+   header, drawer, input bar so the colored backdrop bleeds through
+   just enough to feel alive without losing contrast. */
+.glass {
+  background-color: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.glass-strong {
+  background-color: var(--bg-elevated);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
 }
 
 /* --------------------------------------------------------------------------

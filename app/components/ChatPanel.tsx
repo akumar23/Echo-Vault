@@ -130,9 +130,9 @@ export function ChatPanel({
     : 'Ask anything about your journal — patterns, memories, recurring themes.'
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       {/* Header: scope + actions */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-2">
+      <div className="glass flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2">
         <Badge variant="secondary" className="gap-1.5">
           <ScopeIcon className="h-3 w-3" />
           <span className="truncate max-w-[14ch] sm:max-w-[22ch] md:max-w-[32ch]" title={scopeLabel}>{scopeLabel}</span>
@@ -189,22 +189,22 @@ export function ChatPanel({
       )}
 
       <ScrollArea ref={scrollContainerRef} className="flex-1">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 pb-28 sm:gap-8 sm:px-6 sm:pb-8">
           {messages.length === 0 && !streamingContent && (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 py-12 text-center text-muted-foreground">
               <MessageCircle className="h-8 w-8 opacity-40" />
-              <p className="text-sm">{emptyStateCopy}</p>
+              <p className="text-[15px]">{emptyStateCopy}</p>
             </div>
           )}
 
           {messages.map((message, index) => (
             <MessageBubble key={index} role={message.role}>
               {message.role === 'assistant' ? (
-                <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all">
+                <div className="prose prose-neutral max-w-none break-words [overflow-wrap:anywhere] text-[16px] leading-relaxed text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all">
                   <ReactMarkdown>{message.content}</ReactMarkdown>
                 </div>
               ) : (
-                <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed">
+                <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] leading-relaxed">
                   {message.content}
                 </p>
               )}
@@ -214,7 +214,7 @@ export function ChatPanel({
           {streamingContent && (
             <div aria-live="polite" aria-atomic="false">
               <MessageBubble role="assistant">
-                <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all">
+                <div className="prose prose-neutral max-w-none break-words [overflow-wrap:anywhere] text-[16px] leading-relaxed text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all">
                   <ReactMarkdown>{streamingContent}</ReactMarkdown>
                 </div>
                 <span
@@ -229,31 +229,39 @@ export function ChatPanel({
 
       <form
         onSubmit={handleSubmit}
-        className="border-t border-border bg-background/95 backdrop-blur"
+        className="pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:px-0 sm:pb-0"
       >
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-3">
-          <Input
-            ref={inputRef}
-            type="text"
-            autoFocus
-            placeholder={
-              activeEntryId
-                ? 'Ask about this entry…'
-                : 'Ask about your journal…'
-            }
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            disabled={inputDisabled}
-            className="flex-1"
-          />
-          <Button type="submit" disabled={sendDisabled} size="icon">
-            {isStreaming ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            <span className="sr-only">Send</span>
-          </Button>
+        <div className="pointer-events-auto mx-auto flex w-full max-w-3xl items-center gap-2 px-0 sm:px-6 sm:py-4">
+          <div className="glass-strong flex w-full items-center gap-1 rounded-full border border-border/50 py-1.5 pl-5 pr-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors focus-within:border-border-light">
+            <Input
+              ref={inputRef}
+              type="text"
+              autoFocus
+              placeholder={
+                activeEntryId
+                  ? 'Ask about this entry…'
+                  : 'Ask about your journal…'
+              }
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              disabled={inputDisabled}
+              className="h-10 flex-1 border-0 bg-transparent px-0 text-[16px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+            <Button
+              type="submit"
+              disabled={sendDisabled}
+              size="icon"
+              className="h-10 w-10 rounded-full"
+              aria-label="Send message"
+            >
+              {isStreaming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              <span className="sr-only">Send</span>
+            </Button>
+          </div>
         </div>
       </form>
     </div>
@@ -268,29 +276,18 @@ function MessageBubble({
   children: React.ReactNode
 }) {
   const isUser = role === 'user'
-  return (
-    <div
-      className={cn(
-        'flex w-full gap-3',
-        isUser ? 'justify-end' : 'justify-start',
-      )}
-    >
-      <div
-        className={cn(
-          'min-w-0 max-w-[85%] space-y-1 overflow-hidden rounded-lg px-4 py-3 shadow-sm',
-          isUser
-            ? 'bg-primary text-primary-foreground'
-            : 'border border-border bg-card text-card-foreground',
-        )}
-      >
-        <div
-          className={cn(
-            'text-xs font-medium uppercase tracking-wide',
-            isUser ? 'text-primary-foreground/80' : 'text-muted-foreground',
-          )}
-        >
-          {isUser ? 'You' : 'Assistant'}
+  if (!isUser) {
+    return (
+      <div className="flex w-full justify-start">
+        <div className="min-w-0 max-w-full overflow-hidden text-foreground">
+          {children}
         </div>
+      </div>
+    )
+  }
+  return (
+    <div className="flex w-full justify-end">
+      <div className="min-w-0 max-w-[85%] overflow-hidden rounded-3xl bg-primary/10 px-4 py-2.5 text-foreground">
         {children}
       </div>
     </div>

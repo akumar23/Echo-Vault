@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from app.core.encryption import EncryptedText
 from app.database import Base
 
 
@@ -9,8 +10,8 @@ class Entry(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    title = Column(String, nullable=True)
-    content = Column(Text, nullable=False)
+    title = Column(EncryptedText, nullable=True)
+    content = Column(EncryptedText, nullable=False)
     tags = Column(JSON, default=list)
     mood_user = Column(Integer, nullable=True)  # 1-5 from UI
     mood_inferred = Column(Integer, nullable=True)  # 1-5 from LLM

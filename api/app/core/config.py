@@ -50,8 +50,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_same_site: str = "lax"
 
-    # Fernet key for encrypting LLM API tokens at rest.
+    # Fernet key for at-rest encryption of LLM API tokens and entry content/title.
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # WARNING: losing this key makes all encrypted entries unrecoverable — back it up.
     encryption_key: str = ""
 
     @field_validator("encryption_key", mode="after")
