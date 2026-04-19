@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
@@ -60,7 +61,10 @@ def _clear_auth_cookies(response: Response) -> None:
 @limiter.limit("3/minute")
 async def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
     try:
-        logger.info(f"Registration attempt for email: {user_data.email}, username: {user_data.username}")
+        logger.info(
+            "Registration attempt",
+            extra={"email_hash": hashlib.sha256(user_data.email.encode()).hexdigest()[:8]},
+        )
 
         existing_user = db.query(User).filter(
             (User.email == user_data.email) | (User.username == user_data.username)
@@ -84,7 +88,7 @@ async def register(request: Request, user_data: UserCreate, db: Session = Depend
         db.add(default_settings)
         db.commit()
         db.refresh(user)
-        logger.info(f"Successfully registered user: {user.id}")
+        logger.info("Successfully registered user", extra={"user_id": user.id})
         return user
 
     except HTTPException:

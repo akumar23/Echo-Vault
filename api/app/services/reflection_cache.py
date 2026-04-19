@@ -79,14 +79,25 @@ class ReflectionCache:
             return json.loads(data)
         return None
 
-    def set_reflection(self, user_id: int, reflection: str, status: str = "complete") -> None:
-        """Cache reflection for a user"""
+    def set_reflection(
+        self,
+        user_id: int,
+        reflection: str,
+        status: str = "complete",
+        ttl: Optional[int] = None,
+    ) -> None:
+        """Cache reflection for a user.
+
+        If ttl is None, defaults to REFLECTION_TTL (7 days). Callers caching
+        an error state should pass a short ttl so failures don't poison the
+        cache for a week.
+        """
         key = self._get_key(user_id)
         data = {
             "reflection": reflection,
             "status": status  # "generating", "complete", "error"
         }
-        self.redis.setex(key, self.REFLECTION_TTL, json.dumps(data))
+        self.redis.setex(key, ttl if ttl is not None else self.REFLECTION_TTL, json.dumps(data))
 
     def set_status(self, user_id: int, status: str) -> None:
         """Update just the status (e.g., mark as 'generating').

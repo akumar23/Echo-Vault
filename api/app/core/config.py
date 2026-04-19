@@ -1,6 +1,12 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from typing import Optional
+
+
+def _is_production() -> bool:
+    return os.getenv("ENV", "").lower() == "production"
 
 
 class Settings(BaseSettings):
@@ -23,6 +29,23 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 7
     upload_dir: str = "/data/uploads"
 
+    @field_validator("jwt_secret", mode="after")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        """Refuse to start in production with a placeholder or short JWT secret."""
+        if _is_production():
+            if v == "change_me":
+                raise ValueError(
+                    "jwt_secret is set to the default 'change_me' in production. "
+                    "Set JWT_SECRET to a strong random value."
+                )
+            if len(v) < 32:
+                raise ValueError(
+                    "jwt_secret must be at least 32 characters in production "
+                    f"(got {len(v)})."
+                )
+        return v
+
     # Cookie settings — set COOKIE_SECURE=true and COOKIE_SAME_SITE=none in production (HTTPS + cross-origin)
     cookie_secure: bool = False
     cookie_same_site: str = "lax"
@@ -30,6 +53,17 @@ class Settings(BaseSettings):
     # Fernet key for encrypting LLM API tokens at rest.
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     encryption_key: str = ""
+
+    @field_validator("encryption_key", mode="after")
+    @classmethod
+    def validate_encryption_key(cls, v: str) -> str:
+        """Refuse to start in production without an encryption_key set."""
+        if _is_production() and not v:
+            raise ValueError(
+                "encryption_key must be set in production. Generate with: "
+                "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            )
+        return v
 
     # Default LLM settings (used when user has no custom settings)
     default_generation_url: str = "http://ollama:11434"

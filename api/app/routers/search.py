@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Request
+import logging
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, cast, Float
 from typing import List
@@ -13,6 +16,8 @@ from app.core.dependencies import get_current_user
 from app.core.rate_limit import limiter
 from app.services.llm_service import get_embedding_service_for_user
 from pgvector.sqlalchemy import Vector
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -31,7 +36,18 @@ async def semantic_search(
 
     # Get query embedding using user's configured embedding service
     embedding_service = get_embedding_service_for_user(db, current_user.id)
-    query_embedding = await embedding_service.get_embedding(search_request.query)
+    try:
+        query_embedding = await embedding_service.get_embedding(search_request.query)
+    except (httpx.HTTPError, httpx.TimeoutException):
+        logger.warning(
+            "Semantic search failed: embedding provider error",
+            extra={"user_id": current_user.id},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Embedding service unavailable — check your LLM settings",
+        )
 
     # Calculate age in days using SQL (EXTRACT returns epoch in seconds)
     # age_days = (NOW() - created_at) / 86400

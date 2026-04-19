@@ -1,6 +1,9 @@
 import logging
 import os
+import re
+import time
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,10 +25,46 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Debug: Log database URL (masked) to verify env var is loaded
-_db_url = os.getenv("DATABASE_URL", "NOT_SET")
-_masked_url = _db_url[:30] + "..." if len(_db_url) > 30 else _db_url
-logger.info(f"DATABASE_URL from env: {_masked_url}")
+# Strip "scheme://user:pass@host" credentials before logging any URL or exception
+_CREDS_IN_URL_RE = re.compile(r"://[^/\s@]+@")
+
+
+def _scrub_creds(text_value: str) -> str:
+    """Remove 'user:pass@' userinfo from any URL-like substrings."""
+    return _CREDS_IN_URL_RE.sub("://", text_value)
+
+
+def _safe_db_url_summary(raw: str) -> str:
+    """Return a scheme://host/database summary of the DB URL with userinfo stripped."""
+    if not raw or raw == "NOT_SET":
+        return "NOT_SET"
+    try:
+        parsed = urlparse(raw)
+        host = parsed.hostname or "?"
+        port = f":{parsed.port}" if parsed.port else ""
+        db = parsed.path.lstrip("/") or ""
+        scheme = parsed.scheme or "?"
+        return f"{scheme}://{host}{port}/{db}"
+    except Exception:
+        return "unparseable"
+
+
+# Log DB connection target (scheme + host + database only, never userinfo)
+logger.info("DATABASE_URL target: %s", _safe_db_url_summary(os.getenv("DATABASE_URL", "NOT_SET")))
+
+# Rate limiter for health-check failure logs to avoid flooding during outages.
+_HEALTH_LOG_INTERVAL_SECONDS = 60
+_health_log_state: dict[str, float] = {}
+
+
+def _should_log_health_failure(check: str) -> bool:
+    """Return True if it's been >60s since the last logged failure for `check`."""
+    now = time.monotonic()
+    last = _health_log_state.get(check, 0.0)
+    if now - last >= _HEALTH_LOG_INTERVAL_SECONDS:
+        _health_log_state[check] = now
+        return True
+    return False
 
 # Schema is managed exclusively by Alembic migrations.
 # Run `alembic upgrade head` before starting the server (handled by docker-compose entrypoint).
@@ -99,10 +138,11 @@ async def health(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
     except Exception as e:
-        logger.error(f"Health check - database failed: {e}")
+        if _should_log_health_failure("db"):
+            logger.exception("Health check: database unreachable")
         return JSONResponse(
             status_code=503,
-            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+            content={"status": "unhealthy", "database": "disconnected", "error": _scrub_creds(str(e))}
         )
 
 
@@ -117,8 +157,9 @@ async def health_full(db: Session = Depends(get_db)):
         results["database"] = "connected"
     except Exception as e:
         results["database"] = "disconnected"
-        errors.append(f"database: {str(e)}")
-        logger.error(f"Health check - database failed: {e}")
+        errors.append(f"database: {_scrub_creds(str(e))}")
+        if _should_log_health_failure("db"):
+            logger.exception("Health check: database unreachable")
 
     try:
         if reflection_cache.ping():
@@ -128,8 +169,9 @@ async def health_full(db: Session = Depends(get_db)):
             errors.append("redis: ping failed")
     except Exception as e:
         results["redis"] = "disconnected"
-        errors.append(f"redis: {str(e)}")
-        logger.error(f"Health check - redis failed: {e}")
+        errors.append(f"redis: {_scrub_creds(str(e))}")
+        if _should_log_health_failure("redis"):
+            logger.exception("Health check: redis unreachable")
 
     all_healthy = all(v == "connected" for v in results.values())
 

@@ -1,10 +1,13 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.database import SessionLocal
 from app.models.entry import Entry
 from app.services.llm_service import get_generation_service_for_user
 from app.celery_app import celery_app
 import asyncio
+import httpx
 import logging
+import redis
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,13 @@ logger = logging.getLogger(__name__)
     ignore_result=True,
     time_limit=120,  # Hard kill at 2 minutes
     soft_time_limit=90,  # Graceful shutdown at 90 seconds
-    autoretry_for=(Exception,),
+    autoretry_for=(
+        httpx.HTTPError,
+        httpx.TimeoutException,
+        ConnectionError,
+        redis.RedisError,
+        SQLAlchemyError,
+    ),
     retry_kwargs={"max_retries": 3, "countdown": 60},
     retry_backoff=True,
     retry_backoff_max=300,
@@ -47,9 +56,6 @@ def infer_mood_task(entry_id: int):
 
         # Log successful inference
         logger.info(f"Successfully inferred mood {mood} for entry {entry_id}")
-    except Exception as e:
-        logger.error(f"Error inferring mood for entry {entry_id}: {str(e)}")
-        raise
     finally:
         db.close()
 

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from typing import Optional
 
@@ -9,7 +10,7 @@ from app.core.security import decode_access_token
 from app.database import get_db
 from app.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.auth")
 security = HTTPBearer(auto_error=False)
 
 
@@ -24,7 +25,7 @@ def get_current_user(
         token = credentials.credentials
 
     if not token:
-        logger.warning("No authentication provided")
+        logger.debug("No authentication provided")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -33,6 +34,10 @@ def get_current_user(
 
     payload = decode_access_token(token)
     if payload is None:
+        logger.warning(
+            "Invalid JWT",
+            extra={"token_prefix": hashlib.sha256(token.encode()).hexdigest()[:8]},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -58,7 +63,7 @@ def get_current_user(
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None or not user.is_active:
-        logger.warning(f"User not found or inactive: {user_id}")
+        logger.warning("User not found or inactive", extra={"user_id": user_id})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",

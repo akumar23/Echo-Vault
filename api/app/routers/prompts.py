@@ -1,12 +1,17 @@
 import uuid
 import json
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+
+import httpx
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from app.core.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.user import User
@@ -161,6 +166,7 @@ async def get_writing_suggestions(
         entries=recent_entries,
         avg_mood=avg_mood,
         llm_service=llm_service,
+        user_id=current_user.id,
     )
 
     return SuggestionsResponse(
@@ -215,6 +221,7 @@ async def _generate_suggestions(
     entries: List[Entry],
     avg_mood: float,
     llm_service,
+    user_id: Optional[int] = None,
 ) -> List[WritingSuggestion]:
     """Generate AI-powered writing suggestions with a single LLM call."""
     # Prepare context for LLM
@@ -287,7 +294,12 @@ async def _generate_suggestions(
                 source_entry_id=source_entry.id,
             ),
         ]
-    except Exception:
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError, KeyError):
+        logger.warning(
+            "Suggestion generation failed, using fallback",
+            extra={"user_id": user_id},
+            exc_info=True,
+        )
         return _get_fallback_suggestions()
 
 

@@ -6,9 +6,12 @@ from app.services.llm_service import get_generation_service_for_user
 from app.services.reflection_cache import reflection_cache
 from app.celery_app import celery_app
 import asyncio
+import httpx
 import logging
 
 logger = logging.getLogger(__name__)
+
+_ERROR_STATUS_TTL_SECONDS = 60
 
 
 @celery_app.task(
@@ -16,6 +19,10 @@ logger = logging.getLogger(__name__)
     ignore_result=True,
     time_limit=180,  # Hard kill at 3 minutes (reflections take longer)
     soft_time_limit=150,  # Graceful shutdown at 2.5 minutes
+    autoretry_for=(httpx.HTTPError, httpx.TimeoutException, ConnectionError),
+    retry_kwargs={"max_retries": 2, "countdown": 60},
+    retry_backoff=True,
+    retry_backoff_max=300,
 )
 def generate_reflection_task(user_id: int):
     """
@@ -64,12 +71,24 @@ def generate_reflection_task(user_id: int):
         reflection_cache.set_reflection(user_id, reflection, status="complete")
         logger.info(f"Generated reflection for user {user_id}")
 
-    except Exception as e:
-        logger.error(f"Error generating reflection for user {user_id}: {e}")
+    except (httpx.HTTPError, httpx.TimeoutException, ConnectionError):
+        # Transient failures — let Celery retry. Don't poison the cache here;
+        # the "generating" marker set earlier is fine while retries run.
+        logger.exception(
+            "Transient error generating reflection, retrying",
+            extra={"user_id": user_id},
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "Fatal error generating reflection",
+            extra={"user_id": user_id},
+        )
         reflection_cache.set_reflection(
             user_id,
             "Unable to generate reflection at this time. Please try again later.",
-            status="error"
+            status="error",
+            ttl=_ERROR_STATUS_TTL_SECONDS,
         )
     finally:
         db.close()

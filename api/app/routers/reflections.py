@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Optional
 
+import redis
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -98,6 +99,9 @@ async def stream_reflection(request: Request):
         max_checks = 60  # 5 minutes max (60 * 5s = 300s)
 
         while check_count < max_checks:
+            if await request.is_disconnected():
+                logger.debug("SSE client disconnected for user %s", user_id)
+                return
             check_count += 1
             try:
                 cached = reflection_cache.get_reflection(user_id)
@@ -122,8 +126,11 @@ async def stream_reflection(request: Request):
 
                 await asyncio.sleep(5)
 
-            except Exception as e:
-                logger.error(f"SSE stream error for user {user_id}: {e}")
+            except asyncio.CancelledError:
+                logger.debug("SSE stream cancelled for user %s", user_id)
+                raise
+            except (redis.RedisError, json.JSONDecodeError):
+                logger.exception("SSE stream error", extra={"user_id": user_id})
                 error_data = json.dumps({"reflection": "Error checking reflection status", "status": "error"})
                 yield f"data: {error_data}\n\n"
                 break

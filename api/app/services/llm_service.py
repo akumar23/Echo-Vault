@@ -13,6 +13,7 @@ This service supports any LLM provider that implements the OpenAI API standard:
 The service uses the chat completions format for text generation and the
 embeddings endpoint for vector generation.
 """
+import hashlib
 import httpx
 import json
 import re
@@ -20,6 +21,39 @@ import logging
 from typing import List, Dict, Optional, Any, AsyncGenerator
 
 from app.core.config import settings as app_settings
+
+
+class LLMProviderError(Exception):
+    """Raised when the upstream LLM provider returns a non-2xx response.
+
+    Attributes allow callers to distinguish 401/404/429/5xx and route them
+    to appropriate user-facing messages.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int,
+        provider_url: str,
+        body_snippet: str = "",
+    ):
+        super().__init__(message)
+        self.status_code = status_code
+        self.provider_url = provider_url
+        self.body_snippet = body_snippet
+
+
+class LLMStreamError(Exception):
+    """Raised when a streaming completion is interrupted by a transport error.
+
+    Wraps the underlying httpx exception so the caller can surface a
+    generic error to the client without leaking provider internals.
+    """
+
+    def __init__(self, message: str, *, provider_url: str):
+        super().__init__(message)
+        self.provider_url = provider_url
 
 
 class LLMService:
@@ -41,6 +75,33 @@ class LLMService:
         self.api_token = api_token
         self.service_type = service_type
         self._logger = logging.getLogger(__name__)
+
+    def _raise_for_provider_status(self, response: httpx.Response, endpoint: str) -> None:
+        """Inspect the response; on non-2xx, log the body snippet and raise LLMProviderError."""
+        if response.status_code < 400:
+            return
+
+        try:
+            body = response.text
+        except Exception:
+            body = ""
+        body_snippet = body[:500] if body else ""
+
+        self._logger.warning(
+            "LLM provider error",
+            extra={
+                "provider_url": endpoint,
+                "model": self.model,
+                "status_code": response.status_code,
+                "body_snippet": body_snippet,
+            },
+        )
+        raise LLMProviderError(
+            f"LLM provider returned {response.status_code}",
+            status_code=response.status_code,
+            provider_url=endpoint,
+            body_snippet=body_snippet,
+        )
 
     def _create_client(self) -> httpx.AsyncClient:
         """
@@ -67,13 +128,14 @@ class LLMService:
 
         Uses POST /v1/embeddings with {"model": "...", "input": "..."}
         """
+        endpoint = f"{self.base_url}/v1/embeddings"
         async with self._create_client() as client:
             response = await client.post(
-                f"{self.base_url}/v1/embeddings",
+                endpoint,
                 json={"model": self.model, "input": text},
                 timeout=30.0
             )
-            response.raise_for_status()
+            self._raise_for_provider_status(response, endpoint)
             data = response.json()
 
             # OpenAI format returns {"data": [{"embedding": [...]}]}
@@ -105,13 +167,14 @@ class LLMService:
         if max_tokens:
             payload["max_tokens"] = max_tokens
 
+        endpoint = f"{self.base_url}/v1/chat/completions"
         async with self._create_client() as client:
             response = await client.post(
-                f"{self.base_url}/v1/chat/completions",
+                endpoint,
                 json=payload,
                 timeout=120.0
             )
-            response.raise_for_status()
+            self._raise_for_provider_status(response, endpoint)
             data = response.json()
 
             # OpenAI format returns {"choices": [{"message": {"content": "..."}}]}
@@ -144,31 +207,68 @@ class LLMService:
         if max_tokens:
             payload["max_tokens"] = max_tokens
 
+        endpoint = f"{self.base_url}/v1/chat/completions"
         async with self._create_client() as client:
             async with client.stream(
                 "POST",
-                f"{self.base_url}/v1/chat/completions",
+                endpoint,
                 json=payload,
                 timeout=120.0
             ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
-                    # SSE format: "data: {...}" or "data: [DONE]"
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # Remove "data: " prefix
-                        if data_str.strip() == "[DONE]":
-                            break
-                        try:
-                            data = json.loads(data_str)
-                            if "choices" in data and len(data["choices"]) > 0:
-                                delta = data["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
-                                if content:
-                                    yield content
-                        except json.JSONDecodeError:
+                if response.status_code >= 400:
+                    try:
+                        body_bytes = await response.aread()
+                        body = body_bytes.decode("utf-8", errors="replace")
+                    except Exception:
+                        body = ""
+                    body_snippet = body[:500] if body else ""
+                    self._logger.warning(
+                        "LLM provider error",
+                        extra={
+                            "provider_url": endpoint,
+                            "model": self.model,
+                            "status_code": response.status_code,
+                            "body_snippet": body_snippet,
+                        },
+                    )
+                    raise LLMProviderError(
+                        f"LLM provider returned {response.status_code}",
+                        status_code=response.status_code,
+                        provider_url=endpoint,
+                        body_snippet=body_snippet,
+                    )
+
+                try:
+                    async for line in response.aiter_lines():
+                        if not line:
                             continue
+                        # SSE format: "data: {...}" or "data: [DONE]"
+                        if line.startswith("data: "):
+                            data_str = line[6:]  # Remove "data: " prefix
+                            if data_str.strip() == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(data_str)
+                                if "choices" in data and len(data["choices"]) > 0:
+                                    delta = data["choices"][0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        yield content
+                            except json.JSONDecodeError:
+                                self._logger.debug(
+                                    "Dropping malformed SSE frame",
+                                    extra={"line": line[:200]},
+                                )
+                                continue
+                except (
+                    httpx.ReadError,
+                    httpx.RemoteProtocolError,
+                    httpx.TimeoutException,
+                ) as e:
+                    raise LLMStreamError(
+                        "Upstream stream interrupted",
+                        provider_url=endpoint,
+                    ) from e
 
     async def generate_reflection(self, entries_text: str) -> str:
         """Generate reflection from entries using chat completions."""
@@ -257,7 +357,14 @@ class LLMService:
         mood = max(1, min(5, mood))
 
         if confidence == "low":
-            self._logger.warning(f"Low confidence mood inference. Raw response: {response_text[:100]}")
+            response_hash = hashlib.sha256(response_text.encode("utf-8")).hexdigest()[:8]
+            self._logger.debug(
+                "Low confidence mood inference",
+                extra={
+                    "response_length": len(response_text),
+                    "response_hash": response_hash,
+                },
+            )
 
         return mood
 
@@ -312,8 +419,16 @@ class LLMService:
                     "themes": parsed.get("themes", [])[:5],  # Limit to 5 themes
                     "actions": parsed.get("actions", [])[:5]  # Limit to 5 actions
                 }
-        except (json.JSONDecodeError, ValueError, AttributeError) as e:
-            self._logger.warning(f"Failed to parse insights JSON: {e}")
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            response_hash = hashlib.sha256(response_text.encode("utf-8")).hexdigest()[:8]
+            self._logger.debug(
+                "Failed to parse insights JSON",
+                extra={
+                    "response_length": len(response_text),
+                    "response_hash": response_hash,
+                },
+                exc_info=True,
+            )
 
         # Strategy 2: Use raw response as summary if JSON parsing fails
         if response_text.strip():

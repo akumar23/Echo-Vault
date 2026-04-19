@@ -14,6 +14,7 @@ from typing import Deque, Dict, List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy import func
+from websockets.exceptions import ConnectionClosed
 
 from app.database import SessionLocal
 from app.models.embedding import EntryEmbedding
@@ -155,8 +156,8 @@ async def get_related_entries(user_id: int, query: str, embedding_service, k: in
                 }
                 for r in results
             ]
-    except Exception as e:
-        logger.warning(f"Failed to get related entries: {e}")
+    except Exception:
+        logger.warning("Failed to get related entries", extra={"user_id": user_id}, exc_info=True)
         return []
 
 
@@ -295,24 +296,44 @@ async def chat_websocket(
                 messages = [{"role": "system", "content": system_prompt}] + conversation_history[-10:]
 
                 full_response = ""
+                client_gone = False
+                # Breaking out of the async for closes the upstream generator,
+                # which cancels the httpx stream so we stop billing LLM tokens.
                 async for token_content in generation_service.chat_completion_stream(messages, temperature=0.7):
                     full_response += token_content
-                    await websocket.send_json({"type": "token", "content": token_content})
+                    try:
+                        await websocket.send_json({"type": "token", "content": token_content})
+                    except (WebSocketDisconnect, ConnectionClosed):
+                        client_gone = True
+                        break
+
+                if client_gone:
+                    logger.info(f"Client disconnected mid-stream for user {user_id}; aborting generation")
+                    break
 
                 conversation_history.append({"role": "assistant", "content": full_response})
-                await websocket.send_json({"type": "complete"})
+                try:
+                    await websocket.send_json({"type": "complete"})
+                except (WebSocketDisconnect, ConnectionClosed):
+                    logger.info(f"Client disconnected before completion for user {user_id}")
+                    break
 
-            except WebSocketDisconnect:
+            except (WebSocketDisconnect, ConnectionClosed):
                 logger.info(f"WebSocket disconnected for user {user_id}")
                 break
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON message"})
-            except Exception as e:
-                logger.error(f"Error processing chat message: {e}")
-                await websocket.send_json({"type": "error", "message": "Failed to process message"})
+            except Exception:
+                logger.exception("Error processing chat message", extra={"user_id": user_id})
+                try:
+                    await websocket.send_json({"type": "error", "message": "Failed to process message"})
+                except (WebSocketDisconnect, ConnectionClosed):
+                    break
 
-    except Exception as e:
-        logger.error(f"Chat WebSocket error: {e}")
+    except (WebSocketDisconnect, ConnectionClosed):
+        logger.info("WebSocket closed by client")
+    except Exception:
+        logger.exception("Chat WebSocket error")
         if websocket_accepted:
             try:
                 await websocket.close(code=WS_SERVER_ERROR, reason="Internal server error")

@@ -3,6 +3,7 @@ import os
 import pathlib
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings as app_settings
@@ -28,22 +29,31 @@ def _safe_delete_file(filepath_relative: str) -> None:
     upload_base = pathlib.Path(app_settings.upload_dir).resolve()
     try:
         target = (upload_base / filepath_relative).resolve()
-    except Exception as e:
-        logger.error(f"Could not resolve attachment path '{filepath_relative}': {e}")
+    except Exception:
+        logger.warning(
+            "Could not resolve attachment path",
+            extra={"path": filepath_relative},
+            exc_info=True,
+        )
         return
 
     # Ensure the resolved path is actually inside the upload directory
     if not str(target).startswith(str(upload_base) + os.sep):
         logger.error(
-            f"Path traversal attempt blocked: '{filepath_relative}' resolved to '{target}'"
+            "Path traversal attempt blocked",
+            extra={"path": filepath_relative, "resolved": str(target)},
         )
         return
 
     if target.exists():
         try:
             target.unlink()
-        except OSError as e:
-            logger.error(f"Failed to delete attachment file '{target}': {e}")
+        except OSError:
+            logger.warning(
+                "Failed to delete attachment file",
+                extra={"path": str(target)},
+                exc_info=True,
+            )
 
 
 @router.post("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -62,26 +72,53 @@ async def forget_entry(
     user_settings = db.query(Settings).filter(Settings.user_id == current_user.id).first()
     hard_delete = user_settings.privacy_hard_delete if user_settings else False
 
-    if hard_delete:
-        # Hard delete: remove files then delete the row (cascade handles relationships)
-        attachments = db.query(Attachment).filter(Attachment.entry_id == entry_id).all()
-        for attachment in attachments:
-            _safe_delete_file(attachment.filepath)
-        db.delete(entry)
-    else:
-        # Soft forget: zero the embedding vector and wipe PII from the entry row.
-        # The row is kept for referential integrity but contains no recoverable content.
-        embeddings = db.query(EntryEmbedding).filter(EntryEmbedding.entry_id == entry_id).all()
-        for embedding in embeddings:
-            embedding.embedding = [0.0] * app_settings.embedding_dim
-            embedding.is_active = False
+    try:
+        if hard_delete:
+            # Hard delete: commit the DB delete FIRST so we never orphan DB rows.
+            # Capture attachment paths before deleting the row (cascade will remove them).
+            attachment_paths = [
+                a.filepath
+                for a in db.query(Attachment).filter(Attachment.entry_id == entry_id).all()
+            ]
+            db.delete(entry)
+            db.commit()
 
-        entry.content = ""
-        entry.title = None
-        entry.tags = []
-        entry.mood_user = None
-        entry.mood_inferred = None
-        entry.is_deleted = True
+            # Now attempt to delete files. Orphan files are recoverable via
+            # a janitor task; orphan DB rows are not. Failures here are logged
+            # and swallowed.
+            for path in attachment_paths:
+                try:
+                    _safe_delete_file(path)
+                except OSError:
+                    logger.warning(
+                        "Failed to delete attachment file",
+                        extra={"path": path},
+                        exc_info=True,
+                    )
+        else:
+            # Soft forget: zero the embedding vector and wipe PII from the entry row.
+            # The row is kept for referential integrity but contains no recoverable content.
+            embeddings = db.query(EntryEmbedding).filter(EntryEmbedding.entry_id == entry_id).all()
+            for embedding in embeddings:
+                embedding.embedding = [0.0] * app_settings.embedding_dim
+                embedding.is_active = False
 
-    db.commit()
+            entry.content = ""
+            entry.title = None
+            entry.tags = []
+            entry.mood_user = None
+            entry.mood_inferred = None
+            entry.is_deleted = True
+            db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception(
+            "Failed to delete entry",
+            extra={"user_id": current_user.id, "entry_id": entry_id},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete entry",
+        )
+
     return None
