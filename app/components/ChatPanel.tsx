@@ -15,6 +15,8 @@ import {
   BookOpen,
   Library,
   RotateCcw,
+  ChevronsLeftRight,
+  ChevronsRightLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +29,10 @@ interface ChatPanelProps {
   activeEntryId?: number
   /** Display-only — used to label the scope pill when an entry is pinned. */
   activeEntryTitle?: string | null
+  /** When true, the surrounding layout has hidden its side panels. */
+  isExpanded?: boolean
+  /** When provided, renders a header toggle to expand/collapse the chat. */
+  onToggleExpanded?: () => void
 }
 
 /**
@@ -34,7 +40,12 @@ interface ChatPanelProps {
  * Uses shadcn primitives + Tailwind utilities; intended for embedding inside
  * a full-page conversations layout.
  */
-export function ChatPanel({ activeEntryId, activeEntryTitle }: ChatPanelProps) {
+export function ChatPanel({
+  activeEntryId,
+  activeEntryTitle,
+  isExpanded,
+  onToggleExpanded,
+}: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -149,6 +160,23 @@ export function ChatPanel({ activeEntryId, activeEntryTitle }: ChatPanelProps) {
             <RotateCcw className="h-3 w-3" />
             <span className="hidden sm:inline">New chat</span>
           </Button>
+          {onToggleExpanded && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleExpanded}
+              className="hidden h-7 w-7 md:inline-flex"
+              aria-label={isExpanded ? 'Show side panels' : 'Hide side panels'}
+              aria-pressed={isExpanded}
+              title={isExpanded ? 'Show side panels' : 'Hide side panels'}
+            >
+              {isExpanded ? (
+                <ChevronsRightLeft className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronsLeftRight className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
 

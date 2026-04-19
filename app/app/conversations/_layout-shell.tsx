@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useEntries } from '@/hooks/useEntries'
 import { ChatPanel } from '@/components/ChatPanel'
 import { ReflectionsPanel } from '@/components/ReflectionsPanel'
@@ -31,6 +32,8 @@ export function ConversationsLayout({
   activeEntryTitle?: string | null
   contextPane?: React.ReactNode
 }) {
+  const [isChatExpanded, setIsChatExpanded] = useState(false)
+
   return (
     <div className="mx-auto flex w-full min-h-0 max-w-7xl flex-1 gap-4 px-4 pb-4 md:px-6">
       {/* Mobile: history in Sheet */}
@@ -56,7 +59,12 @@ export function ConversationsLayout({
       </div>
 
       {/* Desktop: three-pane */}
-      <aside className="hidden w-64 min-h-0 flex-shrink-0 md:flex md:flex-col">
+      <aside
+        className={cn(
+          'hidden w-64 min-h-0 flex-shrink-0 md:flex md:flex-col',
+          isChatExpanded && 'md:hidden',
+        )}
+      >
         <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             History
@@ -74,11 +82,18 @@ export function ConversationsLayout({
             key={activeEntryId ?? 'all'}
             activeEntryId={activeEntryId}
             activeEntryTitle={activeEntryTitle}
+            isExpanded={isChatExpanded}
+            onToggleExpanded={() => setIsChatExpanded((v) => !v)}
           />
         </Card>
       </main>
 
-      <aside className="hidden w-80 min-h-0 flex-shrink-0 lg:flex lg:flex-col">
+      <aside
+        className={cn(
+          'hidden w-80 min-h-0 flex-shrink-0 lg:flex lg:flex-col',
+          isChatExpanded && 'lg:hidden',
+        )}
+      >
         <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Context
