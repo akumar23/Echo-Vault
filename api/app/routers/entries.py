@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.models.user import User
 from app.models.entry import Entry
+from app.models.embedding import EntryEmbedding
 from app.schemas.entry import EntryCreate, EntryUpdate, EntryResponse
+from app.schemas.search import SearchResult
 from app.core.dependencies import get_current_user
 from app.jobs.embedding_job import enqueue_embedding_job
 from app.jobs.mood_job import enqueue_mood_job
@@ -68,6 +70,65 @@ async def get_entry(
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
     return entry
+
+
+@router.get("/{entry_id}/related", response_model=List[SearchResult])
+async def get_related_entries(
+    entry_id: int,
+    k: int = Query(3, ge=1, le=10),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the k entries most semantically similar to the given entry.
+
+    Similarity uses pgvector cosine distance against the source entry's stored
+    embedding. If the embedding hasn't been generated yet (async Celery job) or
+    was zeroed by a soft delete, an empty list is returned so the UI can degrade
+    gracefully rather than erroring.
+    """
+    entry = db.query(Entry).filter(
+        Entry.id == entry_id,
+        Entry.user_id == current_user.id,
+        Entry.is_deleted == False,
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+
+    source = db.query(EntryEmbedding).filter(
+        EntryEmbedding.entry_id == entry_id,
+        EntryEmbedding.is_active == True,
+    ).first()
+    if not source:
+        return []
+
+    distance = EntryEmbedding.embedding.cosine_distance(source.embedding)
+    similarity_expr = 1 - (distance / 2)
+
+    rows = db.query(
+        Entry.id.label("entry_id"),
+        Entry.title,
+        Entry.content,
+        Entry.created_at,
+        similarity_expr.label("score"),
+    ).join(
+        EntryEmbedding, Entry.id == EntryEmbedding.entry_id
+    ).filter(
+        Entry.user_id == current_user.id,
+        Entry.is_deleted == False,
+        Entry.id != entry_id,
+        EntryEmbedding.is_active == True,
+    ).order_by(distance).limit(k).all()
+
+    return [
+        {
+            "entry_id": row.entry_id,
+            "title": row.title,
+            "content": row.content,
+            "created_at": row.created_at,
+            "score": float(row.score),
+        }
+        for row in rows
+    ]
 
 
 @router.put("/{entry_id}", response_model=EntryResponse)

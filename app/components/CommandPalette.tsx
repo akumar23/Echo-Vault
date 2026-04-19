@@ -26,6 +26,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { searchApi, type SearchResult } from '@/lib/api'
+import { useCommandPaletteStore } from '@/lib/commandPaletteStore'
 import { format } from 'date-fns'
 
 /**
@@ -36,7 +37,9 @@ import { format } from 'date-fns'
  * performed lazily against the semantic endpoint with a 250ms debounce.
  */
 export function CommandPalette() {
-  const [open, setOpen] = useState(false)
+  const open = useCommandPaletteStore((s) => s.open)
+  const setOpen = useCommandPaletteStore((s) => s.setOpen)
+  const toggle = useCommandPaletteStore((s) => s.toggle)
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
@@ -62,12 +65,12 @@ export function CommandPalette() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setOpen((v) => !v)
+        toggle()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [toggle])
 
   // Reset query whenever the palette closes so reopening feels fresh.
   useEffect(() => {
@@ -105,7 +108,7 @@ export function CommandPalette() {
       // Defer navigation/action so Radix can finish its close animation.
       setTimeout(action, 10)
     },
-    []
+    [setOpen]
   )
 
   // Don't render the palette chrome at all for logged-out users.

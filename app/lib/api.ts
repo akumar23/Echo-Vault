@@ -244,6 +244,10 @@ export const entriesApi = {
   delete: async (id: number) => {
     await api.delete(`/entries/${id}`)
   },
+  getRelated: async (id: number, k = 3): Promise<SearchResult[]> => {
+    const response = await api.get(`/entries/${id}/related`, { params: { k } })
+    return response.data
+  },
 }
 
 // Search

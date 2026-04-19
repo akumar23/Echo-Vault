@@ -15,7 +15,9 @@ import {
   BarChart3,
   User,
   Home,
+  Search,
 } from 'lucide-react'
+import { useCommandPaletteStore } from '@/lib/commandPaletteStore'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -57,6 +59,11 @@ export function Header({ showNav = true }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { logout, user } = useAuth()
+  const openCommandPalette = useCommandPaletteStore((s) => s.setOpen)
+
+  const isMac =
+    typeof navigator !== 'undefined' &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.platform)
 
   const handleLogout = useCallback(async () => {
     await logout()
@@ -108,6 +115,32 @@ export function Header({ showNav = true }: HeaderProps) {
 
         {/* Right: actions */}
         <div className="flex items-center gap-1.5">
+          {showNav && user && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openCommandPalette(true)}
+                aria-label="Search entries"
+                className="hidden h-8 gap-2 px-3 text-muted-foreground md:inline-flex"
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span className="text-xs">Search</span>
+                <kbd className="pointer-events-none ml-1 hidden items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground lg:inline-flex">
+                  {isMac ? '⌘' : 'Ctrl'}K
+                </kbd>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => openCommandPalette(true)}
+                aria-label="Search entries"
+                className="md:hidden"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           {showNav && (
             <Button asChild size="sm" className="hidden md:inline-flex">
               <Link href="/new">

@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { WritingEditor } from '@/components/WritingEditor'
 import { InlineReflection } from '@/components/InlineReflection'
+import { RelatedMemories } from '@/components/RelatedMemories'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Header } from '@/components/Header'
 import { Button } from '@/components/ui/button'
@@ -128,6 +129,8 @@ export default function EntryDetailPage() {
           onSave={(data) => updateMutation.mutateAsync(data)}
           saving={updateMutation.isPending}
         />
+
+        <RelatedMemories entryId={entryId} />
 
         {/* Reflection below */}
         <Card variant="bordered" className="mt-10">
