@@ -78,11 +78,16 @@
   --bg-surface: rgba(255, 252, 247, 0.62);
   --bg-elevated: rgba(255, 252, 247, 0.82);
 
-  /* Gradient blobs (consumed by the fixed .app-backdrop layer) */
-  --blob-1: rgba(245, 197, 160, 0.85);  /* warm peach, top-left   */
-  --blob-2: rgba(233, 185, 185, 0.80);  /* soft rose, top-right   */
-  --blob-3: rgba(230, 212, 183, 0.75);  /* sand, bottom-left      */
-  --blob-4: rgba(240, 178, 155, 0.70);  /* coral tint, bottom-right */
+  /* Gradient blobs — landing-page palette at low alpha so the cream
+     base keeps its warmth without oversaturating in light mode. */
+  --blob-1: rgba(224, 122, 90, 0.30);   /* coral,  upper-left     */
+  --blob-2: rgba(242, 178, 76, 0.28);   /* amber,  mid-right      */
+  --blob-3: rgba(198, 120, 140, 0.22);  /* rose,   lower-left     */
+  --blob-4: rgba(140, 120, 190, 0.20);  /* violet, bottom-right   */
+  --blob-5: rgba(130, 170, 170, 0.18);  /* teal,   center accent  */
+  /* Unifying veil — cream-toned, fades edges into the base. */
+  --veil-mid: rgba(243, 238, 229, 0.32);
+  --veil-outer: rgba(243, 238, 229, 0.55);
 
   /* Accent — Claude-style warm coral */
   --accent: #D97757;
@@ -125,11 +130,18 @@
   --bg-surface: rgba(28, 24, 21, 0.58);
   --bg-elevated: rgba(38, 32, 28, 0.82);
 
-  /* Gradient blobs — deep, warm, blended (plum / navy / burgundy / ember) */
-  --blob-1: rgba(56, 34, 52, 0.85);   /* deep plum, top-left      */
-  --blob-2: rgba(28, 40, 58, 0.85);   /* deep navy, top-right     */
-  --blob-3: rgba(44, 32, 26, 0.85);   /* warm charcoal, bottom-left */
-  --blob-4: rgba(58, 28, 34, 0.85);   /* deep burgundy, bottom-right */
+  /* Gradient blobs — landing-page palette: vibrant coral / amber / rose
+     / violet / teal glows at moderate alpha, so they read atmospheric
+     against the warm near-black base rather than muddy. */
+  --blob-1: rgba(224, 122, 90, 0.42);   /* coral,  upper-left     */
+  --blob-2: rgba(242, 178, 76, 0.32);   /* amber,  mid-right      */
+  --blob-3: rgba(198, 74, 120, 0.36);   /* rose,   lower-left     */
+  --blob-4: rgba(98,  72, 170, 0.40);   /* violet, bottom-right   */
+  --blob-5: rgba(72, 138, 144, 0.26);   /* teal,   center accent  */
+  /* Unifying veil — deep near-black, darkens corners and ties the
+     blobs together (mirrors the landing's glass overlay). */
+  --veil-mid: rgba(12, 10, 8, 0.50);
+  --veil-outer: rgba(12, 10, 8, 0.78);
 
   /* Accent — same warm coral, slightly brighter on dark */
   --accent: #E8866A;
@@ -220,11 +232,13 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
-   Glassy blurred backdrop — four soft color blobs layered over the base.
-   Rendered via a fixed ::before on <body> so it sits behind everything and
-   never scrolls. Works for both themes (the blob variables switch with
-   data-theme). No blur filter on the layer itself — the gradients are
-   already soft, and a filter would hurt scroll perf on mobile.
+   Glassy blurred backdrop — five soft color glows layered over the base,
+   topped with a radial veil that darkens the edges and unifies the
+   blobs. Mirrors the landing page's atmospheric feel.
+   Rendered via a fixed ::before on <body> so it sits behind everything
+   and never scrolls. Blob + veil variables switch with data-theme.
+   Keeping the layer filter-less (no backdrop/filter blur) so mobile
+   scroll stays smooth — the radial gradients are already soft.
    -------------------------------------------------------------------------- */
 
 body::before {
@@ -234,10 +248,21 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(55% 45% at 12% 8%,  var(--blob-1) 0%, transparent 70%),
-    radial-gradient(50% 45% at 92% 6%,  var(--blob-2) 0%, transparent 70%),
-    radial-gradient(55% 50% at 8%  95%, var(--blob-3) 0%, transparent 70%),
-    radial-gradient(60% 55% at 95% 92%, var(--blob-4) 0%, transparent 72%),
+    /* Veil on top — fades corners into the base, pulls focus centered. */
+    radial-gradient(ellipse at 50% 40%,
+      transparent 0%,
+      var(--veil-mid) 75%,
+      var(--veil-outer) 100%),
+    /* Coral — upper-left primary glow */
+    radial-gradient(46% 42% at  6%  6%,  var(--blob-1) 0%, transparent 70%),
+    /* Amber — warm mid-right */
+    radial-gradient(42% 42% at 98% 18%,  var(--blob-2) 0%, transparent 70%),
+    /* Rose — lower-left drift */
+    radial-gradient(48% 45% at -2% 58%,  var(--blob-3) 0%, transparent 70%),
+    /* Violet — bottom-right depth */
+    radial-gradient(54% 52% at 104% 104%, var(--blob-4) 0%, transparent 72%),
+    /* Teal — center-left cool balance */
+    radial-gradient(34% 32% at 38% 72%,  var(--blob-5) 0%, transparent 70%),
     var(--bg-primary);
   transition: background var(--transition-slow);
 }
