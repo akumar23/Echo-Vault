@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.entry import Entry
@@ -97,3 +97,91 @@ def generate_reflection_task(user_id: int):
 def enqueue_reflection_job(user_id: int):
     """Enqueue reflection generation job for a user"""
     generate_reflection_task.delay(user_id)
+
+
+@celery_app.task(
+    name="reflection.generate_entry_reflection",
+    ignore_result=True,
+    time_limit=180,
+    soft_time_limit=150,
+    autoretry_for=(httpx.HTTPError, httpx.TimeoutException, ConnectionError),
+    retry_kwargs={"max_retries": 2, "countdown": 60},
+    retry_backoff=True,
+    retry_backoff_max=300,
+)
+def generate_entry_reflection_task(user_id: int, entry_id: int):
+    """Generate and persist a reflection scoped to a single entry.
+
+    Status is tracked directly on the Entry row so each entry can display
+    its own reflection across visits without sharing the user-wide Redis cache.
+    """
+    db = SessionLocal()
+    try:
+        entry = (
+            db.query(Entry)
+            .filter(
+                Entry.id == entry_id,
+                Entry.user_id == user_id,
+                Entry.is_deleted == False,  # noqa: E712
+            )
+            .first()
+        )
+        if entry is None:
+            logger.warning(
+                "Entry not found for reflection",
+                extra={"user_id": user_id, "entry_id": entry_id},
+            )
+            return
+
+        entry.reflection_status = "generating"
+        db.commit()
+
+        generation_service = get_generation_service_for_user(db, user_id)
+
+        entry_text = (
+            f"[{entry.created_at.date()}] {entry.title or 'Untitled'}\n{entry.content}"
+        )
+
+        reflection_text = asyncio.run(
+            generation_service.generate_reflection(entry_text)
+        )
+
+        entry.reflection = reflection_text
+        entry.reflection_status = "complete"
+        entry.reflection_generated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        logger.info(
+            "Generated entry reflection",
+            extra={"user_id": user_id, "entry_id": entry_id},
+        )
+
+    except (httpx.HTTPError, httpx.TimeoutException, ConnectionError):
+        logger.exception(
+            "Transient error generating entry reflection, retrying",
+            extra={"user_id": user_id, "entry_id": entry_id},
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "Fatal error generating entry reflection",
+            extra={"user_id": user_id, "entry_id": entry_id},
+        )
+        try:
+            entry = (
+                db.query(Entry)
+                .filter(Entry.id == entry_id, Entry.user_id == user_id)
+                .first()
+            )
+            if entry is not None:
+                entry.reflection_status = "error"
+                db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
+
+
+def enqueue_entry_reflection_job(user_id: int, entry_id: int) -> None:
+    """Enqueue reflection generation for a specific entry."""
+    generate_entry_reflection_task.delay(user_id, entry_id)

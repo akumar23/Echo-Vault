@@ -153,6 +153,11 @@ export interface Reflection {
   status: 'generating' | 'complete' | 'error'
 }
 
+export interface EntryReflection {
+  reflection: string | null
+  status: 'pending' | 'generating' | 'complete' | 'error'
+}
+
 export interface SearchResult {
   entry_id: number
   title: string | null
@@ -301,6 +306,14 @@ export const reflectionsApi = {
   },
   regenerate: async (): Promise<Reflection> => {
     const response = await api.post('/reflections/regenerate')
+    return response.data
+  },
+  getForEntry: async (entryId: number): Promise<EntryReflection> => {
+    const response = await api.get(`/entries/${entryId}/reflection`)
+    return response.data
+  },
+  regenerateForEntry: async (entryId: number): Promise<EntryReflection> => {
+    const response = await api.post(`/entries/${entryId}/reflection/regenerate`)
     return response.data
   },
 }

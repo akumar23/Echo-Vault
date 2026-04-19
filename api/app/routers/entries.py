@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.database import get_db
 from app.models.user import User
 from app.models.entry import Entry
@@ -8,11 +9,18 @@ from app.models.embedding import EntryEmbedding
 from app.schemas.entry import EntryCreate, EntryUpdate, EntryResponse
 from app.schemas.search import SearchResult
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from app.jobs.embedding_job import enqueue_embedding_job
 from app.jobs.mood_job import enqueue_mood_job
+from app.jobs.reflection_job import enqueue_entry_reflection_job
 from app.services.reflection_cache import reflection_cache
 
 router = APIRouter()
+
+
+class EntryReflectionResponse(BaseModel):
+    reflection: Optional[str]
+    status: str  # "pending" | "generating" | "complete" | "error"
 
 
 @router.post("", response_model=EntryResponse, status_code=status.HTTP_201_CREATED)
@@ -131,6 +139,60 @@ async def get_related_entries(
     ]
 
 
+@router.get("/{entry_id}/reflection", response_model=EntryReflectionResponse)
+async def get_entry_reflection(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the stored reflection for an entry, enqueueing generation
+    on first access so each entry gets its own unique reflection."""
+    entry = db.query(Entry).filter(
+        Entry.id == entry_id,
+        Entry.user_id == current_user.id,
+        Entry.is_deleted == False,
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+
+    if entry.reflection_status is None:
+        entry.reflection_status = "generating"
+        db.commit()
+        enqueue_entry_reflection_job(current_user.id, entry.id)
+        return EntryReflectionResponse(reflection=None, status="generating")
+
+    return EntryReflectionResponse(
+        reflection=entry.reflection,
+        status=entry.reflection_status,
+    )
+
+
+@router.post("/{entry_id}/reflection/regenerate", response_model=EntryReflectionResponse)
+@limiter.limit("5/minute")
+async def regenerate_entry_reflection(
+    request: Request,
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Force regeneration of the entry's reflection."""
+    entry = db.query(Entry).filter(
+        Entry.id == entry_id,
+        Entry.user_id == current_user.id,
+        Entry.is_deleted == False,
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+
+    entry.reflection = None
+    entry.reflection_status = "generating"
+    entry.reflection_generated_at = None
+    db.commit()
+
+    enqueue_entry_reflection_job(current_user.id, entry.id)
+    return EntryReflectionResponse(reflection=None, status="generating")
+
+
 @router.put("/{entry_id}", response_model=EntryResponse)
 async def update_entry(
     entry_id: int,
@@ -158,9 +220,13 @@ async def update_entry(
     db.commit()
     db.refresh(entry)
     
-    # Re-embed if content changed
+    # Re-embed and invalidate entry reflection if content changed
     if entry_data.content is not None:
         enqueue_embedding_job(entry.id)
+        entry.reflection = None
+        entry.reflection_status = None
+        entry.reflection_generated_at = None
+        db.commit()
 
     # Invalidate cached reflection so it regenerates on next view
     reflection_cache.delete_reflection(current_user.id)

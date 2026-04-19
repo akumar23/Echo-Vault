@@ -10,7 +10,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { WritingEditor } from '@/components/WritingEditor'
-import { InlineReflection } from '@/components/InlineReflection'
+import { EntryReflectionPanel } from '@/components/EntryReflectionPanel'
 import { RelatedMemories } from '@/components/RelatedMemories'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Header } from '@/components/Header'
@@ -139,22 +139,10 @@ export default function EntryDetailPage() {
             <CardTitle className="text-base">Reflection</CardTitle>
           </CardHeader>
           <CardContent>
-            <ReflectionSlot />
+            <EntryReflectionPanel entryId={entryId} />
           </CardContent>
         </Card>
       </main>
     </ProtectedRoute>
-  )
-}
-
-function ReflectionSlot() {
-  return (
-    <div className="min-h-[3rem]">
-      <InlineReflection />
-      <p className="text-sm text-muted-foreground [&:not(:only-child)]:hidden">
-        Your reflection will appear here once there&apos;s enough writing to
-        ponder over.
-      </p>
-    </div>
   )
 }
