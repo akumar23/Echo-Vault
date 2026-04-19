@@ -78,17 +78,18 @@
   --bg-surface: rgba(255, 252, 247, 0.62);
   --bg-elevated: rgba(255, 252, 247, 0.82);
 
-  /* Gradient blobs — landing-page palette at moderate alpha. Blur
-     filter on the backdrop layer spreads these far beyond their
-     origin, so they read as atmospheric washes, not hard circles. */
-  --blob-1: rgba(224, 122, 90, 0.55);   /* coral,  upper-left     */
-  --blob-2: rgba(242, 178, 76, 0.45);   /* amber,  mid-right      */
-  --blob-3: rgba(198, 120, 140, 0.40);  /* rose,   lower-left     */
-  --blob-4: rgba(140, 120, 190, 0.35);  /* violet, bottom-right   */
-  --blob-5: rgba(130, 170, 170, 0.30);  /* teal,   center accent  */
-  /* Unifying veil — cream-toned, subtle corner fade only. */
-  --veil-mid: rgba(243, 238, 229, 0.0);
-  --veil-outer: rgba(243, 238, 229, 0.28);
+  /* Gradient blobs — spring meadow: grass green, dandelion yellow,
+     cornflower sky, wildflower lilac, peach blossom. Alpha high
+     enough to show against the cream base without feeling loud. */
+  --blob-1: rgba(135, 195, 140, 0.50);  /* grass green,     upper-left   */
+  --blob-2: rgba(245, 215, 115, 0.46);  /* dandelion yellow, mid-right    */
+  --blob-3: rgba(150, 195, 230, 0.44);  /* cornflower sky,  lower-left   */
+  --blob-4: rgba(205, 175, 230, 0.40);  /* wildflower lilac, bottom-right */
+  --blob-5: rgba(245, 180, 155, 0.34);  /* peach blossom,   center accent */
+  /* Veil — barely there, just a whisper of morning mist at the
+     far corners. The meadow should feel open, not vignetted. */
+  --veil-mid: rgba(250, 246, 236, 0.0);
+  --veil-outer: rgba(250, 246, 236, 0.22);
 
   /* Accent — Claude-style warm coral */
   --accent: #D97757;
@@ -125,27 +126,27 @@
 }
 
 [data-theme="dark"] {
-  /* Warm near-black with translucent surfaces over the gradient blend. */
-  --bg-primary: #16120F;
-  --bg-paper: rgba(28, 24, 21, 0.70);
-  --bg-surface: rgba(28, 24, 21, 0.58);
-  --bg-elevated: rgba(38, 32, 28, 0.82);
+  /* Batcave: cool ink-black base, cool-tinted translucent surfaces.
+     Shifted off the previous warm near-black so the whole page reads
+     cold-shadow instead of cozy-lamp. */
+  --bg-primary: #0B0D13;
+  --bg-paper: rgba(20, 23, 32, 0.72);
+  --bg-surface: rgba(20, 23, 32, 0.60);
+  --bg-elevated: rgba(30, 34, 46, 0.84);
 
-  /* Gradient blobs — deeper, moodier night palette. Hues shifted
-     toward rust / ember / burgundy / indigo / deep teal instead of
-     the landing's bright coral/amber/rose/violet/teal, and alpha
-     lowered so the overall page reads dark and intimate rather than
-     vibrant. Still atmospheric via the filter: blur() spread. */
-  --blob-1: rgba(170, 80, 60, 0.48);   /* rust ember, upper-left   */
-  --blob-2: rgba(180, 125, 55, 0.38);  /* deep ochre, mid-right    */
-  --blob-3: rgba(130, 45, 85, 0.45);   /* burgundy, lower-left     */
-  --blob-4: rgba(60, 50, 120, 0.50);   /* deep indigo, bot-right   */
-  --blob-5: rgba(50, 95, 100, 0.35);   /* deep teal, center accent */
-  /* Vignette veil — pulls the corners darker, anchors the moody feel.
-     Stronger than the light variant because the embers underneath
-     are warm enough to balance a heavier darken. */
-  --veil-mid: rgba(8, 6, 5, 0.25);
-  --veil-outer: rgba(8, 6, 5, 0.70);
+  /* Gradient blobs — batcave palette. Steel blue dominates, a single
+     dim ember hints at a distant torch, wine and indigo deepen the
+     shadow, gunmetal anchors the center. Alpha kept very low — the
+     scene is almost pure shadow with color you have to squint for. */
+  --blob-1: rgba(50, 78, 115, 0.32);   /* steel blue shadow,  upper-left */
+  --blob-2: rgba(135, 85, 55, 0.18);   /* dim torch ember,    mid-right  */
+  --blob-3: rgba(80, 35, 65, 0.26);    /* wine shadow,        lower-left */
+  --blob-4: rgba(42, 48, 100, 0.38);   /* midnight indigo,    bot-right  */
+  --blob-5: rgba(40, 60, 72, 0.22);    /* gunmetal graphite,  center     */
+  /* Vignette veil — heavy. Pulls corners into near-total shadow so the
+     dim color pools at the center like distant cave light. */
+  --veil-mid: rgba(4, 5, 9, 0.42);
+  --veil-outer: rgba(4, 5, 9, 0.82);
 
   /* Accent — same warm coral, slightly brighter on dark */
   --accent: #E8866A;
@@ -161,9 +162,9 @@
   --text-muted: #B8ADA1;
   --text-dim: #82786D;
 
-  /* Borders — barely-there on glass */
-  --border: rgba(245, 239, 231, 0.10);
-  --border-light: rgba(245, 239, 231, 0.18);
+  /* Borders — cool-tinted to match the ink base */
+  --border: rgba(220, 226, 240, 0.08);
+  --border-light: rgba(220, 226, 240, 0.16);
 
   /* Semantic */
   --error: #EF6B5C;
