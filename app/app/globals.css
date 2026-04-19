@@ -78,16 +78,17 @@
   --bg-surface: rgba(255, 252, 247, 0.62);
   --bg-elevated: rgba(255, 252, 247, 0.82);
 
-  /* Gradient blobs — landing-page palette at low alpha so the cream
-     base keeps its warmth without oversaturating in light mode. */
-  --blob-1: rgba(224, 122, 90, 0.30);   /* coral,  upper-left     */
-  --blob-2: rgba(242, 178, 76, 0.28);   /* amber,  mid-right      */
-  --blob-3: rgba(198, 120, 140, 0.22);  /* rose,   lower-left     */
-  --blob-4: rgba(140, 120, 190, 0.20);  /* violet, bottom-right   */
-  --blob-5: rgba(130, 170, 170, 0.18);  /* teal,   center accent  */
-  /* Unifying veil — cream-toned, fades edges into the base. */
-  --veil-mid: rgba(243, 238, 229, 0.32);
-  --veil-outer: rgba(243, 238, 229, 0.55);
+  /* Gradient blobs — landing-page palette at moderate alpha. Blur
+     filter on the backdrop layer spreads these far beyond their
+     origin, so they read as atmospheric washes, not hard circles. */
+  --blob-1: rgba(224, 122, 90, 0.55);   /* coral,  upper-left     */
+  --blob-2: rgba(242, 178, 76, 0.45);   /* amber,  mid-right      */
+  --blob-3: rgba(198, 120, 140, 0.40);  /* rose,   lower-left     */
+  --blob-4: rgba(140, 120, 190, 0.35);  /* violet, bottom-right   */
+  --blob-5: rgba(130, 170, 170, 0.30);  /* teal,   center accent  */
+  /* Unifying veil — cream-toned, subtle corner fade only. */
+  --veil-mid: rgba(243, 238, 229, 0.0);
+  --veil-outer: rgba(243, 238, 229, 0.28);
 
   /* Accent — Claude-style warm coral */
   --accent: #D97757;
@@ -130,18 +131,19 @@
   --bg-surface: rgba(28, 24, 21, 0.58);
   --bg-elevated: rgba(38, 32, 28, 0.82);
 
-  /* Gradient blobs — landing-page palette: vibrant coral / amber / rose
-     / violet / teal glows at moderate alpha, so they read atmospheric
-     against the warm near-black base rather than muddy. */
-  --blob-1: rgba(224, 122, 90, 0.42);   /* coral,  upper-left     */
-  --blob-2: rgba(242, 178, 76, 0.32);   /* amber,  mid-right      */
-  --blob-3: rgba(198, 74, 120, 0.36);   /* rose,   lower-left     */
-  --blob-4: rgba(98,  72, 170, 0.40);   /* violet, bottom-right   */
-  --blob-5: rgba(72, 138, 144, 0.26);   /* teal,   center accent  */
-  /* Unifying veil — deep near-black, darkens corners and ties the
-     blobs together (mirrors the landing's glass overlay). */
-  --veil-mid: rgba(12, 10, 8, 0.50);
-  --veil-outer: rgba(12, 10, 8, 0.78);
+  /* Gradient blobs — landing-page palette. Full alpha-per-blob to
+     survive the blur spread; the atmospheric look comes from the
+     filter: blur() on the backdrop layer, not from weak colors. */
+  --blob-1: rgba(224, 122, 90, 0.70);   /* coral,  upper-left     */
+  --blob-2: rgba(242, 178, 76, 0.55);   /* amber,  mid-right      */
+  --blob-3: rgba(198, 74, 120, 0.60);   /* rose,   lower-left     */
+  --blob-4: rgba(98,  72, 170, 0.65);   /* violet, bottom-right   */
+  --blob-5: rgba(72, 138, 144, 0.45);   /* teal,   center accent  */
+  /* Subtle vignette veil — just darkens the far corners so the
+     colorful center feels anchored. Nowhere near the landing's
+     overlay, because our blobs (blurred) already spread outward. */
+  --veil-mid: rgba(12, 10, 8, 0.0);
+  --veil-outer: rgba(12, 10, 8, 0.45);
 
   /* Accent — same warm coral, slightly brighter on dark */
   --accent: #E8866A;
@@ -232,39 +234,48 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
-   Glassy blurred backdrop — five soft color glows layered over the base,
-   topped with a radial veil that darkens the edges and unifies the
-   blobs. Mirrors the landing page's atmospheric feel.
-   Rendered via a fixed ::before on <body> so it sits behind everything
-   and never scrolls. Blob + veil variables switch with data-theme.
-   Keeping the layer filter-less (no backdrop/filter blur) so mobile
-   scroll stays smooth — the radial gradients are already soft.
+   Glassy blurred backdrop — five color glows layered over the base,
+   heavily blurred so they bleed into each other like the landing page.
+   The veil sits on a second layer (::after) so it stays crisp while
+   the blobs get smeared into an atmospheric wash.
+
+   Both layers are fixed — painted once, never scroll, so the blur
+   filter has no per-frame cost. `inset: -10%` extends past the
+   viewport so the filter's soft edge doesn't show at the screen edge.
    -------------------------------------------------------------------------- */
 
 body::before {
   content: "";
   position: fixed;
+  inset: -10%;
+  z-index: -2;
+  pointer-events: none;
+  filter: blur(70px) saturate(115%);
+  background:
+    /* Coral — upper-left primary glow */
+    radial-gradient(38% 36% at 10% 10%,  var(--blob-1) 0%, transparent 75%),
+    /* Amber — warm mid-right */
+    radial-gradient(36% 36% at 92% 16%,  var(--blob-2) 0%, transparent 75%),
+    /* Rose — lower-left drift */
+    radial-gradient(40% 40% at  4% 62%,  var(--blob-3) 0%, transparent 75%),
+    /* Violet — bottom-right depth */
+    radial-gradient(44% 44% at 96% 96%,  var(--blob-4) 0%, transparent 75%),
+    /* Teal — center-left cool balance */
+    radial-gradient(28% 28% at 42% 74%,  var(--blob-5) 0%, transparent 75%),
+    var(--bg-primary);
+  transition: background var(--transition-slow);
+}
+
+body::after {
+  content: "";
+  position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    /* Veil on top — fades corners into the base, pulls focus centered. */
-    radial-gradient(ellipse at 50% 40%,
-      transparent 0%,
-      var(--veil-mid) 75%,
-      var(--veil-outer) 100%),
-    /* Coral — upper-left primary glow */
-    radial-gradient(46% 42% at  6%  6%,  var(--blob-1) 0%, transparent 70%),
-    /* Amber — warm mid-right */
-    radial-gradient(42% 42% at 98% 18%,  var(--blob-2) 0%, transparent 70%),
-    /* Rose — lower-left drift */
-    radial-gradient(48% 45% at -2% 58%,  var(--blob-3) 0%, transparent 70%),
-    /* Violet — bottom-right depth */
-    radial-gradient(54% 52% at 104% 104%, var(--blob-4) 0%, transparent 72%),
-    /* Teal — center-left cool balance */
-    radial-gradient(34% 32% at 38% 72%,  var(--blob-5) 0%, transparent 70%),
-    var(--bg-primary);
-  transition: background var(--transition-slow);
+  background: radial-gradient(ellipse at 50% 42%,
+    transparent 0%,
+    var(--veil-mid) 70%,
+    var(--veil-outer) 100%);
 }
 
 /* Frosted surface — translucent bg + backdrop blur. Apply to cards,
