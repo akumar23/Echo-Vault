@@ -37,7 +37,6 @@ interface ChatPanelProps {
 export function ChatPanel({ activeEntryId, activeEntryTitle }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -64,12 +63,16 @@ export function ChatPanel({ activeEntryId, activeEntryTitle }: ChatPanelProps) {
   const ScopeIcon = activeEntryId ? BookOpen : Library
 
   // Auto-scroll to bottom when new content arrives, but only when the user
-  // is already parked at the bottom. This stops us from yanking them away
-  // if they've scrolled up to re-read earlier messages.
+  // is already parked at the bottom. Scroll the viewport directly rather
+  // than using scrollIntoView — the latter walks up the ancestor chain and
+  // can nudge the page/document, which feels jerky.
   useEffect(() => {
-    if (autoScroll) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    if (!autoScroll) return
+    const viewport = scrollContainerRef.current?.querySelector<HTMLDivElement>(
+      '[data-slot="scroll-area-viewport"]',
+    )
+    if (!viewport) return
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
   }, [messages, streamingContent, autoScroll])
 
   // Track whether the user is pinned to the bottom of the scroll region so
@@ -193,8 +196,6 @@ export function ChatPanel({ activeEntryId, activeEntryTitle }: ChatPanelProps) {
               </MessageBubble>
             </div>
           )}
-
-          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 

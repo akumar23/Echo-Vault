@@ -56,8 +56,8 @@ export function ConversationsLayout({
       </div>
 
       {/* Desktop: three-pane */}
-      <aside className="hidden w-64 flex-shrink-0 md:flex md:flex-col">
-        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col">
+      <aside className="hidden w-64 min-h-0 flex-shrink-0 md:flex md:flex-col">
+        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             History
           </div>
@@ -78,12 +78,12 @@ export function ConversationsLayout({
         </Card>
       </main>
 
-      <aside className="hidden w-80 flex-shrink-0 lg:flex lg:flex-col">
-        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col">
+      <aside className="hidden w-80 min-h-0 flex-shrink-0 lg:flex lg:flex-col">
+        <Card variant="bordered" className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Context
           </div>
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="p-4">{contextPane ?? <DefaultContextPane />}</div>
           </ScrollArea>
         </Card>
@@ -126,7 +126,7 @@ function HistoryList({ activeEntryId }: { activeEntryId?: number }) {
   }
 
   return (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="min-h-0 flex-1">
       <ul className="space-y-1 p-2">
         {entries.map((entry) => {
           const isActive = activeEntryId === entry.id
