@@ -389,7 +389,7 @@ export function WritingEditor({
                             key={value}
                             type="button"
                             className={cn(
-                              'flex flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                              'flex min-h-11 flex-col items-center justify-center gap-1 rounded-md border px-1 py-2 text-[11px] leading-tight transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                               active
                                 ? 'border-primary bg-primary/10 text-foreground'
                                 : 'border-border text-muted-foreground hover:bg-muted'
@@ -502,7 +502,7 @@ export function WritingEditor({
       {/* Title — large sans, no chrome */}
       <input
         type="text"
-        className="w-full border-none bg-transparent p-0 text-3xl font-bold tracking-tight text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
+        className="w-full border-none bg-transparent p-0 text-2xl font-bold tracking-tight text-foreground placeholder:font-normal placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0 sm:text-3xl"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Untitled"

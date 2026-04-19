@@ -79,7 +79,7 @@ export function Header({ showNav = true }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-6">
+      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Left: app name */}
         <Link
           href="/journal"
@@ -144,12 +144,19 @@ export function Header({ showNav = true }: HeaderProps) {
             </>
           )}
           {showNav && (
-            <Button asChild size="sm" className="hidden md:inline-flex">
-              <Link href="/new">
-                <PenLine className="h-3.5 w-3.5" />
-                New entry
-              </Link>
-            </Button>
+            <>
+              <Button asChild size="sm" className="hidden md:inline-flex">
+                <Link href="/new">
+                  <PenLine className="h-3.5 w-3.5" />
+                  New entry
+                </Link>
+              </Button>
+              <Button asChild size="icon" className="md:hidden">
+                <Link href="/new" aria-label="New entry">
+                  <PenLine className="h-4 w-4" />
+                </Link>
+              </Button>
+            </>
           )}
           <ThemeToggle />
           <DropdownMenu>

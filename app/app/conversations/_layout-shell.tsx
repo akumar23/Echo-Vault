@@ -43,7 +43,7 @@ export function ConversationsLayout({
             <Button
               variant="outline"
               size="icon"
-              className="fixed bottom-20 left-4 z-40 shadow-lg"
+              className="fixed left-3 top-[4rem] z-30 h-9 w-9 shadow-lg"
               aria-label="Open history"
             >
               <Menu className="h-4 w-4" />

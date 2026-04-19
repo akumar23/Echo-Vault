@@ -113,7 +113,7 @@ export default function EntriesPage() {
                       )}
                       {entry.tags && entry.tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {entry.tags.slice(0, 4).map((tag) => (
+                          {entry.tags.slice(0, 3).map((tag) => (
                             <Badge
                               key={tag}
                               variant="secondary"
@@ -122,6 +122,14 @@ export default function EntriesPage() {
                               {tag}
                             </Badge>
                           ))}
+                          {entry.tags.length > 3 && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] font-normal"
+                            >
+                              +{entry.tags.length - 3}
+                            </Badge>
+                          )}
                         </div>
                       )}
                     </div>

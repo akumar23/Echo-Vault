@@ -49,7 +49,7 @@ function ReflectionsPanelContent() {
           </span>
         </div>
         {reflection.reflection && (
-          <div className="prose prose-sm max-w-none text-foreground opacity-80">
+          <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] text-foreground opacity-80 [&_pre]:overflow-x-auto [&_pre]:max-w-full">
             <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
           </div>
         )}
@@ -62,7 +62,7 @@ function ReflectionsPanelContent() {
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          <div className="prose prose-sm max-w-none">
+          <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] [&_pre]:overflow-x-auto [&_pre]:max-w-full">
             <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
           </div>
         </AlertDescription>
@@ -73,7 +73,7 @@ function ReflectionsPanelContent() {
   return (
     <div>
       {reflection.reflection ? (
-        <div className="prose prose-sm max-w-none text-foreground">
+        <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full">
           <ReactMarkdown>{reflection.reflection}</ReactMarkdown>
         </div>
       ) : (

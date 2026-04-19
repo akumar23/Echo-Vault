@@ -135,7 +135,7 @@ export function ChatPanel({
       <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-2">
         <Badge variant="secondary" className="gap-1.5">
           <ScopeIcon className="h-3 w-3" />
-          <span className="truncate max-w-[22ch]">{scopeLabel}</span>
+          <span className="truncate max-w-[14ch] sm:max-w-[22ch] md:max-w-[32ch]" title={scopeLabel}>{scopeLabel}</span>
         </Badge>
         <div className="flex items-center gap-1.5">
           {!isConnected && (
@@ -200,11 +200,11 @@ export function ChatPanel({
           {messages.map((message, index) => (
             <MessageBubble key={index} role={message.role}>
               {message.role === 'assistant' ? (
-                <div className="prose prose-sm max-w-none break-words text-foreground">
+                <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all">
                   <ReactMarkdown>{message.content}</ReactMarkdown>
                 </div>
               ) : (
-                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed">
                   {message.content}
                 </p>
               )}
@@ -214,7 +214,7 @@ export function ChatPanel({
           {streamingContent && (
             <div aria-live="polite" aria-atomic="false">
               <MessageBubble role="assistant">
-                <div className="prose prose-sm max-w-none break-words text-foreground">
+                <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] text-foreground [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all">
                   <ReactMarkdown>{streamingContent}</ReactMarkdown>
                 </div>
                 <span
@@ -277,7 +277,7 @@ function MessageBubble({
     >
       <div
         className={cn(
-          'max-w-[85%] space-y-1 rounded-lg px-4 py-3 shadow-sm',
+          'min-w-0 max-w-[85%] space-y-1 overflow-hidden rounded-lg px-4 py-3 shadow-sm',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'border border-border bg-card text-card-foreground',
