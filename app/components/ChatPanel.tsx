@@ -5,7 +5,6 @@ import ReactMarkdown from 'react-markdown'
 import { useChat } from '@/hooks/useChat'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -47,7 +46,7 @@ export function ChatPanel({
   onToggleExpanded,
 }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('')
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -74,14 +73,10 @@ export function ChatPanel({
   const ScopeIcon = activeEntryId ? BookOpen : Library
 
   // Auto-scroll to bottom when new content arrives, but only when the user
-  // is already parked at the bottom. Scroll the viewport directly rather
-  // than using scrollIntoView — the latter walks up the ancestor chain and
-  // can nudge the page/document, which feels jerky.
+  // is already parked at the bottom.
   useEffect(() => {
     if (!autoScroll) return
-    const viewport = scrollContainerRef.current?.querySelector<HTMLDivElement>(
-      '[data-slot="scroll-area-viewport"]',
-    )
+    const viewport = viewportRef.current
     if (!viewport) return
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
   }, [messages, streamingContent, autoScroll])
@@ -89,9 +84,7 @@ export function ChatPanel({
   // Track whether the user is pinned to the bottom of the scroll region so
   // the auto-scroll behavior above knows when to engage.
   useEffect(() => {
-    const viewport = scrollContainerRef.current?.querySelector<HTMLDivElement>(
-      '[data-slot="scroll-area-viewport"]',
-    )
+    const viewport = viewportRef.current
     if (!viewport) return
     const handleScroll = () => {
       const distanceFromBottom =
@@ -188,7 +181,7 @@ export function ChatPanel({
         </div>
       )}
 
-      <ScrollArea ref={scrollContainerRef} className="flex-1">
+      <div ref={viewportRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 pb-28 sm:gap-8 sm:px-6 sm:pb-8">
           {messages.length === 0 && !streamingContent && (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/60 py-12 text-center text-muted-foreground">
@@ -225,7 +218,7 @@ export function ChatPanel({
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       <form
         onSubmit={handleSubmit}
