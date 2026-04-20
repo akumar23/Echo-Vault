@@ -1,30 +1,21 @@
-# Override file to use native Ollama with Metal GPU acceleration
-# This disables the Docker Ollama container and connects to host Ollama instead
+# Local dev override.
+#
+# The original version of this file disabled the containerized Ollama (via
+# `deploy.replicas: 0`, which is a swarm-only directive and ignored by
+# `docker compose up`) and redirected api/worker to a host-installed Ollama
+# at `host.docker.internal`. That setup required Ollama to be installed on
+# the host; without it, api/worker get DNS errors and no embeddings run.
+#
+# This version points api+worker back at the containerized Ollama so seeding
+# works without a host install. To switch back to host Ollama for Metal
+# acceleration, restore the previous content from git history and install
+# Ollama locally.
 
 services:
-  # Disable the Ollama container by setting replicas to 0
-  ollama:
-    deploy:
-      replicas: 0
-
-  # Update API to connect to host Ollama
   api:
     environment:
-      # host.docker.internal allows Docker containers to connect to host services
-      OLLAMA_URL: http://host.docker.internal:11434
-    # Remove dependency on Ollama container
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      OLLAMA_URL: http://ollama:11434
 
-  # Update worker to connect to host Ollama
   worker:
     environment:
-      OLLAMA_URL: http://host.docker.internal:11434
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      OLLAMA_URL: http://ollama:11434

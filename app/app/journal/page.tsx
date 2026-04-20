@@ -17,7 +17,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  ArrowRight,
   BookOpen,
   MessageCircle,
   PenLine,
@@ -264,43 +263,31 @@ export default function JournalDashboard() {
           </Card>
         </section>
 
-        {/* Reflection */}
+        {/* Reflection with inline Chat entry point */}
         <section className="mb-8">
           <Card variant="bordered">
-            <CardHeader className="flex-row items-center gap-2 space-y-0">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <CardTitle className="text-base">Reflection</CardTitle>
+            <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base">Reflection</CardTitle>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 rounded-full px-3"
+              >
+                <Link
+                  href="/conversations"
+                  aria-label="Chat with your journal"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Chat
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent>
               <ReflectionBlock />
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Chat CTA — entry point into the all-entries conversation */}
-        <section className="mb-8">
-          <Card variant="bordered">
-            <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <MessageCircle className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Chat with your journal
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    Ask questions across every entry. Open a single entry to
-                    scope the chat to just that one.
-                  </p>
-                </div>
-              </div>
-              <Button asChild size="sm" className="self-start sm:self-auto">
-                <Link href="/conversations">
-                  Start chatting
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
             </CardContent>
           </Card>
         </section>

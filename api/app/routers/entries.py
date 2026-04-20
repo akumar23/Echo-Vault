@@ -1,3 +1,6 @@
+import logging
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -6,14 +9,31 @@ from app.database import get_db
 from app.models.user import User
 from app.models.entry import Entry
 from app.models.embedding import EntryEmbedding
-from app.schemas.entry import EntryCreate, EntryUpdate, EntryResponse
+from app.schemas.entry import (
+    EchoItem,
+    EchoesResponse,
+    EntryCreate,
+    EntryUpdate,
+    EntryResponse,
+)
 from app.schemas.search import SearchResult
 from app.core.dependencies import get_current_user
 from app.core.rate_limit import limiter
 from app.jobs.embedding_job import enqueue_embedding_job
 from app.jobs.mood_job import enqueue_mood_job
 from app.jobs.reflection_job import enqueue_entry_reflection_job
-from app.services.reflection_cache import reflection_cache
+from app.services.reflection_cache import (
+    reflection_cache,
+    get_cached_echoes,
+    set_cached_echoes,
+    invalidate_reverse_prompt,
+)
+from app.services.llm_service import (
+    LLMProviderError,
+    get_generation_service_for_user,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -46,6 +66,8 @@ async def create_entry(
 
     # Invalidate cached reflection so it regenerates on next view
     reflection_cache.delete_reflection(current_user.id)
+    # Fresh content may change which gaps exist — drop the cached reverse prompt.
+    invalidate_reverse_prompt(current_user.id)
 
     return entry
 
@@ -137,6 +159,107 @@ async def get_related_entries(
         }
         for row in rows
     ]
+
+
+@router.get("/{entry_id}/echoes", response_model=EchoesResponse)
+@limiter.limit("30/minute")
+async def get_entry_echoes(
+    request: Request,
+    entry_id: int,
+    k: int = Query(3, ge=1, le=5),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return entries that semantically resonate with the given entry,
+    wrapped in a short LLM-generated observation about what connects them.
+
+    Cached in Redis for 7 days per (user, entry). Returns `status='empty'`
+    when the user has no other entries yet, and `status='pending'` if the
+    source embedding isn't ready yet.
+    """
+    entry = db.query(Entry).filter(
+        Entry.id == entry_id,
+        Entry.user_id == current_user.id,
+        Entry.is_deleted == False,
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+
+    cached = get_cached_echoes(current_user.id, entry_id)
+    if cached:
+        return EchoesResponse(**cached)
+
+    source = db.query(EntryEmbedding).filter(
+        EntryEmbedding.entry_id == entry_id,
+        EntryEmbedding.is_active == True,
+    ).first()
+    if not source:
+        # Embedding job hasn't completed yet — don't cache, let the client retry.
+        return EchoesResponse(echoes=[], framing=None, status="pending")
+
+    distance = EntryEmbedding.embedding.cosine_distance(source.embedding)
+    similarity_expr = 1 - (distance / 2)
+
+    rows = db.query(
+        Entry.id.label("entry_id"),
+        Entry.title,
+        Entry.content,
+        Entry.created_at,
+        similarity_expr.label("score"),
+    ).join(
+        EntryEmbedding, Entry.id == EntryEmbedding.entry_id
+    ).filter(
+        Entry.user_id == current_user.id,
+        Entry.is_deleted == False,
+        Entry.id != entry_id,
+        EntryEmbedding.is_active == True,
+    ).order_by(distance).limit(k).all()
+
+    echoes = [
+        EchoItem(
+            entry_id=row.entry_id,
+            title=row.title,
+            content=row.content,
+            created_at=row.created_at,
+            similarity=float(row.score),
+        )
+        for row in rows
+    ]
+
+    if not echoes:
+        payload = {"echoes": [], "framing": None, "status": "empty"}
+        set_cached_echoes(current_user.id, entry_id, payload)
+        return EchoesResponse(**payload)
+
+    # Generate the 'then vs now' framing paragraph.
+    llm_service = get_generation_service_for_user(db, current_user.id)
+    framing: Optional[str] = None
+    try:
+        framing = await llm_service.generate_echo_framing(
+            current_entry=entry.content,
+            current_entry_date=entry.created_at.strftime("%B %d, %Y"),
+            echoes=[
+                {
+                    "date": e.created_at.strftime("%B %d, %Y"),
+                    "content": e.content,
+                }
+                for e in echoes
+            ],
+        )
+    except (LLMProviderError, httpx.HTTPError, httpx.TimeoutException):
+        logger.warning(
+            "Echo framing generation failed; returning echoes without framing",
+            extra={"user_id": current_user.id, "entry_id": entry_id},
+            exc_info=True,
+        )
+
+    payload = {
+        "echoes": [e.model_dump(mode="json") for e in echoes],
+        "framing": framing,
+        "status": "complete",
+    }
+    set_cached_echoes(current_user.id, entry_id, payload)
+    return EchoesResponse(echoes=echoes, framing=framing, status="complete")
 
 
 @router.get("/{entry_id}/reflection", response_model=EntryReflectionResponse)

@@ -9,6 +9,7 @@ class PromptType(str, enum.Enum):
     QUESTION = "question"
     PROMPT = "prompt"
     CONTINUATION = "continuation"
+    REVERSE = "reverse"
 
 
 class PromptAction(str, enum.Enum):
@@ -25,7 +26,7 @@ class PromptInteraction(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     prompt_text = Column(Text, nullable=False)
-    prompt_type = Column(String, nullable=False)  # question, prompt, continuation
+    prompt_type = Column(String, nullable=False)  # question, prompt, continuation, reverse
     action = Column(String, nullable=False)  # displayed, clicked, cycled, dismissed, completed
     entry_id = Column(Integer, ForeignKey("entries.id", ondelete="CASCADE"), nullable=True)
     source_entry_id = Column(Integer, ForeignKey("entries.id", ondelete="SET NULL"), nullable=True)

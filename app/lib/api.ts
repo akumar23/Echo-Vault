@@ -183,10 +183,36 @@ export interface SuggestionsResponse {
 
 export interface PromptInteraction {
   prompt_text: string
-  prompt_type: 'question' | 'prompt' | 'continuation'
+  prompt_type: 'question' | 'prompt' | 'continuation' | 'reverse'
   action: 'displayed' | 'clicked' | 'cycled' | 'dismissed' | 'completed'
   entry_id?: number
   source_entry_id?: number
+}
+
+export interface EchoItem {
+  entry_id: number
+  title: string | null
+  content: string
+  created_at: string
+  similarity: number
+}
+
+export interface EchoesResponse {
+  echoes: EchoItem[]
+  framing: string | null
+  status: 'complete' | 'empty' | 'pending'
+}
+
+export interface ReversePromptResponse {
+  prompt_text: string
+  gap_subject: string
+  rationale: string
+  has_sufficient_data: boolean
+}
+
+export interface WelcomeBackResponse {
+  message: string
+  has_sufficient_data: boolean
 }
 
 export interface PromptStats {
@@ -249,8 +275,8 @@ export const entriesApi = {
   delete: async (id: number) => {
     await api.delete(`/entries/${id}`)
   },
-  getRelated: async (id: number, k = 3): Promise<SearchResult[]> => {
-    const response = await api.get(`/entries/${id}/related`, { params: { k } })
+  getEchoes: async (id: number, k = 3): Promise<EchoesResponse> => {
+    const response = await api.get(`/entries/${id}/echoes`, { params: { k } })
     return response.data
   },
 }
@@ -329,6 +355,14 @@ export const promptsApi = {
   },
   getStats: async (): Promise<PromptStatsResponse> => {
     const response = await api.get('/prompts/stats')
+    return response.data
+  },
+  getReverse: async (): Promise<ReversePromptResponse> => {
+    const response = await api.get('/prompts/reverse')
+    return response.data
+  },
+  getWelcomeBack: async (): Promise<WelcomeBackResponse> => {
+    const response = await api.get('/prompts/welcome-back')
     return response.data
   },
 }

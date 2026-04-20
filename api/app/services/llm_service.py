@@ -440,6 +440,122 @@ class LLMService:
 
         return default_result
 
+    async def generate_echo_framing(
+        self,
+        current_entry: str,
+        current_entry_date: str,
+        echoes: List[Dict[str, str]],
+    ) -> str:
+        """Generate a 2-3 sentence observation describing what connects the
+        current entry to other semantically resonant entries from the user's
+        journal. Echoes may be recent or years old; the framing should read
+        naturally either way.
+
+        `echoes` is a list of dicts with keys: 'date', 'content'.
+        """
+        echoes_text = "\n\n".join(
+            f"[{e['date']}]\n{e['content'][:400]}" for e in echoes
+        )
+
+        system_prompt = (
+            "You are a thoughtful journaling companion. The user is reading one of their "
+            "journal entries. You are given that entry plus a few other entries of theirs "
+            "that semantically resonate with it — some may be recent, some older.\n\n"
+            "Write 2-3 sentences that gently observe the thread connecting them. "
+            "Be warm, specific, and non-judgmental. Do NOT list the entries. Do NOT ask "
+            "questions. Do NOT give advice. Just notice the thread out loud, like a close "
+            "friend who remembers.\n\n"
+            "RULES:\n"
+            "- Under 400 characters total.\n"
+            "- No bullet points, no headings, no emojis.\n"
+            "- Reference dates naturally only when it adds clarity (e.g. 'last spring', "
+            "  'a few days ago'); skip them for very recent matches.\n"
+            "- Output only the observation itself, no preamble."
+        )
+        user_prompt = (
+            f"Today's entry [{current_entry_date}]:\n{current_entry[:1200]}\n\n"
+            f"Echoes from the past:\n{echoes_text}\n\n"
+            "Write the observation:"
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        response = await self.chat_completion(messages, temperature=0.7)
+        return response.strip().strip('"').strip()
+
+    async def generate_reverse_prompt(self, entries_text: str) -> Dict[str, str]:
+        """Mine the user's recent corpus for something REFERENCED but NOT EXPLORED
+        and return a gentle prompt inviting them to write about it.
+
+        Returns dict with keys: gap_subject, rationale, prompt_text.
+        """
+        system_prompt = (
+            "You analyze journal entries to find gaps — topics, people, events, or "
+            "emotions the user has REFERENCED but never EXPLORED in depth. Find exactly "
+            "one such gap and craft a gentle prompt inviting reflection on it.\n\n"
+            "OUTPUT FORMAT (JSON only):\n"
+            "{\n"
+            '  "gap_subject": "2-4 words naming the gap (e.g., \'your mother\', \'the new job\', \'that recurring dream\')",\n'
+            '  "rationale": "One sentence describing what you noticed (e.g., \'mentioned often but rarely described in depth\')",\n'
+            '  "prompt_text": "A writing prompt under 20 words that invites exploring this gap"\n'
+            "}\n\n"
+            "RULES:\n"
+            "- The gap must be REFERENCED in the entries but NOT explored. Not something never mentioned.\n"
+            "- Be specific: 'your brother Mark' beats 'family'.\n"
+            "- The prompt should feel inviting, not accusatory — no 'why haven't you' phrasing.\n"
+            "- Output ONLY valid JSON, no explanations."
+        )
+        user_prompt = f"Recent journal entries:\n\n{entries_text}\n\nFind the gap (JSON only):"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        response = await self.chat_completion(messages, temperature=0.7)
+        return self._parse_reverse_prompt_response(response)
+
+    def _parse_reverse_prompt_response(self, response_text: str) -> Dict[str, str]:
+        """Parse the gap-mining JSON response with defensive fallbacks."""
+        try:
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                return {
+                    "gap_subject": str(parsed.get("gap_subject", "something on your mind")).strip(),
+                    "rationale": str(parsed.get("rationale", "")).strip(),
+                    "prompt_text": str(parsed.get("prompt_text", "")).strip(),
+                }
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            self._logger.debug("Failed to parse reverse prompt JSON", exc_info=True)
+        raise ValueError("Could not parse reverse prompt JSON")
+
+    async def generate_welcome_back(self, entries_text: str) -> str:
+        """Generate a short (1-2 sentence) personalized greeting based on the user's
+        past week of entries. Returned as a plain string, no quotes."""
+        system_prompt = (
+            "You are a warm, thoughtful companion welcoming the user back to their "
+            "journal. Based on what they wrote in the past week, craft a short "
+            "(1-2 sentence) greeting that acknowledges where they've been without "
+            "summarizing or quoting. Be specific but not intrusive.\n\n"
+            "RULES:\n"
+            "- Under 180 characters.\n"
+            "- No questions. No lists. No emojis.\n"
+            "- No cliches ('How are you?', 'Welcome back to your journey').\n"
+            "- Feel like a friend noticing you, not a chatbot.\n"
+            "- Output ONLY the message itself, no quotes, no preamble."
+        )
+        user_prompt = f"Past week's entries:\n\n{entries_text}\n\nGreeting:"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        response = await self.chat_completion(messages, temperature=0.8)
+        # Defensive cleanup: LLMs sometimes wrap in quotes or add leading "Greeting:"
+        cleaned = response.strip().strip('"').strip("'").strip()
+        if cleaned.lower().startswith("greeting:"):
+            cleaned = cleaned[len("greeting:"):].strip()
+        return cleaned[:400]  # Hard cap so broken models can't blow up the toast
+
     async def extract_common_theme(self, entry_texts: List[str]) -> str:
         """
         Identify the common theme across multiple journal entries.

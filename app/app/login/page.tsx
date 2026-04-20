@@ -4,8 +4,10 @@ import { useState, Suspense } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { getErrorMessage } from '@/lib/errors'
 import { loginSchema, type LoginFormData } from '@/lib/validation'
+import { promptsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,6 +48,18 @@ function LoginForm() {
     setSubmitting(true)
     try {
       await login(result.data.email, result.data.password)
+
+      // Kick off the welcome-back greeting in parallel with the redirect.
+      // We deliberately don't await — the LLM call can take 1-3s, and the user
+      // shouldn't stare at the login button in the meantime. Sonner persists
+      // toasts across route changes so it'll land on /journal.
+      promptsApi
+        .getWelcomeBack()
+        .then(({ message }) => {
+          if (message) toast(message, { duration: 8000 })
+        })
+        .catch(() => {})
+
       const returnUrl = searchParams.get('returnUrl') || '/journal'
       router.push(returnUrl)
     } catch (err) {

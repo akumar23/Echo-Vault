@@ -6,7 +6,7 @@ from datetime import datetime
 class PromptInteractionCreate(BaseModel):
     """Request to log a prompt interaction."""
     prompt_text: str
-    prompt_type: Literal["question", "prompt", "continuation"]
+    prompt_type: Literal["question", "prompt", "continuation", "reverse"]
     action: Literal["displayed", "clicked", "cycled", "dismissed", "completed"]
     entry_id: Optional[int] = None
     source_entry_id: Optional[int] = None
@@ -33,6 +33,20 @@ class WritingSuggestion(BaseModel):
     type: Literal["question", "prompt", "continuation"]
     context: str
     source_entry_id: Optional[int] = None
+
+
+class ReversePromptResponse(BaseModel):
+    """A gap-mining prompt generated from under-explored topics in the user's corpus."""
+    prompt_text: str
+    gap_subject: str
+    rationale: str
+    has_sufficient_data: bool
+
+
+class WelcomeBackResponse(BaseModel):
+    """A short, personalized greeting generated from the user's past week of entries."""
+    message: str
+    has_sufficient_data: bool
 
 
 class SuggestionsResponse(BaseModel):

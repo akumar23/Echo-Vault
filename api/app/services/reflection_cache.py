@@ -128,3 +128,76 @@ class ReflectionCache:
 
 
 reflection_cache = ReflectionCache()
+
+
+# --- Feature caches ---------------------------------------------------------
+#
+# Simple key/value Redis helpers for features that only need get/set with TTL.
+# They deliberately reuse ``reflection_cache.redis`` so we don't open extra
+# connection pools — free-tier Redis tiers have strict connection limits.
+
+_ECHOES_KEY_PREFIX = "echoes:v2:user:"
+_ECHOES_TTL = 60 * 60 * 24 * 7  # 7 days
+
+_REVERSE_PROMPT_KEY_PREFIX = "reverse_prompt:user:"
+_REVERSE_PROMPT_TTL = 60 * 60 * 24  # 24 hours
+
+
+def _safe_get(key: str) -> Optional[dict]:
+    """Read a JSON blob from Redis. Returns None on miss or transport error."""
+    try:
+        data = reflection_cache.redis.get(key)
+    except redis.RedisError:
+        logger.warning("Redis GET failed for key %s", key, exc_info=True)
+        return None
+    if not data:
+        return None
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        logger.warning("Redis cache corruption: non-JSON value at key %s", key)
+        return None
+
+
+def _safe_setex(key: str, ttl: int, payload: dict) -> None:
+    """Write a JSON blob to Redis with TTL. Failures are logged and swallowed."""
+    try:
+        reflection_cache.redis.setex(key, ttl, json.dumps(payload, default=str))
+    except redis.RedisError:
+        logger.warning("Redis SETEX failed for key %s", key, exc_info=True)
+
+
+def get_cached_echoes(user_id: int, entry_id: int) -> Optional[dict]:
+    """Return cached echoes payload for (user, entry) or None."""
+    return _safe_get(f"{_ECHOES_KEY_PREFIX}{user_id}:entry:{entry_id}")
+
+
+def set_cached_echoes(user_id: int, entry_id: int, payload: dict) -> None:
+    """Cache echoes payload for (user, entry) with 7-day TTL."""
+    _safe_setex(
+        f"{_ECHOES_KEY_PREFIX}{user_id}:entry:{entry_id}",
+        _ECHOES_TTL,
+        payload,
+    )
+
+
+def get_cached_reverse_prompt(user_id: int) -> Optional[dict]:
+    """Return cached reverse prompt for user or None."""
+    return _safe_get(f"{_REVERSE_PROMPT_KEY_PREFIX}{user_id}")
+
+
+def set_cached_reverse_prompt(user_id: int, payload: dict) -> None:
+    """Cache reverse prompt for user with 24-hour TTL."""
+    _safe_setex(
+        f"{_REVERSE_PROMPT_KEY_PREFIX}{user_id}",
+        _REVERSE_PROMPT_TTL,
+        payload,
+    )
+
+
+def invalidate_reverse_prompt(user_id: int) -> None:
+    """Drop cached reverse prompt (e.g., when user writes a new entry)."""
+    try:
+        reflection_cache.redis.delete(f"{_REVERSE_PROMPT_KEY_PREFIX}{user_id}")
+    except redis.RedisError:
+        logger.warning("Redis DELETE failed for reverse_prompt user %s", user_id)

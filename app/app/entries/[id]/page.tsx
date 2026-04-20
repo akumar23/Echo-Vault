@@ -11,7 +11,8 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { WritingEditor } from '@/components/WritingEditor'
 import { EntryReflectionPanel } from '@/components/EntryReflectionPanel'
-import { RelatedMemories } from '@/components/RelatedMemories'
+import { Echoes } from '@/components/Echoes'
+import { ReversePrompt } from '@/components/ReversePrompt'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Header } from '@/components/Header'
 import { Button } from '@/components/ui/button'
@@ -89,15 +90,6 @@ export default function EntryDetailPage() {
             <span className="text-sm text-muted-foreground">
               {format(new Date(entry.created_at), 'MMMM d, yyyy')}
             </span>
-            <Button asChild variant="ghost" size="sm">
-              <Link
-                href={`/conversations/${entry.id}`}
-                aria-label="Ask about this entry"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Chat</span>
-              </Link>
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="More actions">
@@ -130,18 +122,36 @@ export default function EntryDetailPage() {
           saving={updateMutation.isPending}
         />
 
-        <RelatedMemories entryId={entryId} />
+        <Echoes entryId={entryId} />
 
-        {/* Reflection below */}
+        {/* Reflection with inline Chat entry point */}
         <Card variant="bordered" className="mt-10">
-          <CardHeader className="flex-row items-center gap-2 space-y-0">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <CardTitle className="text-base">Reflection</CardTitle>
+          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base">Reflection</CardTitle>
+            </div>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 rounded-full px-3"
+            >
+              <Link
+                href={`/conversations/${entry.id}`}
+                aria-label="Ask about this entry"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Chat
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent>
             <EntryReflectionPanel entryId={entryId} />
           </CardContent>
         </Card>
+
+        <ReversePrompt />
       </main>
     </ProtectedRoute>
   )

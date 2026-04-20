@@ -53,3 +53,19 @@ class EntryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EchoItem(BaseModel):
+    """A past entry surfaced as an 'echo' of the current one."""
+    entry_id: int
+    title: Optional[str]
+    content: str
+    created_at: datetime
+    similarity: float
+
+
+class EchoesResponse(BaseModel):
+    """A collection of echoes plus an LLM-generated 'then vs now' framing paragraph."""
+    echoes: List[EchoItem]
+    framing: Optional[str]
+    status: str  # "complete" | "empty" | "pending"

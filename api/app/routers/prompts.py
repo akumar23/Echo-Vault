@@ -20,13 +20,19 @@ from app.models.prompt_interaction import PromptInteraction
 from app.schemas.prompt import (
     PromptInteractionCreate,
     PromptInteractionResponse,
+    ReversePromptResponse,
     SuggestionsResponse,
+    WelcomeBackResponse,
     WritingSuggestion,
     PromptStats,
     PromptStatsResponse,
 )
 from app.core.dependencies import get_current_user
-from app.services.llm_service import get_generation_service_for_user
+from app.services.llm_service import LLMProviderError, get_generation_service_for_user
+from app.services.reflection_cache import (
+    get_cached_reverse_prompt,
+    set_cached_reverse_prompt,
+)
 
 router = APIRouter()
 
@@ -340,6 +346,136 @@ def _get_fallback_suggestions() -> List[WritingSuggestion]:
             context="Future focus",
         ),
     ]
+
+
+@router.get("/reverse", response_model=ReversePromptResponse)
+@limiter.limit("10/minute")
+async def get_reverse_prompt(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a single 'reverse prompt' that invites the user to write about
+    something they have REFERENCED in their corpus but not EXPLORED.
+
+    Cached in Redis for 24h per user and invalidated when a new entry is created.
+    Requires at least 5 entries in the last 30 days; otherwise returns a
+    fallback prompt with ``has_sufficient_data=False``.
+    """
+    cached = get_cached_reverse_prompt(current_user.id)
+    if cached:
+        return ReversePromptResponse(**cached)
+
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    recent_entries = (
+        db.query(Entry)
+        .filter(
+            Entry.user_id == current_user.id,
+            Entry.is_deleted.is_not(True),
+            Entry.created_at >= thirty_days_ago,
+        )
+        .order_by(Entry.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    if len(recent_entries) < 5:
+        # Don't cache the fallback — we want to retry once the user has written enough.
+        return ReversePromptResponse(
+            prompt_text="What's something you've been circling around but haven't quite written down yet?",
+            gap_subject="the unspoken",
+            rationale="Not enough recent entries to mine a specific gap yet.",
+            has_sufficient_data=False,
+        )
+
+    entries_text = "\n\n---\n\n".join(
+        f"[{e.created_at.strftime('%b %d')}] {(e.title or 'Untitled')}\n{e.content[:600]}"
+        for e in recent_entries[:20]
+    )
+
+    llm_service = get_generation_service_for_user(db, current_user.id)
+    try:
+        parsed = await llm_service.generate_reverse_prompt(entries_text)
+    except (LLMProviderError, httpx.HTTPError, httpx.TimeoutException, json.JSONDecodeError, ValueError):
+        logger.warning(
+            "Reverse prompt generation failed, returning fallback",
+            extra={"user_id": current_user.id},
+            exc_info=True,
+        )
+        # Soft fallback — still useful, just not personalized. Don't cache so we retry next request.
+        return ReversePromptResponse(
+            prompt_text="What's one thing you keep mentioning but haven't really sat with?",
+            gap_subject="the unexplored",
+            rationale="",
+            has_sufficient_data=True,
+        )
+
+    payload = {
+        "prompt_text": parsed["prompt_text"] or "What's one thing you keep mentioning but haven't really sat with?",
+        "gap_subject": parsed["gap_subject"] or "the unexplored",
+        "rationale": parsed["rationale"],
+        "has_sufficient_data": True,
+    }
+    set_cached_reverse_prompt(current_user.id, payload)
+    return ReversePromptResponse(**payload)
+
+
+@router.get("/welcome-back", response_model=WelcomeBackResponse)
+@limiter.limit("10/minute")
+async def get_welcome_back(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a short, personalized greeting based on the user's past week.
+
+    Intentionally not cached — meant to be called once per actual login
+    (triggered by the frontend on login form submission) so the message is
+    always fresh. Falls back to a generic line when there's not enough data
+    or the LLM is unreachable.
+    """
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    recent_entries = (
+        db.query(Entry)
+        .filter(
+            Entry.user_id == current_user.id,
+            Entry.is_deleted.is_not(True),
+            Entry.created_at >= seven_days_ago,
+        )
+        .order_by(Entry.created_at.desc())
+        .limit(15)
+        .all()
+    )
+
+    if len(recent_entries) < 2:
+        return WelcomeBackResponse(
+            message="Welcome back. A blank page is a good place to start.",
+            has_sufficient_data=False,
+        )
+
+    entries_text = "\n\n---\n\n".join(
+        f"[{e.created_at.strftime('%a')}] {e.content[:500]}"
+        for e in recent_entries[:10]
+    )
+
+    llm_service = get_generation_service_for_user(db, current_user.id)
+    try:
+        message = await llm_service.generate_welcome_back(entries_text)
+    except (LLMProviderError, httpx.HTTPError, httpx.TimeoutException):
+        logger.warning(
+            "Welcome-back generation failed, using fallback",
+            extra={"user_id": current_user.id},
+            exc_info=True,
+        )
+        return WelcomeBackResponse(
+            message="Welcome back. Ready when you are.",
+            has_sufficient_data=True,
+        )
+
+    if not message:
+        message = "Welcome back. Ready when you are."
+
+    return WelcomeBackResponse(message=message, has_sufficient_data=True)
 
 
 def _get_fallback_question() -> WritingSuggestion:
