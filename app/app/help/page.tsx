@@ -47,17 +47,17 @@ export default function HelpPage() {
 
           <h4 className="mb-2">How it works:</h4>
           <ol style={{ marginLeft: 'var(--space-5)', marginBottom: 'var(--space-4)' }}>
-            <li className="mb-2">When you write an entry, the AI converts it into a "vector" (a mathematical representation of meaning)</li>
+            <li className="mb-2">When you write an entry, the AI converts it into a &ldquo;vector&rdquo; (a mathematical representation of meaning)</li>
             <li className="mb-2">When you search, your query is also converted to a vector</li>
             <li>The system finds entries with similar meanings, not just matching words</li>
           </ol>
 
           <div className="alert alert--info">
             <p className="mb-2"><strong>Example:</strong></p>
-            <p className="mb-2">You search for: <em>"feeling anxious about deadlines"</em></p>
+            <p className="mb-2">You search for: <em>&ldquo;feeling anxious about deadlines&rdquo;</em></p>
             <p>
-              It finds entries about: "work stress", "pressure at the office", "worried about projects" -
-              even if those exact words weren't used!
+              It finds entries about: &ldquo;work stress&rdquo;, &ldquo;pressure at the office&rdquo;, &ldquo;worried about projects&rdquo; -
+              even if those exact words weren&rsquo;t used!
             </p>
           </div>
         </div>
@@ -71,11 +71,11 @@ export default function HelpPage() {
 
           <div className="alert alert--info">
             <p className="mb-2"><strong>Example:</strong></p>
-            <p className="mb-2">If you search for "work stress" and have 10 relevant entries:</p>
+            <p className="mb-2">If you search for &ldquo;work stress&rdquo; and have 10 relevant entries:</p>
             <ul style={{ marginLeft: 'var(--space-5)' }}>
-              <li>A very recent entry about work stress might rank #1 even if it's slightly less similar</li>
+              <li>A very recent entry about work stress might rank #1 even if it&rsquo;s slightly less similar</li>
               <li>An older entry needs to be much more relevant to rank high</li>
-              <li>You control this balance in Settings with the "Search Half-Life" setting</li>
+              <li>You control this balance in Settings with the &ldquo;Search Half-Life&rdquo; setting</li>
             </ul>
           </div>
         </div>
@@ -87,8 +87,8 @@ export default function HelpPage() {
         <div className="mb-6" style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
           <h3 className="mb-4">Search Half-Life</h3>
           <p className="mb-4">
-            Controls how quickly older entries decay in search results. This is the number of days it takes for an entry's
-            "recency score" to drop to half its original value.
+            Controls how quickly older entries decay in search results. This is the number of days it takes for an entry&rsquo;s
+            &ldquo;recency score&rdquo; to drop to half its original value.
           </p>
 
           <div className="alert alert--warning">
@@ -104,7 +104,7 @@ export default function HelpPage() {
         <div style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
           <h3 className="mb-4">Hard Delete vs Soft Delete</h3>
           <p className="mb-4">
-            When you use the "Forget" feature on an entry, you can choose between two deletion modes:
+            When you use the &ldquo;Forget&rdquo; feature on an entry, you can choose between two deletion modes:
           </p>
 
           <div className="mb-5">
@@ -112,8 +112,8 @@ export default function HelpPage() {
             <ul style={{ marginLeft: 'var(--space-5)' }}>
               <li>Entry is removed from search results</li>
               <li>Content is preserved - you can still access it directly</li>
-              <li>Embedding is zeroed out (can't be found by semantic search)</li>
-              <li>Good for: "Hide this from search but keep the memory"</li>
+              <li>Embedding is zeroed out (can&rsquo;t be found by semantic search)</li>
+              <li>Good for: &ldquo;Hide this from search but keep the memory&rdquo;</li>
             </ul>
           </div>
 
@@ -123,7 +123,7 @@ export default function HelpPage() {
               <li>Entry is permanently deleted from the database</li>
               <li>All associated data is removed (embeddings, attachments)</li>
               <li><strong>This action cannot be undone</strong></li>
-              <li>Good for: Complete privacy - "I never want to see this again"</li>
+              <li>Good for: Complete privacy - &ldquo;I never want to see this again&rdquo;</li>
             </ul>
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function HelpPage() {
         <div className="mb-5" style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
           <h3 className="mb-2">Creating Entries</h3>
           <ul style={{ marginLeft: 'var(--space-5)' }}>
-            <li>Click "New Entry" to create a journal entry</li>
+            <li>Click &ldquo;New Entry&rdquo; to create a journal entry</li>
             <li>Add a title (optional) and write your content</li>
             <li>Set your mood using the slider (1 = very negative, 5 = very positive)</li>
             <li>Add tags to categorize your entries</li>

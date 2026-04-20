@@ -18,12 +18,21 @@ export function useEntryReflection(
   enabled: boolean = true,
 ): UseEntryReflectionReturn {
   const [reflection, setReflection] = useState<EntryReflection | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startedAtRef = useRef<number>(0)
   const mountedRef = useRef(true)
+  const fetchOnceRef = useRef<(id: number) => Promise<void>>(async () => {})
+
+  // Derived loading state — true while waiting for an initial fetch or polling
+  // for a still-generating reflection. Switches off automatically on success
+  // or error without touching setState from inside an effect.
+  const isLoading =
+    enabled &&
+    entryId != null &&
+    error == null &&
+    (!reflection || reflection.status === 'generating')
 
   const clearPoll = useCallback(() => {
     if (pollTimeoutRef.current) {
@@ -38,28 +47,30 @@ export function useEntryReflection(
         const data = await reflectionsApi.getForEntry(id)
         if (!mountedRef.current) return
         setReflection(data)
-        setIsLoading(false)
         setError(null)
 
         const isTerminal = data.status === 'complete' || data.status === 'error'
         const timedOut = Date.now() - startedAtRef.current > MAX_POLL_MS
         if (!isTerminal && !timedOut) {
-          pollTimeoutRef.current = setTimeout(() => fetchOnce(id), POLL_INTERVAL_MS)
+          pollTimeoutRef.current = setTimeout(() => fetchOnceRef.current(id), POLL_INTERVAL_MS)
         }
       } catch {
         if (!mountedRef.current) return
         setError('Failed to load reflection')
-        setIsLoading(false)
       }
     },
     [],
   )
 
+  useEffect(() => {
+    fetchOnceRef.current = fetchOnce
+  }, [fetchOnce])
+
   const regenerate = useCallback(async () => {
     if (entryId == null) return
     clearPoll()
-    setIsLoading(true)
     setError(null)
+    setReflection(null)
     startedAtRef.current = Date.now()
     try {
       const data = await reflectionsApi.regenerateForEntry(entryId)
@@ -72,19 +83,19 @@ export function useEntryReflection(
     } catch {
       if (!mountedRef.current) return
       setError('Failed to regenerate reflection')
-      setIsLoading(false)
     }
   }, [entryId, clearPoll, fetchOnce])
 
   useEffect(() => {
     mountedRef.current = true
     if (!enabled || entryId == null) {
-      setIsLoading(false)
       return
     }
-    setIsLoading(true)
     startedAtRef.current = Date.now()
-    fetchOnce(entryId)
+    // Defer so setState inside fetchOnce doesn't trigger during effect commit.
+    queueMicrotask(() => {
+      if (mountedRef.current) fetchOnce(entryId)
+    })
 
     return () => {
       mountedRef.current = false

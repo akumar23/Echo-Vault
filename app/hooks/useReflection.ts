@@ -47,8 +47,10 @@ export function useReflection({
   const onCompleteRef = useRef(onComplete)
   const onErrorRef = useRef(onError)
 
-  onCompleteRef.current = onComplete
-  onErrorRef.current = onError
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+    onErrorRef.current = onError
+  }, [onComplete, onError])
 
   const closeConnection = useCallback(() => {
     if (eventSourceRef.current) {
@@ -146,11 +148,18 @@ export function useReflection({
   useEffect(() => {
     mountedRef.current = true
 
+    // Defer setState-triggering work so it doesn't run synchronously in the
+    // effect body. This avoids cascading renders while preserving behavior.
     if (enabled && !document.hidden) {
-      connectSSE()
+      queueMicrotask(() => {
+        if (mountedRef.current) connectSSE()
+      })
     } else if (!enabled) {
-      closeConnection()
-      setIsLoading(false)
+      queueMicrotask(() => {
+        if (!mountedRef.current) return
+        closeConnection()
+        setIsLoading(false)
+      })
     }
 
     return () => {

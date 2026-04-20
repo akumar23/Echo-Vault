@@ -1,7 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+
+const subscribeOnlineStatus = (onChange: () => void) => {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => {
+    window.removeEventListener('online', onChange)
+    window.removeEventListener('offline', onChange)
+  }
+}
+
+const getOnlineSnapshot = () => !navigator.onLine
+const getServerSnapshot = () => false
 
 /**
  * Detects online/offline status and shows toast notifications.
@@ -9,38 +21,30 @@ import { useToast } from '@/contexts/ToastContext'
  */
 export function OfflineDetector() {
   const { toast } = useToast()
-  const [isOffline, setIsOffline] = useState(false)
-  const [hasShownOfflineToast, setHasShownOfflineToast] = useState(false)
+  const isOffline = useSyncExternalStore(
+    subscribeOnlineStatus,
+    getOnlineSnapshot,
+    getServerSnapshot,
+  )
+  const hasShownOfflineToastRef = useRef(false)
+  const prevIsOfflineRef = useRef(isOffline)
 
   useEffect(() => {
-    // Set initial state
-    setIsOffline(!navigator.onLine)
+    if (isOffline === prevIsOfflineRef.current) return
 
-    const handleOnline = () => {
-      setIsOffline(false)
-      if (hasShownOfflineToast) {
-        toast({ message: "You're back online!", type: 'success' })
-      }
-    }
-
-    const handleOffline = () => {
-      setIsOffline(true)
-      setHasShownOfflineToast(true)
+    if (isOffline) {
+      hasShownOfflineToastRef.current = true
       toast({
         message: "You're offline. Some features may not work.",
         type: 'warning',
         duration: 6000,
       })
+    } else if (hasShownOfflineToastRef.current) {
+      toast({ message: "You're back online!", type: 'success' })
     }
 
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [toast, hasShownOfflineToast])
+    prevIsOfflineRef.current = isOffline
+  }, [isOffline, toast])
 
   if (!isOffline) return null
 

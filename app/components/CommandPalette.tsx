@@ -73,21 +73,19 @@ export function CommandPalette() {
   }, [toggle])
 
   // Reset query whenever the palette closes so reopening feels fresh.
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
     if (!open) {
       setQuery('')
       setDebouncedQuery('')
     }
-  }, [open])
+  }
 
-  // Debounce the search query
+  // Debounce the search query. Always use setTimeout so setState stays async.
   useEffect(() => {
     const trimmed = query.trim()
-    if (!trimmed) {
-      setDebouncedQuery('')
-      return
-    }
-    const t = setTimeout(() => setDebouncedQuery(trimmed), 250)
+    const t = setTimeout(() => setDebouncedQuery(trimmed), trimmed ? 250 : 0)
     return () => clearTimeout(t)
   }, [query])
 

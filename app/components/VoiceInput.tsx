@@ -1,7 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react'
 import { Mic, MicOff, Loader2 } from 'lucide-react'
+
+const subscribeNoop = () => () => {}
+const getSpeechRecognitionSupport = () =>
+  !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+const getSpeechRecognitionSupportServer = () => false
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void
@@ -59,15 +64,13 @@ declare global {
 
 export function VoiceInput({ onTranscript, disabled = false }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
-  const [isSupported, setIsSupported] = useState(false)
+  const isSupported = useSyncExternalStore(
+    subscribeNoop,
+    getSpeechRecognitionSupport,
+    getSpeechRecognitionSupportServer,
+  )
   const [interimTranscript, setInterimTranscript] = useState('')
   const recognitionRef = useRef<SpeechRecognition | null>(null)
-
-  // Check for browser support
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    setIsSupported(!!SpeechRecognition)
-  }, [])
 
   const startListening = useCallback(() => {
     if (!isSupported || disabled) return

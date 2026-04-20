@@ -1,7 +1,7 @@
 "use client";
 
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Header } from "@/components/Header";
@@ -202,18 +202,18 @@ export default function SettingsPage() {
   const [embeddingUrlError, setEmbeddingUrlError] = useState("");
   const [showEmbeddingToken, setShowEmbeddingToken] = useState(false);
 
-  // Sync state when settings load
-  useEffect(() => {
-    if (settings) {
-      setHalfLife(settings.search_half_life_days ?? 30);
-      setHardDelete(settings.privacy_hard_delete ?? false);
-      setGenerationUrl(settings.generation_url ?? "");
-      setGenerationModel(settings.generation_model ?? "");
-      setEmbeddingUrl(settings.embedding_url ?? "");
-      setEmbeddingModel(settings.embedding_model ?? "");
-      // Tokens are write-only — never hydrated.
-    }
-  }, [settings]);
+  // Sync state when settings load (render-time pattern).
+  const [prevSettings, setPrevSettings] = useState(settings);
+  if (settings && settings !== prevSettings) {
+    setPrevSettings(settings);
+    setHalfLife(settings.search_half_life_days ?? 30);
+    setHardDelete(settings.privacy_hard_delete ?? false);
+    setGenerationUrl(settings.generation_url ?? "");
+    setGenerationModel(settings.generation_model ?? "");
+    setEmbeddingUrl(settings.embedding_url ?? "");
+    setEmbeddingModel(settings.embedding_model ?? "");
+    // Tokens are write-only — never hydrated.
+  }
 
   const validateUrl = (
     url: string,

@@ -1,6 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
+
+const subscribeMounted = () => () => {}
+const getMountedSnapshot = () => true
+const getMountedServerSnapshot = () => false
 
 interface AmbientBackgroundProps {
   mood?: number | null
@@ -26,11 +30,11 @@ const staticShapes: Shape[] = [
 ]
 
 export function AmbientBackground({ mood }: AmbientBackgroundProps) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = useSyncExternalStore(
+    subscribeMounted,
+    getMountedSnapshot,
+    getMountedServerSnapshot,
+  )
 
   // Get mood-based color
   const getMoodColor = (m: number | null | undefined): string => {

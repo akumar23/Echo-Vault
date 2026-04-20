@@ -265,7 +265,7 @@ export function MoodNudge() {
           </span>
           {isPreferred && <span className="mood-nudge__preferred">Works for you</span>}
         </div>
-        <p className="mood-nudge__prompt-text">"{currentSuggestion.text}"</p>
+        <p className="mood-nudge__prompt-text">&ldquo;{currentSuggestion.text}&rdquo;</p>
         <button
           className="mood-nudge__new-prompt"
           onClick={handleNewPrompt}

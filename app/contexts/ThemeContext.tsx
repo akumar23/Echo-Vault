@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useSyncExternalStore } from 'react'
 
 type Theme = 'light' | 'dark' | 'system'
 
@@ -12,50 +12,55 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+const STORAGE_KEY = 'theme'
+const THEME_CHANGE_EVENT = 'echocault-theme-change'
+
 function getSystemTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('system')
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light')
-  const [mounted, setMounted] = useState(false)
+const subscribeTheme = (callback: () => void) => {
+  window.addEventListener('storage', callback)
+  window.addEventListener(THEME_CHANGE_EVENT, callback)
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  media.addEventListener('change', callback)
+  return () => {
+    window.removeEventListener('storage', callback)
+    window.removeEventListener(THEME_CHANGE_EVENT, callback)
+    media.removeEventListener('change', callback)
+  }
+}
 
-  useEffect(() => {
-    setMounted(true)
-    const stored = localStorage.getItem('theme') as Theme | null
-    if (stored && ['light', 'dark', 'system'].includes(stored)) {
-      setThemeState(stored)
-    }
-  }, [])
+const getThemeSnapshot = (): Theme => {
+  const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
+  return stored && ['light', 'dark', 'system'].includes(stored) ? stored : 'system'
+}
+
+const getThemeServerSnapshot = (): Theme => 'system'
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getThemeServerSnapshot)
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  )
+
+  const resolvedTheme: 'light' | 'dark' = mounted
+    ? theme === 'system'
+      ? getSystemTheme()
+      : theme
+    : 'light'
 
   useEffect(() => {
     if (!mounted) return
-
-    const resolved = theme === 'system' ? getSystemTheme() : theme
-    setResolvedTheme(resolved)
-
-    document.documentElement.setAttribute('data-theme', resolved)
-    localStorage.setItem('theme', theme)
-  }, [theme, mounted])
-
-  useEffect(() => {
-    if (!mounted || theme !== 'system') return
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = () => {
-      const resolved = getSystemTheme()
-      setResolvedTheme(resolved)
-      document.documentElement.setAttribute('data-theme', resolved)
-    }
-
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [theme, mounted])
+    document.documentElement.setAttribute('data-theme', resolvedTheme)
+  }, [mounted, resolvedTheme])
 
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme)
+    localStorage.setItem(STORAGE_KEY, newTheme)
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT))
   }
 
   if (!mounted) {

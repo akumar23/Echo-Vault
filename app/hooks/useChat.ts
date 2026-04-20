@@ -85,7 +85,11 @@ export function useChat({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const shouldReconnectRef = useRef(true)
   const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
+  const connectRef = useRef<() => Promise<void>>(async () => {})
+
+  useEffect(() => {
+    onErrorRef.current = onError
+  }, [onError])
 
   const reset = useCallback(() => {
     setMessages([])
@@ -225,7 +229,7 @@ export function useChat({
 
           reconnectTimeoutRef.current = setTimeout(() => {
             if (mountedRef.current && shouldReconnectRef.current) {
-              connect()
+              connectRef.current()
             }
           }, delay)
         } else if (nextAttempt > maxReconnectAttempts) {
@@ -237,6 +241,10 @@ export function useChat({
       })
     }
   }, [entryId, maxReconnectAttempts, reconnectBaseDelay])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   const sendMessage = useCallback((content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -274,14 +282,16 @@ export function useChat({
     if (enabled) {
       shouldReconnectRef.current = true
       connect()
-    } else {
-      disconnect()
-      reset()
+      return () => {
+        // Torn down when enabled flips to false or on unmount.
+        mountedRef.current = false
+        disconnect()
+        reset()
+      }
     }
 
     return () => {
       mountedRef.current = false
-      disconnect()
     }
   }, [enabled, connect, disconnect, reset])
 

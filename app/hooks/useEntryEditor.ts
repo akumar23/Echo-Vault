@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Entry } from '@/lib/api'
 
 export interface EntryEditorState {
@@ -42,17 +42,17 @@ export function useEntryEditor(options: UseEntryEditorOptions = {}): EntryEditor
   const [tagInput, setTagInput] = useState('')
   const [mood, setMood] = useState(entry?.mood_user ?? 3)
   const [useLlmPrediction, setUseLlmPrediction] = useState(entry?.mood_user == null)
+  const [prevEntry, setPrevEntry] = useState(entry)
 
-  // Sync state when entry prop changes
-  useEffect(() => {
-    if (entry) {
-      setTitle(entry.title ?? '')
-      setContent(entry.content ?? '')
-      setTags(entry.tags ?? [])
-      setMood(entry.mood_user ?? 3)
-      setUseLlmPrediction(entry.mood_user == null)
-    }
-  }, [entry])
+  // Sync state when entry prop changes (render-time pattern).
+  if (entry && entry !== prevEntry) {
+    setPrevEntry(entry)
+    setTitle(entry.title ?? '')
+    setContent(entry.content ?? '')
+    setTags(entry.tags ?? [])
+    setMood(entry.mood_user ?? 3)
+    setUseLlmPrediction(entry.mood_user == null)
+  }
 
   const handleAddTag = useCallback(() => {
     const trimmed = normalizeTags ? tagInput.trim().toLowerCase() : tagInput.trim()

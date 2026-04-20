@@ -78,16 +78,19 @@ function TrendsChartContent({ days }: TrendsChartContentProps) {
     registerChartJs().then(() => setChartReady(true))
   }, [])
 
-  // Get theme colors from CSS variables
-  const colors = useMemo(() => ({
-    accent: getCssVar('--accent', '#E07A5A'),
-    accentSubtle: getCssVar('--accent-subtle', 'rgba(224, 122, 90, 0.18)'),
-    bgPrimary: getCssVar('--bg-primary', '#131210'),
-    bgSurface: getCssVar('--bg-surface', '#1A1917'),
-    textMuted: getCssVar('--text-muted', '#9A958D'),
-    border: getCssVar('--border', '#3D3A36'),
-    textPrimary: getCssVar('--text-primary', '#E8E4DE'),
-  }), [chartReady]) // Re-compute when chart is ready (client-side)
+  // Re-compute when chart is ready so CSS variables are read client-side.
+  const colors = useMemo(() => {
+    void chartReady
+    return {
+      accent: getCssVar('--accent', '#E07A5A'),
+      accentSubtle: getCssVar('--accent-subtle', 'rgba(224, 122, 90, 0.18)'),
+      bgPrimary: getCssVar('--bg-primary', '#131210'),
+      bgSurface: getCssVar('--bg-surface', '#1A1917'),
+      textMuted: getCssVar('--text-muted', '#9A958D'),
+      border: getCssVar('--border', '#3D3A36'),
+      textPrimary: getCssVar('--text-primary', '#E8E4DE'),
+    }
+  }, [chartReady])
 
   // Process chart data with metadata for tooltips
   // Must be called before any conditional returns to satisfy React hooks rules

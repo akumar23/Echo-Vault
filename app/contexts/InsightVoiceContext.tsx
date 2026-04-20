@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useSyncExternalStore, ReactNode } from 'react'
 
 export type InsightVoice = 'gentle' | 'direct' | 'playful'
 
@@ -128,21 +128,34 @@ interface InsightVoiceProviderProps {
 }
 
 const STORAGE_KEY = 'echocault-insight-voice'
+const VOICE_CHANGE_EVENT = 'echocault-insight-voice-change'
+
+const subscribeVoice = (callback: () => void) => {
+  window.addEventListener('storage', callback)
+  window.addEventListener(VOICE_CHANGE_EVENT, callback)
+  return () => {
+    window.removeEventListener('storage', callback)
+    window.removeEventListener(VOICE_CHANGE_EVENT, callback)
+  }
+}
+
+const getVoiceSnapshot = (): InsightVoice => {
+  const stored = localStorage.getItem(STORAGE_KEY) as InsightVoice | null
+  return stored && ['gentle', 'direct', 'playful'].includes(stored) ? stored : 'gentle'
+}
+
+const getVoiceServerSnapshot = (): InsightVoice => 'gentle'
 
 export function InsightVoiceProvider({ children }: InsightVoiceProviderProps) {
-  const [voice, setVoiceState] = useState<InsightVoice>('gentle')
-
-  // Load preference from localStorage after hydration
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as InsightVoice | null
-    if (stored && ['gentle', 'direct', 'playful'].includes(stored)) {
-      setVoiceState(stored)
-    }
-  }, [])
+  const voice = useSyncExternalStore(
+    subscribeVoice,
+    getVoiceSnapshot,
+    getVoiceServerSnapshot,
+  )
 
   const setVoice = (newVoice: InsightVoice) => {
-    setVoiceState(newVoice)
     localStorage.setItem(STORAGE_KEY, newVoice)
+    window.dispatchEvent(new Event(VOICE_CHANGE_EVENT))
   }
 
   return (
