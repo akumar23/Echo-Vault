@@ -37,7 +37,9 @@ async def semantic_search(
     # Get query embedding using user's configured embedding service
     embedding_service = get_embedding_service_for_user(db, current_user.id)
     try:
-        query_embedding = await embedding_service.get_embedding(search_request.query)
+        query_embedding = await embedding_service.get_embedding(
+            search_request.query, input_type="query"
+        )
     except (httpx.HTTPError, httpx.TimeoutException):
         logger.warning(
             "Semantic search failed: embedding provider error",

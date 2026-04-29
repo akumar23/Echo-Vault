@@ -19,6 +19,7 @@ import json
 import re
 import logging
 from typing import List, Dict, Optional, Any, AsyncGenerator
+from urllib.parse import urlparse
 
 from app.core.config import settings as app_settings
 
@@ -75,6 +76,9 @@ class LLMService:
         self.api_token = api_token
         self.service_type = service_type
         self._logger = logging.getLogger(__name__)
+        # One-shot guard so we log at most once per service instance when a
+        # caller passes input_type to a non-Voyage provider (avoids log spam).
+        self._logged_dropped_input_type = False
 
     def _raise_for_provider_status(self, response: httpx.Response, endpoint: str) -> None:
         """Inspect the response; on non-2xx, log the body snippet and raise LLMProviderError."""
@@ -122,17 +126,47 @@ class LLMService:
             headers=headers
         )
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(
+        self,
+        text: str,
+        input_type: Optional[str] = None,
+    ) -> List[float]:
         """
         Get embedding vector using OpenAI-compatible embeddings endpoint.
 
-        Uses POST /v1/embeddings with {"model": "...", "input": "..."}
+        Uses POST /v1/embeddings with {"model": "...", "input": "..."}.
+
+        `input_type` is forwarded only when set; Voyage uses "document" / "query"
+        for retrieval-tuned embeddings, while OpenAI/Ollama ignore or reject it,
+        so callers should only pass it for Voyage-compatible providers.
         """
+        payload: Dict[str, Any] = {"model": self.model, "input": text}
+
+        # Detect Voyage by hostname (not substring) so URLs like
+        # https://api.voyageai.com.evil.tld or paths containing "voyageai.com"
+        # don't get matched. Hostname is parsed once per call; cheap.
+        hostname = (urlparse(self.base_url).hostname or "").lower()
+        is_voyage = hostname == "voyageai.com" or hostname.endswith(".voyageai.com")
+
+        if input_type:
+            if is_voyage:
+                payload["input_type"] = input_type
+            elif not self._logged_dropped_input_type:
+                self._logger.info(
+                    "Dropping input_type for non-Voyage embedding provider",
+                    extra={
+                        "base_url": self.base_url,
+                        "hostname": hostname,
+                        "input_type": input_type,
+                    },
+                )
+                self._logged_dropped_input_type = True
+
         endpoint = f"{self.base_url}/v1/embeddings"
         async with self._create_client() as client:
             response = await client.post(
                 endpoint,
-                json={"model": self.model, "input": text},
+                json=payload,
                 timeout=30.0
             )
             self._raise_for_provider_status(response, endpoint)

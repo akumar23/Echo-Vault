@@ -1,8 +1,12 @@
 import logging
+from datetime import datetime, timedelta, timezone
 
 import httpx
+import redis as redis_lib
+from celery import group
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
+from sqlalchemy import and_, exists
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
@@ -15,12 +19,13 @@ from app.schemas.entry import (
     EntryCreate,
     EntryUpdate,
     EntryResponse,
+    RetryFailedResponse,
 )
 from app.schemas.search import SearchResult
 from app.core.dependencies import get_current_user
 from app.core.rate_limit import limiter
-from app.jobs.embedding_job import enqueue_embedding_job
-from app.jobs.mood_job import enqueue_mood_job
+from app.jobs.embedding_job import create_embedding_task, enqueue_embedding_job
+from app.jobs.mood_job import infer_mood_task, enqueue_mood_job
 from app.jobs.reflection_job import enqueue_entry_reflection_job
 from app.services.reflection_cache import (
     reflection_cache,
@@ -70,6 +75,158 @@ async def create_entry(
     invalidate_reverse_prompt(current_user.id)
 
     return entry
+
+
+_RETRY_FAILED_CAP = 500
+# Recency gate: don't retry entries whose first-pass jobs haven't had a chance
+# to run yet. Celery time_limit is 120s; with backoff this gives ~2x safety.
+_RETRY_MIN_AGE = timedelta(minutes=5)
+# TTL for the per-entry idempotency lock. Long enough to cover Celery
+# time_limit (120s) plus exponential retry backoff (max 300s) with margin.
+_RETRY_LOCK_TTL_SECONDS = 600
+_RETRY_EMBED_LOCK_PREFIX = "retry:embed:"
+_RETRY_MOOD_LOCK_PREFIX = "retry:mood:"
+
+
+def _build_retry_query(db: Session, user_id: int, now: datetime):
+    """Return a base SQLAlchemy query over ``Entry.id`` with the retry-eligibility
+    guards baked in: user scope, not soft-deleted, and old enough for the
+    original Celery job to have run.
+
+    Soft-deleted ("forgotten") entries MUST stay out of every retry path —
+    re-embedding them would feed the user's deleted content back through
+    the LLM, a privacy regression. Baking ``is_deleted.is_(False)`` in here
+    (rather than at each call site) prevents a future refactor from
+    accidentally dropping it.
+    """
+    return db.query(Entry.id).filter(
+        Entry.user_id == user_id,
+        Entry.is_deleted.is_(False),
+        Entry.created_at < (now - _RETRY_MIN_AGE),
+    )
+
+
+def _missing_embedding_predicate():
+    """Return the SQL predicate for "entry has no active embedding row".
+
+    Uses ``.correlate(Entry)`` so the inner EXISTS correlates against the
+    outer ``entries`` table even if a future refactor adds another join that
+    introduces a second alias — defensive belt-and-braces.
+    """
+    return ~exists().where(
+        and_(
+            EntryEmbedding.entry_id == Entry.id,
+            EntryEmbedding.is_active.is_(True),
+        )
+    ).correlate(Entry)
+
+
+def _try_acquire_retry_lock(key: str) -> bool:
+    """Acquire a Redis SETNX lock with TTL. Returns True if we got the lock,
+    False if another retry is already in flight for this entry.
+
+    Reuses the shared ``reflection_cache.redis`` client (no new connection
+    pool — free-tier Redis has tight connection limits). On Redis transport
+    failure we deliberately fail OPEN (return True) because the cost of a
+    duplicate enqueue is one extra LLM call, while the cost of failing
+    closed is the user can't retry at all.
+    """
+    try:
+        # nx=True means SET only if not exists; ex sets the TTL atomically.
+        acquired = reflection_cache.redis.set(
+            key, "1", nx=True, ex=_RETRY_LOCK_TTL_SECONDS
+        )
+        return bool(acquired)
+    except redis_lib.RedisError:
+        logger.warning(
+            "Redis SETNX failed for retry lock; failing open",
+            extra={"key": key},
+            exc_info=True,
+        )
+        return True
+
+
+@router.post("/retry-failed", response_model=RetryFailedResponse)
+@limiter.limit("3/minute")
+async def retry_failed_entries(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Re-enqueue embedding and mood jobs for entries the worker never processed
+    (typically because LLM settings were misconfigured).
+
+    Guards:
+    - Per-call cap of ``_RETRY_FAILED_CAP`` per job type — keeps the queue
+      from being flooded. Clients should call again when ``capped`` is true.
+    - Recency gate: only entries older than ``_RETRY_MIN_AGE`` are eligible,
+      so a brand-new entry whose Celery job is still mid-flight doesn't get
+      double-enqueued.
+    - Redis SETNX lock per (entry_id, job_type) prevents the user from
+      double-enqueueing by clicking retry twice or while a job is still in
+      its retry-backoff window. Locked entries are reported in
+      ``*_skipped_locked``.
+    """
+    now = datetime.now(timezone.utc)
+
+    # Fetch +1 over the cap so we can detect "capped" in a single query.
+    embed_rows = _build_retry_query(db, current_user.id, now).filter(
+        _missing_embedding_predicate()
+    ).limit(_RETRY_FAILED_CAP + 1).all()
+    embed_capped = len(embed_rows) > _RETRY_FAILED_CAP
+    embed_candidates = [row[0] for row in embed_rows[:_RETRY_FAILED_CAP]]
+
+    mood_rows = _build_retry_query(db, current_user.id, now).filter(
+        Entry.mood_inferred.is_(None)
+    ).limit(_RETRY_FAILED_CAP + 1).all()
+    mood_capped = len(mood_rows) > _RETRY_FAILED_CAP
+    mood_candidates = [row[0] for row in mood_rows[:_RETRY_FAILED_CAP]]
+
+    # Filter by idempotency lock: only enqueue entries whose lock we acquire.
+    embed_targets: List[int] = []
+    embed_skipped_locked = 0
+    for entry_id in embed_candidates:
+        if _try_acquire_retry_lock(f"{_RETRY_EMBED_LOCK_PREFIX}{entry_id}"):
+            embed_targets.append(entry_id)
+        else:
+            embed_skipped_locked += 1
+
+    mood_targets: List[int] = []
+    mood_skipped_locked = 0
+    for entry_id in mood_candidates:
+        if _try_acquire_retry_lock(f"{_RETRY_MOOD_LOCK_PREFIX}{entry_id}"):
+            mood_targets.append(entry_id)
+        else:
+            mood_skipped_locked += 1
+
+    # Batch-enqueue with Celery groups: one Redis round-trip per group rather
+    # than N synchronous .delay() calls. Also shows up nicely in Flower.
+    if embed_targets:
+        group(create_embedding_task.s(eid) for eid in embed_targets).apply_async()
+    if mood_targets:
+        group(infer_mood_task.s(eid) for eid in mood_targets).apply_async()
+
+    capped = embed_capped or mood_capped
+
+    logger.info(
+        "Retry-failed batch enqueued",
+        extra={
+            "user_id": current_user.id,
+            "embedding_enqueued": len(embed_targets),
+            "mood_enqueued": len(mood_targets),
+            "embedding_skipped_locked": embed_skipped_locked,
+            "mood_skipped_locked": mood_skipped_locked,
+            "capped": capped,
+        },
+    )
+
+    return RetryFailedResponse(
+        embedding_jobs_enqueued=len(embed_targets),
+        mood_jobs_enqueued=len(mood_targets),
+        embedding_skipped_locked=embed_skipped_locked,
+        mood_skipped_locked=mood_skipped_locked,
+        capped=capped,
+    )
 
 
 @router.get("", response_model=List[EntryResponse])

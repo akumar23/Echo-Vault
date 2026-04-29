@@ -42,6 +42,7 @@ def create_embedding_task(entry_id: int):
     try:
         entry = db.query(Entry).filter(Entry.id == entry_id).first()
         if not entry:
+            logger.warning(f"Entry {entry_id} not found for embedding generation")
             return
 
         # Get user-specific embedding service
@@ -49,8 +50,10 @@ def create_embedding_task(entry_id: int):
 
         # Get embedding using OpenAI-compatible API
         text_to_embed = f"{entry.title or ''} {entry.content}"
-        embedding_vector = asyncio.run(embedding_service.get_embedding(text_to_embed))
-        
+        embedding_vector = asyncio.run(
+            embedding_service.get_embedding(text_to_embed, input_type="document")
+        )
+
         # Delete old embeddings for this entry
         db.query(EntryEmbedding).filter(EntryEmbedding.entry_id == entry_id).delete()
 
@@ -62,6 +65,8 @@ def create_embedding_task(entry_id: int):
         )
         db.add(embedding)
         db.commit()
+
+        logger.info(f"Successfully generated embedding for entry {entry_id}")
     finally:
         db.close()
 

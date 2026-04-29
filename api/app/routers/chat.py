@@ -128,7 +128,7 @@ async def authenticate_websocket(websocket: WebSocket, ticket: Optional[str]) ->
 async def get_related_entries(user_id: int, query: str, embedding_service, k: int = 3) -> List[Dict]:
     """Get semantically related entries using pgvector (short-lived session)."""
     try:
-        query_embedding = await embedding_service.get_embedding(query)
+        query_embedding = await embedding_service.get_embedding(query, input_type="query")
 
         with get_db_session() as db:
             distance = EntryEmbedding.embedding.cosine_distance(query_embedding)

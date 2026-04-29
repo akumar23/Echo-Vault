@@ -69,3 +69,24 @@ class EchoesResponse(BaseModel):
     echoes: List[EchoItem]
     framing: Optional[str]
     status: str  # "complete" | "empty" | "pending"
+
+
+class RetryFailedResponse(BaseModel):
+    """Counts for the retry-failed endpoint.
+
+    `*_jobs_enqueued` is the number of jobs actually pushed to Celery.
+    `*_skipped_locked` is the number of eligible entries that already had a
+    Redis idempotency lock in place (i.e., a previous retry is still
+    in-flight). `capped` is true when more eligible entries exist than the
+    per-call cap allowed us to scan, so the client should call again.
+
+    Note: We deliberately do NOT report exact pending totals because that
+    would require an extra full COUNT query against the eligible set. The
+    `capped` flag is the actionable signal — when true, retry; when false,
+    you've drained the queue.
+    """
+    embedding_jobs_enqueued: int
+    mood_jobs_enqueued: int
+    embedding_skipped_locked: int
+    mood_skipped_locked: int
+    capped: bool
