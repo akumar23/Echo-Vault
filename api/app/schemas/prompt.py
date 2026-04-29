@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime
 
 
 class PromptInteractionCreate(BaseModel):
     """Request to log a prompt interaction."""
-    prompt_text: str
+    prompt_text: str = Field(..., min_length=1, max_length=2000)
     prompt_type: Literal["question", "prompt", "continuation", "reverse"]
     action: Literal["displayed", "clicked", "cycled", "dismissed", "completed"]
     entry_id: Optional[int] = None

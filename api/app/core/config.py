@@ -46,7 +46,8 @@ class Settings(BaseSettings):
                 )
         return v
 
-    # Cookie settings — set COOKIE_SECURE=true and COOKIE_SAME_SITE=none in production (HTTPS + cross-origin)
+    # Cookie settings — set COOKIE_SECURE=true in production. Keep SAME_SITE=lax;
+    # cookies are first-party because the Vercel rewrite proxies /api to the backend.
     cookie_secure: bool = False
     cookie_same_site: str = "lax"
 

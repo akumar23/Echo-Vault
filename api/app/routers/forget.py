@@ -1,5 +1,4 @@
 import logging
-import os
 import pathlib
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -37,8 +36,11 @@ def _safe_delete_file(filepath_relative: str) -> None:
         )
         return
 
-    # Ensure the resolved path is actually inside the upload directory
-    if not str(target).startswith(str(upload_base) + os.sep):
+    # Ensure the resolved path is strictly *inside* the upload directory.
+    # is_relative_to handles symlink-escape (resolve() follows symlinks so any
+    # link pointing outside upload_base produces a path that fails this check)
+    # and also rejects target == upload_base (we never delete the dir itself).
+    if target == upload_base or not target.is_relative_to(upload_base):
         logger.error(
             "Path traversal attempt blocked",
             extra={"path": filepath_relative, "resolved": str(target)},

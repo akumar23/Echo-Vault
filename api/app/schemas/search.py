@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -36,8 +36,8 @@ class DateRange(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: str
-    k: int = 10
+    query: str = Field(..., min_length=1, max_length=2000)
+    k: int = Field(10, ge=1, le=100)
     date_range: Optional[DateRange] = None
     tags: Optional[List[str]] = None
 

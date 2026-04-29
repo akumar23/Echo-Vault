@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from app.core.rate_limit import limiter
@@ -38,12 +38,27 @@ router = APIRouter()
 
 
 @router.post("/interaction", response_model=PromptInteractionResponse)
+@limiter.limit("60/minute")
 async def log_prompt_interaction(
+    request: Request,
     interaction: PromptInteractionCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Log a prompt interaction (displayed, clicked, cycled, dismissed, completed)."""
+    # Verify any referenced entry IDs belong to the current user to prevent IDOR.
+    referenced_ids = {
+        eid for eid in (interaction.entry_id, interaction.source_entry_id) if eid is not None
+    }
+    if referenced_ids:
+        owned_count = (
+            db.query(func.count(Entry.id))
+            .filter(Entry.id.in_(referenced_ids), Entry.user_id == current_user.id)
+            .scalar()
+        )
+        if owned_count != len(referenced_ids):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+
     db_interaction = PromptInteraction(
         user_id=current_user.id,
         prompt_text=interaction.prompt_text,
@@ -476,58 +491,3 @@ async def get_welcome_back(
         message = "Welcome back. Ready when you are."
 
     return WelcomeBackResponse(message=message, has_sufficient_data=True)
-
-
-def _get_fallback_question() -> WritingSuggestion:
-    """Return a fallback question suggestion."""
-    return WritingSuggestion(
-        id=str(uuid.uuid4()),
-        text="What patterns have you noticed in your thoughts lately?",
-        type="question",
-        context="Self-reflection",
-    )
-
-
-def _get_fallback_prompt(avg_mood: float) -> WritingSuggestion:
-    """Return a fallback prompt suggestion based on mood."""
-    if avg_mood <= 2:
-        text = "Write about one small thing that brought you comfort recently."
-    elif avg_mood >= 4:
-        text = "Describe a recent moment that made you smile."
-    else:
-        text = "Write about something you're curious about right now."
-
-    return WritingSuggestion(
-        id=str(uuid.uuid4()),
-        text=text,
-        type="prompt",
-        context="Mood-based suggestion",
-    )
-
-
-def _get_fallback_continuation(entries: List[Entry]) -> WritingSuggestion:
-    """Return a fallback continuation suggestion."""
-    if entries:
-        entry = entries[0]
-        entry_date = entry.created_at
-        if entry_date.date() == datetime.now(timezone.utc).date():
-            date_str = "earlier today"
-        elif (datetime.now(timezone.utc) - entry_date).days == 1:
-            date_str = "yesterday"
-        else:
-            date_str = entry_date.strftime("%A")
-
-        return WritingSuggestion(
-            id=str(uuid.uuid4()),
-            text=f"How are you feeling about what you wrote {date_str}?",
-            type="continuation",
-            context=f"From your entry {date_str}",
-            source_entry_id=entry.id,
-        )
-
-    return WritingSuggestion(
-        id=str(uuid.uuid4()),
-        text="Looking back at your recent entries, what stands out?",
-        type="continuation",
-        context="Reflection on recent writing",
-    )
