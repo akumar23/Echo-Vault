@@ -10,6 +10,7 @@ import { ToastProvider } from '@/contexts/ToastContext'
 import { BackendStatus } from '@/components/BackendStatus'
 import { SkipLink } from '@/components/SkipLink'
 import { OfflineDetector } from '@/components/OfflineDetector'
+import { OnboardingModal } from '@/components/OnboardingModal'
 import { Toaster } from '@/components/ui/sonner'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   {children}
                 </div>
               </MoodResponsiveLayout>
+              <OnboardingModal />
               <Toaster position="bottom-right" />
             </ToastProvider>
           </InsightVoiceProvider>

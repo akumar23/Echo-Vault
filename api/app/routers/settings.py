@@ -40,6 +40,8 @@ async def update_settings(
         settings.search_half_life_days = settings_data.search_half_life_days
     if settings_data.privacy_hard_delete is not None:
         settings.privacy_hard_delete = settings_data.privacy_hard_delete
+    if settings_data.onboarding_completed is not None:
+        settings.onboarding_completed = settings_data.onboarding_completed
 
     if settings_data.generation_url is not None:
         settings.generation_url = settings_data.generation_url or None

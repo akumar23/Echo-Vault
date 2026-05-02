@@ -129,6 +129,7 @@ export interface Settings {
   user_id: number
   search_half_life_days: number
   privacy_hard_delete: boolean
+  onboarding_completed: boolean
   generation_url: string | null
   generation_api_token_set: boolean
   generation_model: string | null
@@ -140,6 +141,7 @@ export interface Settings {
 export interface SettingsUpdate {
   search_half_life_days?: number
   privacy_hard_delete?: boolean
+  onboarding_completed?: boolean
   generation_url?: string | null
   generation_api_token?: string | null
   generation_model?: string | null

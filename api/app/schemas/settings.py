@@ -7,6 +7,7 @@ class SettingsUpdate(BaseModel):
     """Schema for updating user settings. All fields are optional for partial updates."""
     search_half_life_days: Optional[float] = None
     privacy_hard_delete: Optional[bool] = None
+    onboarding_completed: Optional[bool] = None
 
     # Generation LLM settings
     generation_url: Optional[str] = None
@@ -54,6 +55,7 @@ class SettingsResponse(BaseModel):
     user_id: int
     search_half_life_days: float
     privacy_hard_delete: bool
+    onboarding_completed: bool = False
 
     # Generation LLM settings
     generation_url: Optional[str] = None
@@ -79,6 +81,7 @@ class SettingsResponse(BaseModel):
                 'user_id': data.user_id,
                 'search_half_life_days': data.search_half_life_days,
                 'privacy_hard_delete': data.privacy_hard_delete,
+                'onboarding_completed': bool(data.onboarding_completed),
                 'generation_url': data.generation_url,
                 'generation_api_token_set': bool(data.generation_api_token),
                 'generation_model': data.generation_model,
