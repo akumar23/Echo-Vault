@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
-from app.core.encryption import decrypt_token, encrypt_token
+from app.core.encryption import encrypt_token
 from app.database import get_db
 from app.models.settings import Settings
 from app.models.user import User
@@ -36,28 +36,17 @@ async def update_settings(
         settings = Settings(user_id=current_user.id)
         db.add(settings)
 
-    if settings_data.search_half_life_days is not None:
-        settings.search_half_life_days = settings_data.search_half_life_days
-    if settings_data.privacy_hard_delete is not None:
-        settings.privacy_hard_delete = settings_data.privacy_hard_delete
-    if settings_data.onboarding_completed is not None:
-        settings.onboarding_completed = settings_data.onboarding_completed
+    # Only fields the client explicitly sent (PATCH-style semantics over PUT).
+    # Without this, sending `null` to clear a field is indistinguishable from
+    # omitting it, so users can never blank out a previously-set URL/model/token.
+    update_dict = settings_data.model_dump(exclude_unset=True)
+    token_fields = {"generation_api_token", "embedding_api_token"}
 
-    if settings_data.generation_url is not None:
-        settings.generation_url = settings_data.generation_url or None
-    if settings_data.generation_api_token is not None:
-        raw = settings_data.generation_api_token or None
-        settings.generation_api_token = encrypt_token(raw) if raw else None
-    if settings_data.generation_model is not None:
-        settings.generation_model = settings_data.generation_model or None
-
-    if settings_data.embedding_url is not None:
-        settings.embedding_url = settings_data.embedding_url or None
-    if settings_data.embedding_api_token is not None:
-        raw = settings_data.embedding_api_token or None
-        settings.embedding_api_token = encrypt_token(raw) if raw else None
-    if settings_data.embedding_model is not None:
-        settings.embedding_model = settings_data.embedding_model or None
+    for field, value in update_dict.items():
+        if field in token_fields:
+            setattr(settings, field, encrypt_token(value) if value else None)
+        else:
+            setattr(settings, field, value)
 
     db.commit()
     db.refresh(settings)
