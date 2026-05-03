@@ -22,7 +22,8 @@ import {
   useInsightVoice,
   InsightVoice,
 } from "@/contexts/InsightVoiceContext";
-import { useToast } from "@/contexts/ToastContext";
+import { toast } from "sonner";
+import { isAxiosError } from "axios";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -182,7 +183,6 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
   const updateMutation = useUpdateSettings();
   const { voice, setVoice } = useInsightVoice();
-  const { toast } = useToast();
 
   // Search settings
   const [halfLife, setHalfLife] = useState(30);
@@ -250,9 +250,28 @@ export default function SettingsPage() {
     );
   }
 
+  const extractErrorMessage = (error: unknown): string => {
+    if (isAxiosError(error)) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === "string") return detail;
+      if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+      if (error.response?.status) {
+        return `Save failed (${error.response.status}). Check your connection and try again.`;
+      }
+      return "Save failed — could not reach the server.";
+    }
+    return "Save failed — please try again.";
+  };
+
   const handleSave = () => {
-    if (!validateUrl(generationUrl, setGenerationUrlError)) return;
-    if (!validateUrl(embeddingUrl, setEmbeddingUrlError)) return;
+    if (!validateUrl(generationUrl, setGenerationUrlError)) {
+      toast.error("Fix the highlighted URL errors before saving.");
+      return;
+    }
+    if (!validateUrl(embeddingUrl, setEmbeddingUrlError)) {
+      toast.error("Fix the highlighted URL errors before saving.");
+      return;
+    }
 
     const update: SettingsUpdate = {
       search_half_life_days: halfLife,
@@ -268,9 +287,12 @@ export default function SettingsPage() {
 
     updateMutation.mutate(update, {
       onSuccess: () => {
-        toast({ message: "Settings updated!", type: "success" });
+        toast.success("Settings saved");
         setGenerationToken("");
         setEmbeddingToken("");
+      },
+      onError: (error) => {
+        toast.error(extractErrorMessage(error));
       },
     });
   };
@@ -283,12 +305,12 @@ export default function SettingsPage() {
 
     updateMutation.mutate(update, {
       onSuccess: () => {
-        toast({
-          message: `${
-            type === "generation" ? "Generation" : "Embedding"
-          } API token cleared!`,
-          type: "success",
-        });
+        toast.success(
+          `${type === "generation" ? "Generation" : "Embedding"} API token cleared`,
+        );
+      },
+      onError: (error) => {
+        toast.error(extractErrorMessage(error));
       },
     });
   };
