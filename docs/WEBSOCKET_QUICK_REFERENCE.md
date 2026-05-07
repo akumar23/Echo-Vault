@@ -1,114 +1,127 @@
-# WebSocket Authentication - Quick Reference
+# WebSocket Quick Reference
 
-## For Frontend Developers
+Short, copy-paste snippets for the chat WebSocket. For the full explanation of why the auth flow looks like this, see [WEBSOCKET_AUTH_GUIDE.md](WEBSOCKET_AUTH_GUIDE.md).
 
-### Connecting to WebSocket
+---
+
+## The endpoint
+
+```
+WS /chat/ws/chat?ticket={ticket}&entry_id={optional_entry_id}
+```
+
+Auth is a one-time ticket. You mint it with a normal HTTP call first.
+
+---
+
+## Connecting (TypeScript)
 
 ```typescript
-// Get token from localStorage
-const token = localStorage.getItem('access_token');
+// 1. Get a single-use ticket (cookie-authenticated)
+const res = await fetch(`${API_BASE}/auth/ws-ticket`, { credentials: 'include' });
+const { ticket } = await res.json();
 
-// Connect with authentication
-const ws = new WebSocket(
-  `ws://localhost:8000/ws/reflections/${entryId}?token=${token}`
-);
+// 2. Open the WebSocket
+const url = new URL('/chat/ws/chat', WS_BASE);
+url.searchParams.set('ticket', ticket);
+// Optional: pin the chat to one entry
+// url.searchParams.set('entry_id', String(entryId));
+
+const ws = new WebSocket(url.toString());
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  // msg.type is one of: "context", "token", "complete", "error"
+};
 ```
 
-### Error Codes
+`API_BASE` is your API host (`http://localhost:8000` in dev). `WS_BASE` is the same host with `http`/`https` swapped for `ws`/`wss`.
 
-| Code | Fix |
-|------|-----|
-| 4001 | Log in again (invalid/expired token) |
-| 4002 | User account inactive - contact support |
-| 4003 | You don't own this entry |
-| 4004 | Entry doesn't exist |
+---
 
-### React Hook (Copy-Paste Ready)
+## Sending a message
 
 ```typescript
-import { useEffect, useRef, useState } from 'react';
-
-export function useReflectionStream(entryId: number, token: string) {
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    const ws = new WebSocket(
-      `ws://localhost:8000/ws/reflections/${entryId}?token=${token}`
-    );
-
-    ws.onmessage = (e) => setText(prev => prev + e.data);
-
-    ws.onclose = (e) => {
-      if (e.code === 4001) {
-        localStorage.removeItem('access_token');
-        window.location.href = '/login';
-      } else if (e.code === 4003) {
-        setError('Unauthorized access');
-      }
-    };
-
-    wsRef.current = ws;
-    return () => ws.close();
-  }, [entryId, token]);
-
-  return { text, error };
-}
+ws.send(JSON.stringify({ type: 'chat_message', content: 'your text here' }));
 ```
 
-## For Backend Developers
+Limits per connection:
+- Max 2000 characters per message
+- Max 10 messages per minute
 
-### Testing Authentication
+---
+
+## Server message types
+
+```json
+// Initial — sent once after connect
+{ "type": "context", "scope": "all" | "entry", "reflection": "...", "entry": {...}, "related_entries": [...] }
+
+// Streaming response — repeated for each token
+{ "type": "token", "content": "..." }
+
+// End of one response
+{ "type": "complete" }
+
+// Something went wrong
+{ "type": "error", "message": "..." }
+```
+
+---
+
+## Close codes
+
+| Code | What to do |
+|---|---|
+| 1000 | Normal close, nothing to do |
+| 1011 | Server error — show a generic error |
+| 4001 | Ticket invalid/expired, or pinned entry not found — get a fresh ticket |
+| 4002 | User account inactive — send to login |
+
+---
+
+## Test from the terminal
 
 ```bash
-# Valid connection (replace YOUR_TOKEN and ENTRY_ID)
-websocat "ws://localhost:8000/ws/reflections/ENTRY_ID?token=YOUR_TOKEN"
+# 1. Login (saves cookie)
+curl -c cookies.txt -X POST http://localhost:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"yourpassword"}'
 
-# Should fail with 4001 (no token)
-websocat "ws://localhost:8000/ws/reflections/1"
+# 2. Mint a ticket
+TICKET=$(curl -s -b cookies.txt http://localhost:8000/auth/ws-ticket | jq -r .ticket)
+
+# 3. Connect (requires `brew install websocat` or `cargo install websocat`)
+websocat "ws://localhost:8000/chat/ws/chat?ticket=$TICKET"
+
+# Then type a JSON message:
+{"type":"chat_message","content":"Hello"}
 ```
 
-### Running Tests
+---
+
+## Run backend WebSocket tests
 
 ```bash
-cd api
-pytest tests/test_websocket.py -v
+cd api && pytest tests/test_websocket.py -v
 ```
 
-### Close Codes Reference
+---
 
-```python
-4001  # Authentication failure
-4002  # User not found/inactive
-4003  # Not authorized (doesn't own entry)
-4004  # Entry not found
-1011  # Server error
-```
+## Common problems
 
-## Quick Troubleshooting
+| Symptom | Likely fix |
+|---|---|
+| Closes with 4001 | Ticket is missing/expired/already used. Mint a new one right before connecting. |
+| Closes with 4001 + you passed `entry_id` | The entry doesn't exist or isn't yours. |
+| "Message too long" error | Trim to under 2000 chars. |
+| "Too many messages" error | Wait — limit is 10 per minute. |
+| Works in dev, breaks in production | Check `wss://` vs `ws://` and that the cookie is being sent (cross-origin needs a same-origin proxy). |
 
-**Problem:** Connection closes immediately
-**Solution:** Check that JWT token is valid and not expired
+---
 
-**Problem:** "Unauthorized access" error
-**Solution:** Verify you own the entry you're trying to access
+## Source files
 
-**Problem:** Tests failing
-**Solution:** Ensure test database is set up and Ollama service is mocked
-
-## Security Checklist
-
-- ✅ Token passed in query parameter (not headers - WebSocket limitation)
-- ✅ Token validated on every connection
-- ✅ User ownership verified before streaming
-- ✅ No sensitive data in error messages
-- ✅ Database sessions properly cleaned up
-- ✅ Connection manager cleanup in finally block
-
-## Need More Info?
-
-- Full Guide: `/docs/WEBSOCKET_AUTH_GUIDE.md`
-- Implementation Details: `/docs/SECURITY_FIX_SUMMARY.md`
-- Test Suite: `/api/tests/test_websocket.py`
-- Source Code: `/api/app/websocket.py`
+- Server: `api/app/routers/chat.py`
+- Tests: `api/tests/test_websocket.py`
+- Full guide: [WEBSOCKET_AUTH_GUIDE.md](WEBSOCKET_AUTH_GUIDE.md)

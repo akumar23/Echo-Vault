@@ -1,417 +1,310 @@
 # EchoVault
 
-**A self-hosted AI memory system that learns, recalls, and forgets.**
+**A self-hosted AI journal that learns from what you write — and forgets when you ask it to.**
 
-A privacy-first journaling application with local LLM inference, vector search, and intelligent insights. All processing can happen locally - no data leaves your machine.
+EchoVault is a private journaling app. You write entries; an AI on your own machine reads them, finds patterns, and helps you reflect on them. The catch most other journaling apps have — that your words get sent off to someone else's server — does not apply here. By default, nothing leaves your laptop.
+
+This README is the front door. If you have never set up a project like this before, do not worry: every step is covered, and every piece of jargon is explained the first time it appears.
 
 ---
 
-## Features
+## Who this is for
 
-### AI & Intelligence
+- **You journal and want better recall.** Search by what you meant, not the exact words you typed.
+- **You care about privacy.** You would rather your therapist's notes app not phone home to OpenAI.
+- **You want to learn how a modern full-stack app is built.** This is a working example with a Next.js frontend, a FastAPI backend, a vector database, a job queue, and a local LLM — all wired together.
 
-| Feature | Description |
-|---------|-------------|
-| **Bring Your Own LLM** | Connect any OpenAI API-compatible model server — Ollama, vLLM, LM Studio, or cloud providers like OpenAI, Groq, and Together.ai. Generation and embedding endpoints are configured separately per account, each with an optional API token. |
-| **Interactive Chat** | Real-time WebSocket-based chat with your reflection assistant. Ask follow-up questions about your entries and receive streaming responses with context from semantically related entries. |
-| **Reflections** | AI-generated reflections that analyze your recent entries and surface insights about themes, emotional patterns, and actionable suggestions. Cached in Redis and polled by the frontend — regenerated on demand or after writing new entries. |
-| **Mood Inference** | Automatic mood detection (1-5 scale) from entry content. Set your mood manually or let the AI infer it from your writing. |
-| **Automated Insights** | Nightly generation of summaries, themes, and actionable recommendations based on your recent journal entries. |
+If any of those words are new, read the [Glossary](#glossary) at the bottom first.
 
-### Search & Discovery
+---
 
-| Feature | Description |
-|---------|-------------|
-| **Semantic Search** | Find entries by meaning, not just keywords. Search for "feeling anxious about deadlines" and discover entries about "work stress" or "pressure at the office" - even if those exact words were not used. |
-| **Time-Decayed Scoring** | Balance relevance with recency. Recent entries that match your query rank higher, with configurable half-life settings to control the decay rate. |
-| **Vector Embeddings** | Every entry is converted to a high-dimensional vector (via mxbai-embed-large or your chosen model) enabling semantic similarity matching across your entire journal. |
+## What it does
 
-### User Experience
+### Things you can do as a user
 
-| Feature | Description |
-|---------|-------------|
-| **Neo-Brutalist Design** | Bold, distinctive UI with strong borders, high contrast, and intentional rawness. A fresh take on journaling interfaces. |
-| **Dark Mode Support** | Full light/dark/system theme support with smooth transitions. Toggle between themes or follow your system preference. |
-| **Distraction-Free Editor** | Minimal writing interface with inline title, collapsible toolbar, word count, and keyboard shortcuts (Cmd/Ctrl+S to save). AI mood detection toggle built in. |
-| **Mood Insights Dashboard** | Visual analytics showing mood trends over 7/30/90 days, weekly comparisons, writing streaks, best days, and AI-generated semantic insights about emotional patterns. |
-| **Tag Organization** | Add and manage tags for each entry. Quick tag input with keyboard support for efficient categorization. |
+- **Write journal entries** in a clean editor. Tag them, set a mood, or let the AI guess the mood for you.
+- **Search by meaning.** Type "feeling stuck at work" and find old entries that talk about being demotivated, even if you never used those exact words.
+- **Get AI reflections** — short, generated summaries that surface themes across your recent writing.
+- **Chat with your journal** in a streaming conversation, where the AI pulls in relevant past entries as context.
+- **Track mood trends** over 7, 30, or 90 days.
+- **Forget things.** Soft delete hides an entry from search; hard delete erases it permanently.
 
-### Privacy & Security
+### Things that happen behind the scenes
 
-| Feature | Description |
-|---------|-------------|
-| **Privacy-First Architecture** | Your journal data never leaves your machine when using local Ollama. No third-party API calls unless you explicitly configure a cloud LLM provider. |
-| **Soft Delete** | Remove entries from search results and active views while keeping the underlying data recoverable. |
-| **Hard Delete** | Permanently remove entries and all associated data (embeddings, metadata) with no recovery possible. |
-| **JWT Authentication** | Secure token-based authentication with configurable expiration. All API endpoints protected. |
-
-### Deployment Options
-
-| Feature | Description |
-|---------|-------------|
-| **Docker Compose** | Single-command deployment with all services (API, frontend, database, Redis, Ollama) orchestrated and configured. |
-| **Vercel Deployment** | Deploy the Next.js frontend to Vercel with the backend on Railway, Render, or Fly.io. Full deployment guide included. |
-| **Flexible Database** | PostgreSQL 16 with pgvector extension. Use local Docker or managed services like Neon or Supabase. |
-
-### Background Processing
-
-| Feature | Description |
-|---------|-------------|
-| **Celery Task Queue** | Asynchronous processing for embeddings, mood inference, and insights generation. Non-blocking entry creation with automatic retries on failure. |
-| **Scheduled Jobs** | Weekly insights triggered via external cron calling `POST /insights/cron/weekly`. No Celery Beat required. |
-| **Redis Broker** | Fast, reliable message passing between the API and background workers. Also used as the reflection cache store. |
+- Every entry is converted into a **vector embedding** — a list of 1024 numbers that represents the entry's meaning. Search works by comparing embeddings.
+- A background worker handles the slow stuff (embedding, mood inference, reflections) so the UI never freezes.
+- A local LLM (Ollama) runs on your machine and does all the AI work by default. You can swap it out for OpenAI, Groq, or any OpenAI-compatible API in Settings.
 
 ---
 
 ## Screenshots
 
-### Dashboard with Reflections
-View your recent entries alongside AI-generated reflections that analyze themes and emotional patterns.
-
+### Dashboard with reflections
 ![Dashboard](docs/screenshots/dashboard.png)
 
-### Distraction-Free Editor
-Clean writing interface with dark mode, word count, and keyboard shortcuts.
-
+### Distraction-free editor
 ![Editor](docs/screenshots/editor.png)
 
-### AI Insights
-Generate AI summaries of your entries with themes, patterns, and actionable suggestions.
-
+### AI insights
 ![Insights](docs/screenshots/insights.png)
 
-### Interactive Chat
-Ask follow-up questions about your journal entries and reflections.
-
+### Chat with your journal
 ![Chat](docs/screenshots/chat.png)
 
-### Mood Tracking Chart
-Visualize your mood trends over 7, 30, or 90 days with an emoji-based scale.
-
+### Mood tracking
 ![Mood Chart](docs/screenshots/mood-chart.png)
 
-### Mood Insights
-AI-generated analysis of your mood patterns and correlations with writing topics.
-
+### Mood insights
 ![Mood Insights](docs/screenshots/mood-insights.png)
 
 ---
 
-## How It Works: Understanding the AI Features
+## Quick start
 
-If you are new to LLMs (Large Language Models) and vector search, here is what these features actually do for you:
-
-### LLM Processing
-
-**What it is**: An LLM is like having a smart assistant that reads and understands your journal entries. EchoVault works with any OpenAI API-compatible model server — run Ollama or vLLM locally so your data never leaves your machine, or point it at a cloud provider like OpenAI or Groq if you prefer.
-
-**What it does for you**:
-
-1. **Reflections**: After you write entries, the AI reads them and provides thoughtful insights — cached so they load instantly on return visits and regenerated automatically when you add new entries. For example, if you wrote about work stress, it might notice patterns like "You have mentioned feeling overwhelmed on Mondays" and suggest actionable advice.
-
-2. **Mood Inference**: The AI automatically detects the emotional tone of your entries (on a scale of 1-5) even if you forget to set it manually. This helps track your mood over time.
-
-3. **Insights Generation**: Every night, the AI analyzes your recent entries and creates summaries like:
-   - "This week you focused on work-life balance"
-   - "Common themes: stress, family time, gratitude"
-   - "Consider taking breaks during work hours"
-
-**Why it is useful**: Instead of manually reviewing hundreds of entries, the AI helps you see patterns, themes, and insights you might miss, but remembering everything you have written.
-
-### Vector Search (Semantic Search)
-
-**What it is**: Traditional search finds entries by matching exact words. Vector search understands the *meaning* behind your words, even if you use different phrasing.
-
-**How it works**:
-- When you write an entry, the AI converts it into a "vector" (a mathematical representation of meaning)
-- When you search, your query is also converted to a vector
-- The system finds entries with similar meanings, not just matching words
-
-**Example**:
-- You search for: "feeling anxious about deadlines"
-- It finds entries about: "work stress", "pressure at the office", "worried about projects" - even if those exact words were not used
-- It also prioritizes recent entries (time-decayed scoring), so newer relevant entries appear first
-
-**Why it is useful**: You can find entries by describing how you felt or what you were thinking about, without remembering the exact words you used. It is like Google Search, but for your personal thoughts.
-
-### Time-Decayed Scoring
-
-**What it is**: A way to balance relevance with recency in search results.
-
-**How it works**:
-- Entries that match your search are ranked by both:
-  1. How similar they are to your query (semantic similarity)
-  2. How recent they are (time decay)
-- You can adjust the "half-life" setting: lower values favor recent entries, higher values treat all entries equally regardless of age
-
-**Example**: If you search for "work stress" and have 10 relevant entries:
-- A very recent entry about work stress might rank #1 even if it is slightly less similar
-- An older entry needs to be much more relevant to rank high
-- You control this balance in Settings
-
-**Why it is useful**: Sometimes you want to find what you wrote recently about a topic, not necessarily the most detailed entry from months ago.
-
----
-
-## Quick Start
+This is the five-minute version. For a step-by-step guide written for someone who has never used Docker before, read [SETUP.md](SETUP.md).
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Ollama installed locally (or use the Docker service)
+- **Docker Desktop** (Mac/Windows) or Docker Engine + Docker Compose (Linux). Docker is the tool that runs all the services in isolated containers — see the [Glossary](#glossary).
+- **Ollama**, installed locally. This is the program that runs the AI model on your computer. Get it from [ollama.com](https://ollama.com).
 
-### Setup
+### Steps
 
-1. **Clone the repository**
-   ```bash
-   git clone <repo-url>
-   cd echo-vault
-   ```
+```bash
+# 1. Clone the repo
+git clone <repo-url>
+cd echo-vault
 
-2. **Set up environment variables**
+# 2. Create your config file from the template
+cp default.env .env
+# Then edit .env and set JWT_SECRET to a random string.
+# You can generate one with: openssl rand -hex 32
 
-   Copy the example environment file and customize:
-   ```bash
-   cp default.env .env
-   ```
+# 3. Pull the AI models (this downloads several GB, takes a few minutes)
+ollama pull llama3.1:8b
+ollama pull mxbai-embed-large
 
-   Edit `.env` and set:
-   - `JWT_SECRET`: Generate a strong secret (e.g., `openssl rand -hex 32`)
-   - `DEFAULT_GENERATION_MODEL`: Model for reflections/insights (default: `llama3.1:8b`)
-   - `DEFAULT_EMBEDDING_MODEL`: Model for embeddings (default: `mxbai-embed-large`)
-   - `DEFAULT_GENERATION_URL`: LLM API URL (default: `http://ollama:11434` for Docker)
+# 4. Start everything
+cd infra
+docker compose up -d
 
-   See `docs/ENV_CONFIG.md` for all available options.
+# 5. Open the app
+open http://localhost:3000
+```
 
-3. **Pull Ollama models** (before starting services)
-   ```bash
-   ollama pull llama3.1:8b
-   ollama pull mxbai-embed-large
-   ```
-
-4. **Start all services**
-   ```bash
-   cd infra
-   docker compose up -d
-   ```
-
-5. **Run database migrations**
-   ```bash
-   docker compose exec api alembic upgrade head
-   ```
-
-6. **Access the application**
-   - Frontend: http://localhost:3000
-   - API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
-
-### First Use
-
-1. Register a new account at http://localhost:3000/register
-2. Create your first journal entry
-3. Wait a few seconds for embeddings to process
-4. Try semantic search to find related entries
-5. Check insights page for AI-generated summaries
+If something goes wrong, jump to [Troubleshooting](#troubleshooting) or the more detailed [SETUP.md](SETUP.md).
 
 ---
 
-## Architecture
+## How the AI features actually work
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design.
+If "vector search" and "LLM" are buzzwords to you, here is what they really mean inside this app.
 
-### Services
+### The LLM (Large Language Model)
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| web | 3000 | Next.js frontend |
-| api | 8000 | FastAPI backend |
-| worker | - | Celery background jobs |
-| db | 5432 | PostgreSQL 16 + pgvector |
-| redis | 6379 | Celery broker + reflection cache |
-| ollama | 11434 | Local LLM inference |
+An LLM is a program that reads text and writes text back. EchoVault uses one for three things:
+
+1. **Reflections** — after you write a few entries, the LLM reads them and produces a short note like "you've mentioned feeling overwhelmed three times this week — consider a smaller to-do list tomorrow."
+2. **Mood inference** — if you don't manually pick a mood (1-5), the LLM reads your entry and guesses one.
+3. **Insights** — a longer analysis covering 3, 7, 14, or 30 days of entries.
+
+By default, the LLM is **Ollama** running on your own machine. Your text never leaves your computer. You can switch to OpenAI, Groq, or any compatible service in Settings if you prefer.
+
+### Vector embeddings and semantic search
+
+Traditional search ("Ctrl-F") matches exact words. **Semantic search** matches meaning.
+
+Here is the trick: a separate AI model (called an embedding model) converts each journal entry into a list of 1024 numbers. Entries about similar topics end up with similar lists of numbers, even when the words are completely different. When you search, your query also gets turned into 1024 numbers, and the database finds entries whose numbers are closest.
+
+So you can search "feeling stuck at work" and get back an old entry titled "Why is everything boring lately?" because, mathematically, those two are talking about the same thing.
+
+### Time-decayed scoring
+
+Pure semantic similarity has a problem: a perfectly-matching entry from two years ago will outrank a slightly-less-matching one from yesterday — but you probably wanted yesterday's. EchoVault fixes this by multiplying the similarity score by a **decay factor** based on age:
+
+```
+score = similarity * (1 / (1 + age_in_days / half_life_days))
+```
+
+The half-life is set in Settings (default: 30 days). Lower it to favor recent entries; raise it to treat all entries equally regardless of age.
 
 ---
 
-## API Documentation
+## Why this stack? (Plain-English version)
 
-See [API.md](docs/API.md) for complete API reference.
-
-Interactive documentation available at http://localhost:8000/docs when the API is running.
+| Choice | Why it's here |
+|---|---|
+| **Docker** | Lets you run six different services (database, web app, API, job queue, etc.) without installing six different programs on your machine. Each service runs in a sealed box that talks to the others over a private network. |
+| **Next.js + React** | Next.js is the framework for the web frontend. We picked it because it has good defaults for server-side rendering, routing, and deployment to Vercel. React is the UI library it's built on. |
+| **FastAPI (Python)** | The backend API server. FastAPI is fast, easy to write, and gives you free interactive API docs at `/docs`. Python was the natural choice because most LLM tooling is Python-first. |
+| **PostgreSQL + pgvector** | PostgreSQL is the database that stores your account, entries, and tags. The `pgvector` extension is what lets the same database also store and search vector embeddings, so we don't need a separate vector database. |
+| **Redis** | A fast in-memory store. We use it for two things: passing job messages to the background worker, and caching reflections so they load instantly on a return visit. |
+| **Celery** | A background-job runner. Embedding an entry takes 1-2 seconds, which is too slow to make the user wait. Celery picks up that work in the background while the UI stays snappy. |
+| **Ollama** | Runs the LLM on your machine. The privacy story falls apart if we have to send your journal to OpenAI for every reflection — Ollama is what makes local-first possible. |
 
 ---
 
-## Development
+## Documentation
 
-### Backend Development
+| Doc | What's in it |
+|---|---|
+| [SETUP.md](SETUP.md) | Step-by-step install for first-timers. Read this if `docker compose up -d` made you nervous. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the pieces fit together, with diagrams of the main data flows. |
+| [docs/ENV_CONFIG.md](docs/ENV_CONFIG.md) | Every environment variable, what it does, and what to set it to. |
+| [docs/FEATURES.md](docs/FEATURES.md) | Full feature reference, written from the user's perspective. |
+| [docs/API.md](docs/API.md) | HTTP endpoint reference. The interactive version lives at http://localhost:8000/docs once the API is running. |
+| [docs/DEPLOYMENT_VERCEL.md](docs/DEPLOYMENT_VERCEL.md) | How to deploy to production (Vercel + Railway/Render/Fly.io). |
+| [docs/WEBSOCKET_AUTH_GUIDE.md](docs/WEBSOCKET_AUTH_GUIDE.md) | How real-time chat is authenticated. |
+| [docs/architecture/async-celery-pattern.md](docs/architecture/async-celery-pattern.md) | A design note on why Celery tasks call async code with `asyncio.run()`. |
 
+---
+
+## Services overview
+
+When `docker compose up -d` finishes, six containers are running:
+
+| Service | Port | What it does |
+|---|---|---|
+| `web` | 3000 | The Next.js frontend you open in the browser. |
+| `api` | 8000 | The FastAPI backend that handles all data and auth. |
+| `worker` | — | A Celery process that runs background jobs. |
+| `db` | 5432 | PostgreSQL with pgvector — stores everything. |
+| `redis` | 6379 | The job queue and reflection cache. |
+| `ollama` | 11434 | The local LLM. |
+
+You don't usually need to think about them individually — `docker compose` starts them all in the right order.
+
+---
+
+## Local development (without Docker)
+
+If you want to run the frontend or backend directly on your machine — handy when you're editing code and want hot-reload — you still need the database, Redis, and Ollama running somewhere (Docker is the easy way).
+
+**Backend:**
 ```bash
 cd api
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-### Frontend Development
-
+**Frontend:**
 ```bash
 cd app
 pnpm install
 pnpm run dev
 ```
 
-### Running Tests
-
-**Backend:**
+**Run tests:**
 ```bash
-cd api
-pytest
-```
-
-**Frontend E2E:**
-```bash
-cd app
-pnpm exec playwright test
+cd api && pytest                          # backend
+cd app && pnpm exec playwright test       # frontend end-to-end
 ```
 
 ---
 
-## Deployment
+## Desktop app
 
-### Vercel + Cloud Backend
+EchoVault also ships as a native desktop app via Tauri.
 
-For production deployment with Vercel (frontend) and Railway/Render/Fly.io (backend), see the comprehensive guide: [DEPLOYMENT_VERCEL.md](docs/DEPLOYMENT_VERCEL.md)
+**Prerequisites:** Docker Desktop must be running (the desktop app is just a wrapper around the same backend).
 
-The guide covers:
-- Database setup (Neon or Supabase with pgvector)
-- Redis setup (Upstash or Railway)
-- Backend deployment options
-- Ollama considerations for cloud deployment
-- Environment variable reference
-- Security checklist
+**Install:** download the installer for your OS from the Releases page (`.dmg` for macOS, `.msi` for Windows, `.AppImage`/`.deb` for Linux).
 
----
-
-## Desktop App
-
-EchoVault is also available as a desktop application for macOS, Windows, and Linux.
-
-### Prerequisites
-
-- **Docker Desktop** must be installed and running
-- Backend services running via Docker Compose
-
-### Installation
-
-1. **Download the installer** from the [Releases](https://github.com/your-username/echovault/releases) page:
-   - macOS: `.dmg` file
-   - Windows: `.msi` or `.exe` installer
-   - Linux: `.AppImage` or `.deb` package
-
-2. **Start backend services** (if not already running):
-   ```bash
-   cd infra
-   docker compose up -d
-   ```
-
-3. **Launch EchoVault** - The app will check for backend connectivity on startup
-
-### Features
-
-- **System Tray**: Minimize to tray, quick access to new entry
-- **Global Shortcut**: `Cmd/Ctrl + Shift + E` to quickly open a new entry
-- **Auto-Updates**: Receive updates automatically when new versions are released
-- **Native Notifications**: Reminders and alerts via system notifications
-
-### Development
-
-To run the desktop app in development mode:
-
+**Build from source:**
 ```bash
 cd app
 pnpm install
-pnpm tauri:dev
+pnpm tauri:dev      # run in dev mode
+pnpm tauri:build    # build installers (requires Rust toolchain)
 ```
 
-To build installers:
+Building installers requires Rust. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-```bash
-cd app
-pnpm tauri:build
-```
-
-**Note**: Building requires Rust toolchain. See [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/).
+**Desktop-only features:**
+- System tray with quick "new entry" shortcut
+- Global hotkey: `Cmd/Ctrl + Shift + E`
+- Native OS notifications
 
 ---
 
-## Docker Image Versions
+## Configuration cheat sheet
 
-All Docker images are pinned to specific versions for reproducibility:
+You configure EchoVault in two places:
 
-| Service | Image | Version |
-|---------|-------|---------|
-| Ollama | `ollama/ollama` | sha256 pinned |
-| Redis | `redis` | 7.2.5-alpine |
-| PostgreSQL | `pgvector/pgvector` | pg16 |
-| Node.js | `node` | 20.18.0-alpine |
-| Python | `python` | 3.11.10-slim |
+1. **`.env` file in the project root** — used by Docker Compose for the whole stack. Set things like `JWT_SECRET`, `DATABASE_URL`, and the default LLM endpoints here.
+2. **The Settings page in the app** — per-user overrides. Each user can point at a different LLM, change the search half-life, or enable hard delete.
 
----
+Common Settings-page options:
 
-## Configuration
+| Setting | What it does |
+|---|---|
+| Generation URL / Model | Where to send chat/reflection prompts. Use `http://localhost:11434` for local Ollama, or `https://api.openai.com/v1` for OpenAI. |
+| Embedding URL / Model | Where to generate vector embeddings. Often the same as Generation. |
+| API Token | Bearer token, only needed for cloud providers like OpenAI/Groq. |
+| Search half-life | How quickly older entries decay in search results. Default 30 days. |
+| Hard delete | Off by default. When on, "forget" permanently deletes entries instead of soft-hiding them. |
 
-### LLM Settings
-
-Users can configure their own LLM endpoints in Settings:
-
-| Setting | Description | Example |
-|---------|-------------|---------|
-| Generation URL | LLM API endpoint for text generation | `http://localhost:11434` or `https://api.openai.com/v1` |
-| Generation Model | Model name for reflections/insights | `llama3.1:8b` or `gpt-4o` |
-| Embedding URL | API endpoint for embeddings | `http://localhost:11434` |
-| Embedding Model | Model for vector embeddings | `mxbai-embed-large` or `text-embedding-3-small` |
-| API Token | Optional Bearer token for authentication | Required for OpenAI, Groq, etc. |
-
-### Search Decay
-
-Adjust the search half-life in Settings to control how quickly older entries decay in search results. Lower values favor recent entries.
-
-### Privacy Settings
-
-- **Soft Delete**: Removes entries from search but keeps content
-- **Hard Delete**: Permanently deletes entries and all associated data
+For the full list of environment variables, see [docs/ENV_CONFIG.md](docs/ENV_CONFIG.md).
 
 ---
 
 ## Troubleshooting
 
-### Ollama Connection Issues
+### Ollama is not responding
 
-Ensure Ollama is running and accessible:
 ```bash
 curl http://localhost:11434/api/tags
 ```
 
-### Database Connection
+You should see a JSON list of models. If not, start Ollama and re-run `ollama pull llama3.1:8b mxbai-embed-large`.
 
-Check database is healthy:
+### "Service is not healthy" on startup
+
 ```bash
-docker compose ps
+docker compose ps          # see which container failed
+docker compose logs <name> # read its logs
 ```
 
-### Background Jobs Not Running
+The most common causes are: Ollama not finished starting, the `.env` file missing a value, or port 3000/5432/6379/8000/11434 already in use by something else.
 
-Check Celery worker logs:
+### Embeddings or reflections never appear
+
 ```bash
 docker compose logs worker
 ```
 
-### Embeddings Not Generating
+The worker handles all the AI jobs. If it's quietly erroring (usually because Ollama is unreachable or a model isn't pulled), you'll see it here.
 
-1. Verify Ollama has the embedding model:
-   ```bash
-   ollama list
-   ```
-2. Check worker logs for errors
-3. Ensure user has valid LLM settings configured
+### Database connection errors
+
+```bash
+docker compose ps db
+docker compose logs db
+```
+
+Check that `DATABASE_URL` in `.env` matches the credentials in the `db` service.
+
+For a deeper guide, see the Troubleshooting section in [SETUP.md](SETUP.md).
+
+---
+
+## Glossary
+
+Quick definitions for the terms used throughout the docs:
+
+- **API** — Application Programming Interface. The set of HTTP endpoints the frontend calls to read or write data.
+- **Container** — a sealed environment that holds one program plus everything it needs to run. Started and stopped by Docker.
+- **Docker** — software that runs containers on your machine.
+- **Docker Compose** — a tool that starts a group of containers together with one command (`docker compose up`).
+- **Database** — long-term storage. EchoVault uses PostgreSQL.
+- **Environment variable** — a `KEY=value` pair the app reads at startup. Stored in the `.env` file.
+- **JWT** — JSON Web Token. A signed string the app uses to remember you're logged in.
+- **LLM** — Large Language Model. The AI that reads and writes text. EchoVault uses Ollama by default.
+- **Ollama** — a small program that runs LLMs on your machine. Listens on port 11434.
+- **pgvector** — a PostgreSQL extension that adds a "vector" column type so you can do semantic search inside the database.
+- **Port** — a number that identifies a network service on your machine. The frontend lives on port 3000, the API on 8000, and so on.
+- **Vector embedding** — a list of numbers that represents the meaning of a piece of text. Similar meanings produce similar numbers.
+- **WebSocket** — a long-lived two-way connection between the browser and the server, used here for streaming chat responses token-by-token.
 
 ---
 

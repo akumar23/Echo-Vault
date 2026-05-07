@@ -1,460 +1,318 @@
 # WebSocket Authentication Guide
 
-## Overview
+This doc explains how the chat WebSocket is authenticated and how to connect to it from a client.
 
-The WebSocket endpoint `/ws/reflections/{entry_id}` now requires JWT authentication and enforces authorization checks to ensure users can only access their own journal entries.
+If you only want a quick code snippet to copy, jump to [WEBSOCKET_QUICK_REFERENCE.md](WEBSOCKET_QUICK_REFERENCE.md). For an overview of what the chat feature does, see [FEATURES.md](FEATURES.md).
 
-## Security Implementation
+---
 
-### Authentication Flow
+## Why WebSockets need a different auth flow
 
-1. **Connection Initiation**: Client connects with JWT token in query parameter
-2. **Token Validation**: Server validates JWT signature and expiration
-3. **User Verification**: Server confirms user exists and is active
-4. **Entry Authorization**: Server verifies user owns the requested entry
-5. **Streaming**: If all checks pass, reflection streaming begins
+Regular HTTP requests can carry an `Authorization: Bearer <token>` header. WebSocket connections opened from a browser **cannot** — the browser API does not let you set custom headers. There are two common workarounds:
 
-### WebSocket Close Codes
+1. **Token in the query string.** Easy, but the token ends up in proxy/server access logs. Bad for long-lived JWTs.
+2. **One-time tickets.** The client first calls a normal HTTP endpoint (cookie-authenticated) to mint a short-lived ticket, then opens the WebSocket with `?ticket=<ticket>`. The ticket is consumed on use and never reappears.
 
-The implementation uses custom close codes to indicate specific error conditions:
+EchoVault uses the second approach.
 
-| Code | Meaning | Reason |
-|------|---------|--------|
-| 4001 | Authentication Failure | Missing or invalid JWT token |
-| 4002 | User Not Found/Inactive | User doesn't exist or account is disabled |
-| 4003 | Authorization Failure | User doesn't own the requested entry |
-| 4004 | Entry Not Found | The requested entry doesn't exist |
-| 1011 | Server Error | Unexpected internal server error |
+---
 
-## Frontend Integration
+## The endpoint
 
-### TypeScript/JavaScript Implementation
+There is a single chat WebSocket:
 
-#### Basic WebSocket Connection
+```
+WS /chat/ws/chat?ticket={ticket}&entry_id={optional_entry_id}
+```
+
+| Query param | Required | Notes |
+|---|---|---|
+| `ticket` | yes | Single-use ticket from `GET /auth/ws-ticket`. Expires 60 seconds after issue. |
+| `entry_id` | no | When set, the chat is pinned to one entry. The LLM is given just that entry's content as context. When omitted, the chat spans all entries. |
+
+---
+
+## The flow
+
+```
+1. Browser → GET /auth/ws-ticket
+   (cookie set during /auth/login is used to authenticate)
+   ← { "ticket": "abc123...", "expires_in": 60 }
+
+2. Browser opens WebSocket:
+   WS /chat/ws/chat?ticket=abc123...
+
+3. Server validates and consumes the ticket
+4. Server sends an initial "context" message
+5. Client sends chat_message events
+6. Server streams token events, then a complete event
+```
+
+The ticket is single-use: the same string can never open a second connection.
+
+---
+
+## Message protocol
+
+### Client → Server
+
+```json
+{ "type": "chat_message", "content": "your message text" }
+```
+
+That's the only message type the server reads. Anything else is ignored.
+
+### Server → Client
+
+After `accept()`, the first message is always:
+
+```json
+{
+  "type": "context",
+  "scope": "all" | "entry",
+  "reflection": "the cached reflection text",
+  "entry": { "id": 12, "title": "...", "created_at": "..." },
+  "related_entries": []
+}
+```
+
+(`entry` only present when `scope == "entry"`. `related_entries` is filled per-message in "all" scope.)
+
+For each user message, the server then streams:
+
+```json
+{ "type": "token", "content": "partial..." }
+{ "type": "token", "content": " response..." }
+{ "type": "token", "content": " text..." }
+{ "type": "complete" }
+```
+
+On error:
+
+```json
+{ "type": "error", "message": "human-readable description" }
+```
+
+---
+
+## Close codes
+
+| Code | Meaning | Action |
+|---|---|---|
+| 1000 | Normal close | Nothing — the conversation ended cleanly. |
+| 1011 | Server error | Show a generic error; user can retry. |
+| 4001 | Authentication failed (missing/invalid/expired ticket, or pinned `entry_id` not found) | Get a fresh ticket and reconnect, or check the `entry_id`. |
+| 4002 | User not found or inactive | Send the user to login. |
+
+---
+
+## Per-connection limits
+
+The chat WebSocket enforces:
+
+- **Max 2000 characters per message.** Longer messages get an `error` and are dropped.
+- **Max 10 messages per minute** (sliding window). Beyond that, the server replies with a rate-limit `error`.
+
+---
+
+## Browser client example
+
+A minimal vanilla TypeScript client:
 
 ```typescript
-/**
- * Connect to WebSocket endpoint with authentication
- */
-function connectToReflectionStream(entryId: number, token: string): WebSocket {
-  // Construct WebSocket URL with token in query parameter
-  const wsUrl = `${getWebSocketBaseUrl()}/ws/reflections/${entryId}?token=${encodeURIComponent(token)}`;
+async function startChat(entryId?: number) {
+  // 1. Mint a ticket via the cookie-authenticated HTTP endpoint
+  const res = await fetch(`${API_BASE}/auth/ws-ticket`, { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to get ws-ticket');
+  const { ticket } = await res.json();
 
-  const ws = new WebSocket(wsUrl);
+  // 2. Open the WebSocket
+  const url = new URL('/chat/ws/chat', WS_BASE);
+  url.searchParams.set('ticket', ticket);
+  if (entryId != null) url.searchParams.set('entry_id', String(entryId));
 
-  ws.onopen = () => {
-    console.log('WebSocket connected successfully');
-  };
+  const ws = new WebSocket(url.toString());
 
   ws.onmessage = (event) => {
-    console.log('Received:', event.data);
-    // Handle streaming tokens here
-    displayReflectionToken(event.data);
+    const msg = JSON.parse(event.data);
+    switch (msg.type) {
+      case 'context':
+        console.log('Initial context:', msg);
+        break;
+      case 'token':
+        appendToken(msg.content);
+        break;
+      case 'complete':
+        markComplete();
+        break;
+      case 'error':
+        console.error(msg.message);
+        break;
+    }
   };
 
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
-
-  ws.onclose = (event) => {
-    handleWebSocketClose(event);
+  ws.onclose = (e) => {
+    if (e.code === 4001) redirectToLogin();
+    else if (e.code === 4002) showError('Account is inactive.');
+    else if (e.code !== 1000) showError(`Connection closed (${e.code})`);
   };
 
   return ws;
 }
 
-/**
- * Handle WebSocket close events with error handling
- */
-function handleWebSocketClose(event: CloseEvent) {
-  switch (event.code) {
-    case 4001:
-      console.error('Authentication failed:', event.reason);
-      // Redirect to login or refresh token
-      handleAuthenticationFailure();
-      break;
-
-    case 4002:
-      console.error('User not found or inactive:', event.reason);
-      // User account issue - show error message
-      showError('Your account is not accessible. Please contact support.');
-      break;
-
-    case 4003:
-      console.error('Unauthorized access:', event.reason);
-      // User tried to access someone else's entry
-      showError('You do not have permission to access this entry.');
-      break;
-
-    case 4004:
-      console.error('Entry not found:', event.reason);
-      // Entry doesn't exist
-      showError('The requested entry could not be found.');
-      break;
-
-    case 1011:
-      console.error('Server error:', event.reason);
-      // Internal server error
-      showError('An unexpected error occurred. Please try again.');
-      break;
-
-    case 1000:
-      console.log('WebSocket closed normally');
-      // Normal closure - streaming completed
-      break;
-
-    default:
-      console.warn('WebSocket closed with code:', event.code, event.reason);
-  }
-}
-
-/**
- * Get WebSocket base URL based on environment
- */
-function getWebSocketBaseUrl(): string {
-  // In production
-  if (window.location.protocol === 'https:') {
-    return `wss://${window.location.host}`;
-  }
-  // In development
-  return 'ws://localhost:8000';
-}
-
-/**
- * Get JWT token from localStorage
- */
-function getAuthToken(): string | null {
-  return localStorage.getItem('access_token');
-}
-
-/**
- * Handle authentication failure (e.g., expired token)
- */
-function handleAuthenticationFailure() {
-  // Clear invalid token
-  localStorage.removeItem('access_token');
-  // Redirect to login
-  window.location.href = '/login';
+function sendMessage(ws: WebSocket, text: string) {
+  ws.send(JSON.stringify({ type: 'chat_message', content: text }));
 }
 ```
 
-#### React Hook Example
+`API_BASE` is `http://localhost:8000` (or your deployment). `WS_BASE` is the same URL with `http`/`https` swapped for `ws`/`wss`.
+
+---
+
+## React hook example
 
 ```typescript
 import { useEffect, useRef, useState } from 'react';
 
-interface UseReflectionStreamProps {
-  entryId: number;
-  token: string;
+interface UseChatOptions {
+  entryId?: number;
   enabled: boolean;
 }
 
-interface UseReflectionStreamResult {
-  reflection: string;
-  isConnected: boolean;
-  error: string | null;
-  connect: () => void;
-  disconnect: () => void;
-}
-
-export function useReflectionStream({
-  entryId,
-  token,
-  enabled
-}: UseReflectionStreamProps): UseReflectionStreamResult {
-  const [reflection, setReflection] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
+export function useChat({ entryId, enabled }: UseChatOptions) {
+  const [tokens, setTokens] = useState('');
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  const connect = () => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return; // Already connected
-    }
-
-    const wsUrl = `ws://localhost:8000/ws/reflections/${entryId}?token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      setIsConnected(true);
-      setError(null);
-    };
-
-    ws.onmessage = (event) => {
-      setReflection(prev => prev + event.data);
-    };
-
-    ws.onerror = () => {
-      setError('WebSocket connection error');
-    };
-
-    ws.onclose = (event) => {
-      setIsConnected(false);
-
-      // Handle error codes
-      if (event.code === 4001) {
-        setError('Authentication failed. Please log in again.');
-        localStorage.removeItem('access_token');
-        window.location.href = '/login';
-      } else if (event.code === 4003) {
-        setError('You do not have permission to access this entry.');
-      } else if (event.code === 4004) {
-        setError('Entry not found.');
-      } else if (event.code === 4002) {
-        setError('User account is not active.');
-      } else if (event.code !== 1000) {
-        setError(`Connection closed with code ${event.code}`);
-      }
-    };
-
-    wsRef.current = ws;
-  };
-
-  const disconnect = () => {
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'Client initiated close');
-      wsRef.current = null;
-    }
-  };
-
   useEffect(() => {
-    if (enabled && token) {
-      connect();
-    }
+    if (!enabled) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const res = await fetch('/api/auth/ws-ticket', { credentials: 'include' });
+      if (!res.ok) {
+        setError('Authentication failed');
+        return;
+      }
+      const { ticket } = await res.json();
+      if (cancelled) return;
+
+      const url = new URL('/chat/ws/chat', WS_BASE);
+      url.searchParams.set('ticket', ticket);
+      if (entryId != null) url.searchParams.set('entry_id', String(entryId));
+
+      const ws = new WebSocket(url.toString());
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'token') setTokens((prev) => prev + msg.content);
+        if (msg.type === 'complete') {/* handle done */}
+        if (msg.type === 'error') setError(msg.message);
+      };
+
+      ws.onclose = (e) => {
+        if (e.code === 4001) {
+          setError('Session expired — please log in again.');
+        } else if (e.code !== 1000) {
+          setError(`Disconnected (${e.code})`);
+        }
+      };
+    })();
 
     return () => {
-      disconnect();
+      cancelled = true;
+      wsRef.current?.close(1000, 'unmount');
     };
-  }, [entryId, token, enabled]);
+  }, [entryId, enabled]);
 
-  return {
-    reflection,
-    isConnected,
-    error,
-    connect,
-    disconnect
-  };
+  const send = (text: string) =>
+    wsRef.current?.send(JSON.stringify({ type: 'chat_message', content: text }));
+
+  return { tokens, error, send };
 }
 ```
 
-#### React Component Example
+---
 
-```typescript
-import React from 'react';
-import { useReflectionStream } from '../hooks/useReflectionStream';
+## Testing from the command line
 
-interface ReflectionPanelProps {
-  entryId: number;
-}
-
-export function ReflectionPanel({ entryId }: ReflectionPanelProps) {
-  const token = localStorage.getItem('access_token') || '';
-  const [enabled, setEnabled] = React.useState(false);
-
-  const {
-    reflection,
-    isConnected,
-    error,
-    connect,
-    disconnect
-  } = useReflectionStream({
-    entryId,
-    token,
-    enabled
-  });
-
-  const handleStartReflection = () => {
-    setEnabled(true);
-  };
-
-  const handleStopReflection = () => {
-    setEnabled(false);
-    disconnect();
-  };
-
-  return (
-    <div className="reflection-panel">
-      <div className="controls">
-        {!enabled ? (
-          <button onClick={handleStartReflection}>
-            Start Reflection
-          </button>
-        ) : (
-          <button onClick={handleStopReflection} disabled={!isConnected}>
-            Stop Reflection
-          </button>
-        )}
-        {isConnected && <span className="status">Connected</span>}
-      </div>
-
-      {error && (
-        <div className="error-message">
-          {error}
-        </div>
-      )}
-
-      <div className="reflection-content">
-        {reflection || 'Click "Start Reflection" to begin...'}
-      </div>
-    </div>
-  );
-}
-```
-
-## Testing the WebSocket Connection
-
-### Manual Testing with Browser Console
-
-```javascript
-// Get your JWT token from localStorage
-const token = localStorage.getItem('access_token');
-
-// Replace with actual entry ID you own
-const entryId = 1;
-
-// Connect to WebSocket
-const ws = new WebSocket(`ws://localhost:8000/ws/reflections/${entryId}?token=${token}`);
-
-ws.onopen = () => console.log('Connected');
-ws.onmessage = (event) => console.log('Message:', event.data);
-ws.onerror = (error) => console.error('Error:', error);
-ws.onclose = (event) => console.log('Closed:', event.code, event.reason);
-```
-
-### Testing Authentication Failures
-
-```javascript
-// Test 1: Missing token
-const ws1 = new WebSocket('ws://localhost:8000/ws/reflections/1');
-// Expected: Close code 4001
-
-// Test 2: Invalid token
-const ws2 = new WebSocket('ws://localhost:8000/ws/reflections/1?token=invalid');
-// Expected: Close code 4001
-
-// Test 3: Valid token, unauthorized entry (entry you don't own)
-const ws3 = new WebSocket(`ws://localhost:8000/ws/reflections/999?token=${validToken}`);
-// Expected: Close code 4003 or 4004
-```
-
-### Testing with curl/websocat
+Install [websocat](https://github.com/vi/websocat):
 
 ```bash
-# Install websocat
-brew install websocat  # macOS
-# or
-cargo install websocat  # If you have Rust installed
-
-# Test with valid token
-websocat "ws://localhost:8000/ws/reflections/1?token=YOUR_JWT_TOKEN"
-
-# Test without token (should fail with 4001)
-websocat "ws://localhost:8000/ws/reflections/1"
+brew install websocat                   # macOS
+cargo install websocat                  # if you have Rust
 ```
 
-## Backend Implementation Details
+Then:
 
-### Authentication Function
+```bash
+# 1. Login and capture the cookie
+curl -c cookies.txt -X POST http://localhost:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"yourpassword"}'
 
-The `authenticate_websocket()` helper function:
-1. Checks if token is provided
-2. Decodes JWT using `decode_access_token()` from `app/core/security.py`
-3. Extracts `user_id` from token payload (`sub` claim)
-4. Queries database for user and verifies `is_active` status
-5. Returns `User` object or `None` (after closing WebSocket with error)
+# 2. Mint a ticket
+TICKET=$(curl -s -b cookies.txt http://localhost:8000/auth/ws-ticket | jq -r .ticket)
 
-### Authorization Function
+# 3. Connect
+websocat "ws://localhost:8000/chat/ws/chat?ticket=$TICKET"
 
-The `authorize_entry_access()` helper function:
-1. Checks if entry exists
-2. Compares `entry.user_id` with authenticated `user.id`
-3. Returns `True` if authorized, `False` otherwise (after closing WebSocket)
-
-### Database Session Management
-
-The implementation ensures proper cleanup:
-- Database session created at start of function
-- `finally` block ensures `db.close()` is always called
-- Connection manager cleanup wrapped in try/except to handle edge cases
-
-## Security Considerations
-
-1. **Token in Query Parameter**: WebSocket connections from browsers cannot set custom headers, so the token must be in the query parameter. This is standard practice but means tokens may appear in logs. Consider:
-   - Short token expiration times (current: 30 minutes)
-   - Secure WebSocket (WSS) in production
-   - Log sanitization to remove tokens
-
-2. **Error Message Details**: Error messages are descriptive enough for debugging but don't expose sensitive information like user IDs or internal system details.
-
-3. **User Isolation**: All queries are scoped to the authenticated user's ID, preventing cross-user data access.
-
-4. **Token Validation**: Full JWT validation including signature verification and expiration checks.
-
-## Migration Notes
-
-### For Existing Frontend Code
-
-If you have existing WebSocket connections, update them to include the token:
-
-**Before:**
-```typescript
-const ws = new WebSocket(`ws://localhost:8000/ws/reflections/${entryId}`);
+# Then type:
+{"type":"chat_message","content":"What patterns do you see in my recent entries?"}
 ```
 
-**After:**
-```typescript
-const token = localStorage.getItem('access_token');
-const ws = new WebSocket(`ws://localhost:8000/ws/reflections/${entryId}?token=${token}`);
-```
+You should see the initial `context` message, followed by streamed `token` messages.
 
-### Handling Token Refresh
+---
 
-If your application refreshes tokens, ensure WebSocket reconnection:
+## Server-side implementation notes
 
-```typescript
-// Listen for token refresh events
-window.addEventListener('token-refreshed', () => {
-  if (wsRef.current?.readyState === WebSocket.OPEN) {
-    wsRef.current.close();
-    // Will automatically reconnect with new token via useEffect
-  }
-});
-```
+Source: `api/app/routers/chat.py`.
+
+- **Short-lived DB sessions** are used for each operation (`get_db_session()` context manager). Holding one session for the lifetime of the connection would tie up a connection from the pool for the entire chat — under any concurrency, that exhausts the pool.
+- **Ticket validation** uses `token_store.consume_ws_ticket(ticket)` — atomic consume so the same ticket never validates twice.
+- **Pinned-entry validation** happens before `accept()`, so an unauthorized request fails the handshake instead of opening then immediately closing.
+- **Rate limiting** is a `deque` of timestamps, evicted lazily before each new message.
+- **Streaming** uses `async for token in generation_service.chat_completion_stream(...)`. If the client disconnects mid-stream, breaking out of the loop closes the upstream HTTP generator, cancelling the LLM request — important for cloud providers that bill per token.
+
+---
+
+## Security considerations
+
+- **Tickets are short-lived (60s) and single-use.** Even if one leaks into a log, it's useless after the next garbage-collection sweep.
+- **Long-lived JWTs never appear in the WebSocket URL.** The cookie + ticket separation ensures only the `auth/ws-ticket` HTTP request is authenticated with the JWT (in a cookie, which never appears in URL logs).
+- **All queries are user-scoped.** A pinned `entry_id` is filtered by `Entry.user_id == user_id` before the connection is accepted.
+- **No sensitive details in error messages.** Close `reason` strings are deliberately generic.
+
+---
 
 ## Troubleshooting
 
-### Connection Closes Immediately
+### Connection closes with code 4001 immediately
 
-- **Check token**: Ensure JWT token is valid and not expired
-- **Check permissions**: Verify you own the entry you're trying to access
-- **Check network**: Ensure WebSocket connection is not blocked by firewall/proxy
+- The ticket is missing, expired, or already used. Mint a fresh one with `GET /auth/ws-ticket` right before opening the WebSocket.
+- The `entry_id` query parameter points to an entry that doesn't exist or isn't owned by the authenticated user.
 
-### "Authentication failed" Error
+### Connection works in dev but not in production
 
-- Token is missing, invalid, or expired
-- Solution: Log in again to get a fresh token
+Check that:
+- You are using `wss://` (not `ws://`) in production.
+- The frontend's `fetch('/auth/ws-ticket')` includes credentials so the cookie is sent. With cross-origin Vercel + a separate API, you usually need a Vercel rewrite to proxy `/auth/*` so the cookie is same-origin (see [DEPLOYMENT_VERCEL.md](DEPLOYMENT_VERCEL.md)).
 
-### "Unauthorized access" Error
+### "Too many messages" error
 
-- You're trying to access an entry that belongs to another user
-- Solution: Verify the entry ID is correct
+Per-connection limit: 10 messages per minute. Slow down or open a new connection.
 
-### "Entry not found" Error
+### "Message too long" error
 
-- The entry ID doesn't exist in the database
-- Solution: Check if entry was deleted or ID is incorrect
+Hard limit: 2000 characters. Split your message.
 
-## Performance Considerations
+---
 
-- WebSocket connections are stateful; avoid opening multiple connections for the same entry
-- Implement exponential backoff for reconnection attempts
-- Clean up connections when components unmount
-- Consider connection pooling for multiple entries
+## Where to go next
 
-## Next Steps
-
-1. Update all WebSocket client code to include authentication token
-2. Implement proper error handling and user feedback
-3. Add token refresh logic for long-lived connections
-4. Test with various authentication scenarios
-5. Monitor WebSocket connection metrics in production
+- [WEBSOCKET_QUICK_REFERENCE.md](WEBSOCKET_QUICK_REFERENCE.md) — copy-paste snippets
+- [API.md](API.md) — full HTTP endpoint reference
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how chat fits into the rest of the system

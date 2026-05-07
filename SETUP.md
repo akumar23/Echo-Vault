@@ -1,90 +1,233 @@
-# Setup Instructions
+# Setup Guide
 
-## Prerequisites
+This is the long version of the install guide, written for someone who has never run a Dockerized project before. If you are already comfortable with Docker, skim the [Quick start in README.md](README.md#quick-start) instead.
 
-1. Docker and Docker Compose installed
-2. Ollama installed locally (or use Docker service)
+By the end of this guide, you will have EchoVault running at `http://localhost:3000`, with all six backing services started by a single command.
 
-## Initial Setup
+---
 
-### 1. Pull Ollama Models
+## What you need first
 
-Before starting the services, pull the required models:
+You need three things installed on your machine:
+
+1. **Git** — to download the source code.
+2. **Docker Desktop** — to run the services. Download from [docker.com](https://www.docker.com/products/docker-desktop/). Start it after install; you should see a whale icon in your menu bar / system tray.
+3. **Ollama** — to run the local AI model. Download from [ollama.com](https://ollama.com).
+
+That's it. You do not need to install Python, Node.js, or PostgreSQL on your laptop. Docker handles all of those inside containers (see the [Glossary in README](README.md#glossary)).
+
+### Verifying the prerequisites
+
+Open a terminal and run:
+
+```bash
+git --version
+docker --version
+docker compose version
+ollama --version
+```
+
+You should see a version number from each. If `docker compose version` fails but `docker --version` works, your Docker is too old — update Docker Desktop. (Old versions used `docker-compose` with a hyphen; the new one is two words.)
+
+---
+
+## Step 1: Get the code
+
+```bash
+git clone <repo-url>
+cd echo-vault
+```
+
+Replace `<repo-url>` with the actual repository URL. Once cloned, all commands below assume you are inside the project root unless otherwise noted.
+
+---
+
+## Step 2: Set up your config file
+
+Apps like EchoVault read their configuration from a file called `.env` (short for "environment"). The repository ships a template called `default.env`. Copy it:
+
+```bash
+cp default.env .env
+```
+
+Now open `.env` in any text editor. The most important line to change is:
+
+```env
+JWT_SECRET=your-secret-key-here-generate-with-openssl-rand-hex-32
+```
+
+This is a random string the app uses to sign your login tokens. Generate a real one:
+
+```bash
+openssl rand -hex 32
+```
+
+That prints a 64-character hex string. Paste it after `JWT_SECRET=` and save the file.
+
+For local development, the rest of the defaults are fine. If you are curious what every variable does, see [docs/ENV_CONFIG.md](docs/ENV_CONFIG.md).
+
+> Important: never commit your `.env` file to git. It is already listed in `.gitignore`.
+
+---
+
+## Step 3: Pull the AI models
+
+Ollama needs to download two models before EchoVault can use it. This is a one-time download (a few gigabytes total — go grab a coffee).
 
 ```bash
 ollama pull llama3.1:8b
 ollama pull mxbai-embed-large
 ```
 
-### 2. Environment Configuration
+| Model | Used for | Size |
+|---|---|---|
+| `llama3.1:8b` | Reflections, mood inference, chat | ~4.7 GB |
+| `mxbai-embed-large` | Vector embeddings (semantic search) | ~670 MB |
 
-Create a `.env` file in the root directory (or copy from `.env.example`):
+Verify the models are present:
 
-```env
-JWT_SECRET=your-strong-secret-key-here
-REFLECTION_MODEL=llama3.1:8b
-EMBED_MODEL=mxbai-embed-large
+```bash
+ollama list
 ```
 
-### 3. Start Services
+You should see both names in the output.
+
+---
+
+## Step 4: Start the services
+
+Now the fun part. From inside the `infra` directory, run:
 
 ```bash
 cd infra
 docker compose up -d
 ```
 
-This will start:
-- PostgreSQL with pgvector (port 5432)
-- Redis (port 6379)
-- Ollama (port 11434)
-- FastAPI backend (port 8000)
-- Celery worker
-- Next.js frontend (port 3000)
+Here is what each piece of that command means:
 
-### 4. Run Database Migrations
+- `docker compose` — the tool for running a group of containers together.
+- `up` — start the services defined in `docker-compose.yml`.
+- `-d` — "detached" mode: run in the background so you can keep using your terminal.
 
-```bash
-docker compose exec api alembic upgrade head
-```
+The first time you run this, Docker will download a few base images and build two custom ones (the API and the web app). This takes 2-5 minutes depending on your internet. On later runs it is near-instant.
 
-Or if running locally:
+When it finishes, six containers are running:
 
-```bash
-cd api
-alembic upgrade head
-```
+| Container | Port | Purpose |
+|---|---|---|
+| `echovault_web` | 3000 | The Next.js frontend (the website you'll visit). |
+| `echovault_api` | 8000 | The FastAPI backend (handles all data and login). |
+| `echovault_worker` | — | A Celery worker that runs background AI jobs. |
+| `echovault_db` | 5432 | PostgreSQL with the pgvector extension. |
+| `echovault_redis` | 6379 | The job queue and cache. |
+| `echovault_ollama` | 11434 | Local LLM inference. |
 
-### 5. Verify Services
-
-Check all services are running:
+Check they are all running:
 
 ```bash
 docker compose ps
 ```
 
-Test API health:
+Every row should say `running` and the `db`, `redis`, and `ollama` rows should say `healthy`. If any container is missing or restarting, see [Troubleshooting](#troubleshooting) below.
+
+---
+
+## Step 5: Database migrations
+
+The first time you start the API, it automatically runs the database migrations (this is configured in `docker-compose.yml` — the API command is `alembic upgrade head && uvicorn ...`). So you usually don't have to do anything here.
+
+If you ever need to run migrations manually — for example after pulling new code that adds a column — do:
 
 ```bash
+docker compose exec api alembic upgrade head
+```
+
+What this does, in plain language: `docker compose exec api` means "run the next command inside the running `api` container". `alembic upgrade head` is the migration tool that brings the database schema up to the latest version.
+
+---
+
+## Step 6: Open the app
+
+Navigate to:
+
+- **App:** http://localhost:3000
+- **API health check:** http://localhost:8000/health
+- **Interactive API docs:** http://localhost:8000/docs
+
+The first time you visit, you will be sent to a registration page. Create an account (it's stored locally — there is no email verification). Log in. Write your first entry.
+
+Within a few seconds, the background worker should generate an embedding and infer a mood for your entry. You can verify by opening the entry and seeing the mood badge fill in, or by using the search to look for similar entries.
+
+---
+
+## Step 7: Verify everything works
+
+A few quick health checks:
+
+```bash
+# API is alive
 curl http://localhost:8000/health
+# Expected: {"status":"ok","database":"connected"}
+
+# Ollama has the right models
+curl http://localhost:11434/api/tags
+
+# Worker is processing jobs (look for log lines about embedding tasks)
+docker compose logs worker --tail=50
 ```
 
-Test Ollama:
+If the API health check returns `503 unhealthy`, the database container is not reachable yet — wait 10 seconds and try again, or check `docker compose logs db`.
+
+---
+
+## Stopping and starting
 
 ```bash
-curl http://localhost:11434/api/tags
+# Stop everything (data is preserved)
+cd infra
+docker compose down
+
+# Start it again later
+docker compose up -d
+
+# Stop AND wipe all data (database, Redis, uploaded files)
+docker compose down -v
 ```
 
-## Development Setup
+The `-v` flag removes the named volumes, which is where your journal entries actually live. Use it carefully.
 
-### Backend (Local)
+---
+
+## Local development (editing code with hot-reload)
+
+The Docker setup is for "I just want to use the app". When you are editing code, you usually want hot-reload — the app restarting automatically when you save a file.
+
+You can run the frontend and backend directly on your machine while leaving the database, Redis, and Ollama running in Docker.
+
+### Backend with hot-reload
+
+In one terminal, leave the supporting services running in Docker:
+
+```bash
+cd infra
+docker compose up -d db redis ollama
+```
+
+In another terminal:
 
 ```bash
 cd api
 pip install -r requirements.txt
+# Point the API at the Docker services running on localhost
+export DATABASE_URL="postgresql+psycopg://echovault:echovault@localhost:5432/echovault"
+export REDIS_URL="redis://localhost:6379/0"
+export OLLAMA_URL="http://localhost:11434"
 uvicorn main:app --reload
 ```
 
-### Frontend (Local)
+`--reload` watches your Python files and restarts the server when you save.
+
+### Frontend with hot-reload
 
 ```bash
 cd app
@@ -92,68 +235,109 @@ pnpm install
 pnpm run dev
 ```
 
-### Running Tests
+The frontend calls the backend at the URL in `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`).
 
-**Backend:**
+### Running tests
+
 ```bash
-cd api
-pytest
+# Backend
+cd api && pytest
+
+# A single backend test
+cd api && pytest tests/test_auth.py::test_register -v
+
+# Frontend end-to-end
+cd app && pnpm exec playwright test
+
+# A single frontend test
+cd app && pnpm exec playwright test tests/example.spec.ts
 ```
 
-**Frontend:**
+### Linting
+
 ```bash
-cd app
-pnpm exec playwright test
+cd app && pnpm run lint
 ```
+
+---
 
 ## Troubleshooting
 
-### Database Connection Issues
+### `docker compose up -d` fails immediately
 
-If the API can't connect to the database:
+Make sure Docker Desktop is actually running (whale icon in your menu bar / system tray). If you see "Cannot connect to the Docker daemon", that is what's wrong.
 
-1. Check database is running: `docker compose ps db`
-2. Check database logs: `docker compose logs db`
-3. Verify DATABASE_URL in environment
+### A port is already in use
 
-### Ollama Connection Issues
+Error like `bind: address already in use`. Something else on your machine is using one of these ports: 3000, 5432, 6379, 8000, or 11434. Stop that process, or edit `infra/docker-compose.yml` to use a different port mapping.
 
-If embeddings/reflections fail:
+### `db` container keeps restarting
 
-1. Check Ollama is running: `docker compose ps ollama`
-2. Verify models are pulled: `ollama list`
-3. Check Ollama logs: `docker compose logs ollama`
+Usually means the data volume has been corrupted by a previous failed start. Wipe and try again:
 
-### Background Jobs Not Running
+```bash
+docker compose down -v
+docker compose up -d
+```
 
-If embeddings aren't being created:
+You will lose any journal entries — that is the trade-off for a clean slate.
 
-1. Check Celery worker: `docker compose logs worker`
-2. Check Redis: `docker compose ps redis`
-3. Verify REDIS_URL in environment
+### API is up but I can't log in
 
-### Frontend Can't Connect to API
+Check that `JWT_SECRET` in `.env` is set (not the placeholder). After changing `.env`, restart the API:
 
-1. Verify NEXT_PUBLIC_API_URL is set correctly
-2. Check API is running: `curl http://localhost:8000/health`
-3. Check CORS settings in `api/main.py`
+```bash
+docker compose restart api worker
+```
 
-## First Use
+### Embeddings never get generated
 
-1. Navigate to http://localhost:3000
-2. Register a new account
-3. Create your first journal entry
-4. Wait a few seconds for embeddings to process
-5. Try semantic search
-6. Check insights page (may need to wait for nightly job or trigger manually)
+The worker container is what generates them. Check its logs:
 
-## Production Considerations
+```bash
+docker compose logs worker --tail=100
+```
 
-- Change JWT_SECRET to a strong random value
-- Use environment-specific database credentials
-- Set up proper backup strategy for PostgreSQL
-- Configure reverse proxy (nginx) for production
-- Enable HTTPS
-- Set up monitoring and logging
-- Configure Celery beat for scheduled tasks
+Common causes:
+- Ollama is not reachable. Inside the worker, the URL is `http://ollama:11434` (the container name, not `localhost`).
+- The embedding model isn't pulled. Run `ollama list` and confirm `mxbai-embed-large` is there.
+- The user has bad LLM settings configured in the app. Reset them in Settings, or for a brand-new install they fall back to the `DEFAULT_*` values from `.env`.
 
+### Frontend shows "Network Error"
+
+The frontend cannot reach the API. Check:
+1. The API is up: `curl http://localhost:8000/health`
+2. `NEXT_PUBLIC_API_URL` in `.env` points to the right place (usually `http://localhost:8000`)
+3. CORS allows your frontend origin (`CORS_ORIGINS` in `.env`)
+
+### "I want to start over"
+
+```bash
+cd infra
+docker compose down -v          # delete all containers AND data volumes
+docker system prune -f          # free up disk space from old images
+docker compose up -d --build    # rebuild from scratch
+```
+
+---
+
+## What to do next
+
+- Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) to understand how the pieces fit together.
+- Read [docs/FEATURES.md](docs/FEATURES.md) for a tour of what the app actually does.
+- Read [docs/ENV_CONFIG.md](docs/ENV_CONFIG.md) when you want to tune configuration.
+- When you are ready to deploy publicly, see [docs/DEPLOYMENT_VERCEL.md](docs/DEPLOYMENT_VERCEL.md).
+
+---
+
+## Mini glossary (quick reference)
+
+- **Container** — a sealed environment running one program. Started by Docker.
+- **Docker Compose** — runs a group of containers together with one command.
+- **`.env` file** — text file with `KEY=value` pairs the app reads at startup.
+- **Port** — a number identifying a network service. Frontend = 3000, API = 8000.
+- **Migration** — a script that updates the database schema.
+- **LLM** — Large Language Model. The AI that reads and writes text.
+- **Embedding** — a list of numbers representing the meaning of a piece of text.
+
+The full glossary lives in the [README](README.md#glossary).

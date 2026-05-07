@@ -1,6 +1,22 @@
 # Deploying EchoVault to Vercel
 
-This guide covers deploying EchoVault to production using Vercel for the Next.js frontend, with the FastAPI backend and supporting services deployed to complementary platforms.
+This is the production deployment guide. You will end up with the frontend on Vercel, the backend on Railway / Render / Fly.io, the database on Neon or Supabase, and Redis on Upstash. It assumes you have already run the app locally — if not, start with [SETUP.md](../SETUP.md).
+
+> **Why split it up?** Vercel is great for Next.js but doesn't run long-lived Python processes (you need that for FastAPI + Celery). So the frontend and backend live on different platforms in production. Each platform here was picked because it has a generous free tier and minimal setup.
+
+The overall plan:
+
+| Piece | Where it goes | Why |
+|---|---|---|
+| Next.js frontend | Vercel | Best-in-class Next.js host, instant deploys |
+| FastAPI + Celery worker | Railway / Render / Fly.io | Run long-lived Python servers |
+| PostgreSQL + pgvector | Neon or Supabase | Managed Postgres with pgvector pre-installed |
+| Redis | Upstash or Railway | Managed Redis with a free tier |
+| LLM | User's local Ollama, or a hosted OpenAI-compatible API | Privacy-first stays optional in production |
+
+If you just want to run it locally, skip this doc — `docker compose up -d` is all you need.
+
+---
 
 ## Table of Contents
 

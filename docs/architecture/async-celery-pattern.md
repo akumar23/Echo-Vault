@@ -4,6 +4,10 @@
 **Date**: 2025-11-28
 **Decision Maker**: Backend Architecture Review
 
+> **Plain-English summary:** Our Celery background jobs (the things that generate embeddings, infer mood, etc.) are written in regular synchronous Python. But the LLM client they call is asynchronous (it uses `httpx.AsyncClient` for non-blocking HTTP). To bridge the two, every Celery task wraps its async call in `asyncio.run(...)`. This doc explains why we picked that approach over fancier alternatives — short version: the overhead is microseconds while LLM calls take seconds, so there is nothing to optimize.
+>
+> If you are not familiar with Celery, see [ARCHITECTURE.md](../ARCHITECTURE.md#celery-worker) first.
+
 ## Context
 
 Our Celery background jobs need to call async methods in `OllamaService` (which uses `httpx.AsyncClient` for HTTP requests to the local Ollama LLM). This creates a sync-async boundary that requires careful architectural consideration.

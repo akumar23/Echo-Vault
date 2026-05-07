@@ -1,13 +1,24 @@
 # API Documentation
 
-Base URL: `http://localhost:8000`
+This is the HTTP reference for the EchoVault API. It covers the request and response shapes for the most important endpoints.
+
+If you are looking for a quick way to try requests live, the FastAPI auto-generated **interactive docs** at http://localhost:8000/docs let you click through every endpoint with built-in request building. This file is the same information in handwritten form, useful for offline reading or for figuring out what to send before you write your client code.
+
+If you don't already have the API running, see [SETUP.md](../SETUP.md). For an overview of features that consume these endpoints, see [FEATURES.md](FEATURES.md).
+
+Base URL: `http://localhost:8000` (or your deployment's URL)
 
 ## Authentication
 
-All protected endpoints require a JWT token in the Authorization header:
+All protected endpoints require a JWT token in the `Authorization` header:
+
 ```
 Authorization: Bearer <token>
 ```
+
+Get a token by calling `POST /auth/login` with email + password — the response body contains `access_token`. The login endpoint also sets an `httpOnly` cookie used by Next.js middleware and by the WebSocket ticket endpoint.
+
+For WebSocket connections (which can't set custom headers from the browser), use the one-time ticket flow described in the WebSocket section below.
 
 ## Endpoints
 
@@ -290,17 +301,60 @@ Content-Type: `application/x-ndjson`
 
 ### WebSocket
 
-#### WS `/ws/reflections/{entry_id}`
-Stream reflection for a specific entry.
+EchoVault has one chat WebSocket. Connecting requires a one-time ticket because browsers can't set custom Authorization headers on WebSocket connections.
 
-**Message Format:**
-Server sends text messages with reflection tokens as they're generated.
+#### Step 1: Get a ticket (HTTP, cookie-authenticated)
 
-**Example:**
 ```
-This week you've been focusing on...
-[continues streaming]
+GET /auth/ws-ticket
 ```
+
+Response:
+```json
+{ "ticket": "abc123...", "expires_in": 60 }
+```
+
+Tickets are single-use and expire after 60 seconds.
+
+#### Step 2: Open the WebSocket
+
+```
+WS /chat/ws/chat?ticket={ticket}
+```
+
+Optional query parameter:
+- `entry_id` — pin the chat to a specific journal entry. When present, the LLM is given only that entry's content as context. When absent, the chat spans all entries (current reflection + the top 3 semantically similar entries per message).
+
+#### Messages
+
+Client → Server:
+```json
+{ "type": "chat_message", "content": "your message" }
+```
+
+Server → Client:
+```json
+{ "type": "context", "scope": "all" | "entry", "reflection": "...", "entry": { ... }, "related_entries": [ ... ] }
+{ "type": "token", "content": "partial response..." }
+{ "type": "complete" }
+{ "type": "error", "message": "..." }
+```
+
+#### Limits
+
+- Max message length: 2000 characters
+- Max messages per minute per connection: 10 (sliding window)
+
+#### Close codes
+
+| Code | Meaning |
+|---|---|
+| 1000 | Normal close |
+| 1011 | Server error |
+| 4001 | Authentication failed (missing/invalid/expired ticket) |
+| 4002 | User not found or inactive |
+
+For a full client implementation example, see [WEBSOCKET_AUTH_GUIDE.md](WEBSOCKET_AUTH_GUIDE.md).
 
 ## Error Responses
 
