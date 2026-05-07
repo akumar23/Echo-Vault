@@ -1,8 +1,14 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
 import { ArrowRight, Lock } from 'lucide-react'
 
@@ -178,36 +184,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.08]">
-        <div
-          className={`mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-[11px] uppercase tracking-[0.18em] text-[#A3A3A3] sm:px-10 sm:text-xs ${mono}`}
-        >
-          <span>© {new Date().getFullYear()} EchoVault</span>
-          <div className="flex items-center gap-6">
-            <Link
-              href="/login"
-              className="transition-colors hover:text-[#FAFAFA]"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/docs"
-              className="transition-colors hover:text-[#FAFAFA]"
-            >
-              Docs
-            </Link>
-            <a
-              href="https://github.com/akumar23/Echo-Vault"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors hover:text-[#FAFAFA]"
-            >
-              GitHub
-            </a>
-          </div>
-        </div>
-      </footer>
+      <ComingSoonSection />
     </div>
   )
 }
@@ -296,6 +273,107 @@ function EntryMock() {
         </ul>
       </div>
     </div>
+  )
+}
+
+function ComingSoonSection() {
+  const sectionRef = useRef<HTMLElement>(null)
+  const prefersReducedMotion = useReducedMotion()
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start end', 'start start'],
+  })
+  const cardScale = useTransform(scrollYProgress, [0, 1], [0.78, 1])
+  const cardOpacity = useTransform(scrollYProgress, [0, 0.5], [0.3, 1])
+
+  return (
+    <section
+      ref={sectionRef}
+      className="relative z-10 flex min-h-screen items-center justify-center overflow-hidden px-4 py-12 sm:px-8 sm:py-16"
+      aria-label="Coming Fall 2026: shared journaling features"
+    >
+      <motion.div
+        style={
+          prefersReducedMotion
+            ? undefined
+            : { scale: cardScale, opacity: cardOpacity }
+        }
+        className="relative mx-auto flex w-full max-w-6xl flex-col justify-center rounded-lg border border-white/[0.08] bg-[#111111] px-6 py-10 shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_30px_80px_-30px_rgba(0,0,0,0.9)] sm:px-10 sm:py-12 md:px-14 md:py-14"
+      >
+        <span
+          className={`inline-flex w-fit items-center gap-2 rounded-full border border-[#E07A5A]/40 bg-[#E07A5A]/10 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#E07A5A] sm:text-[11px] ${mono}`}
+        >
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#E07A5A]" />
+          Coming Fall 2026
+        </span>
+
+        <h2 className="mt-6 font-normal leading-[1.04] tracking-tight text-[#FAFAFA] text-[clamp(2rem,6.5vw,5rem)]">
+          <span className="block">Soon, you&apos;ll</span>
+          <span className="block">
+            <em className="italic text-[#E07A5A]">share a moment</em>
+          </span>
+          <span className="block">with the people you choose.</span>
+        </h2>
+
+        <p className="mt-8 max-w-[40rem] text-base leading-relaxed text-[#D4D4D4] sm:text-lg sm:leading-[1.65]">
+          Share entries with just your friends. Follow a quiet feed of what
+          people put into the world. React and reply when you feel like it.
+          Everything you write today stays private, and sharing is something
+          you opt into on every entry, with the freedom to take it back any
+          time.
+        </p>
+
+        <ul
+          className={`mt-8 grid gap-x-10 gap-y-3 text-[11px] uppercase tracking-[0.18em] text-[#A3A3A3] sm:grid-cols-2 sm:text-xs ${mono}`}
+        >
+          <ComingItem label="Visibility on every entry" />
+          <ComingItem label="A feed for friends" />
+          <ComingItem label="Public discovery" />
+          <ComingItem label="Block, mute, report" />
+          <ComingItem label="Reactions and comments" />
+          <ComingItem label="Always private by default" />
+        </ul>
+
+        <div
+          className={`mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.08] pt-6 text-[11px] uppercase tracking-[0.18em] text-[#A3A3A3] sm:text-xs ${mono}`}
+        >
+          <span>© {new Date().getFullYear()} EchoVault</span>
+          <div className="flex items-center gap-6">
+            <Link
+              href="/login"
+              className="transition-colors hover:text-[#FAFAFA]"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/docs"
+              className="transition-colors hover:text-[#FAFAFA]"
+            >
+              Docs
+            </Link>
+            <a
+              href="https://github.com/akumar23/Echo-Vault"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-[#FAFAFA]"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
+      </motion.div>
+    </section>
+  )
+}
+
+function ComingItem({ label }: { label: string }) {
+  return (
+    <li className="flex items-center gap-3">
+      <span aria-hidden className="text-[#E07A5A]">
+        ◇
+      </span>
+      <span>{label}</span>
+    </li>
   )
 }
 
