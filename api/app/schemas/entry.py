@@ -48,6 +48,7 @@ class EntryResponse(BaseModel):
     tags: List[str]
     mood_user: Optional[int]
     mood_inferred: Optional[int]
+    mood_confidence: Optional[str] = None  # "high" | "medium" | "low" — UI gates display on this
     created_at: datetime
     updated_at: Optional[datetime]
 

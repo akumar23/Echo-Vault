@@ -18,7 +18,7 @@ import httpx
 import json
 import re
 import logging
-from typing import List, Dict, Optional, Any, AsyncGenerator
+from typing import List, Dict, Optional, Any, AsyncGenerator, Tuple
 from urllib.parse import urlparse
 
 from app.core.config import settings as app_settings
@@ -323,21 +323,117 @@ class LLMService:
 
         return await self.chat_completion(messages, temperature=0.7)
 
-    async def infer_mood(self, entry_content: str) -> int:
-        """Infer mood (1-5) from entry content using chat completions."""
+    async def generate_entry_reflection_with_echoes(
+        self,
+        focus_entry_text: str,
+        focus_entry_date: str,
+        echoes: List[Dict[str, str]],
+    ) -> str:
+        """Reflect on a single entry, informed by semantically related past entries.
+
+        `echoes` is a list of dicts with keys: 'date', 'title', 'content'.
+        These are MMR-diverse past entries that share themes with the focus
+        entry — they let the model reflect on trajectory and recurrence
+        rather than treating the entry in isolation.
+
+        If `echoes` is empty, callers should fall back to the generic
+        generate_reflection() path instead.
+        """
+        echoes_text = "\n\n".join(
+            f"[{e.get('date', '?')}] {e.get('title') or 'Untitled'}\n{(e.get('content') or '')[:600]}"
+            for e in echoes
+        )
+
         system_prompt = (
-            "You are an emotion analysis assistant. Analyze journal entries and classify them on a 1-5 mood scale.\n\n"
+            "You are a thoughtful journaling assistant reflecting on ONE specific entry. "
+            "You're also shown a few past entries that resonate with it thematically — "
+            "use them to ground your reflection in the writer's history, but keep the "
+            "focus on today's entry.\n\n"
+            "Your reflection should:\n"
+            "1. Name the key themes in TODAY'S entry\n"
+            "2. Notice how those themes connect (or contrast) with the past entries — "
+            "is this a recurring pattern? An evolution? A return after silence?\n"
+            "3. Offer one or two specific, gentle suggestions grounded in what you observed\n\n"
+            "Keep the reflection under 250 words. Be empathetic, specific, and constructive. "
+            "Do NOT list the past entries by date; reference them naturally."
+        )
+        user_prompt = (
+            f"TODAY'S ENTRY [{focus_entry_date}]:\n{focus_entry_text}\n\n"
+            f"ECHOES — past entries that thematically resonate:\n{echoes_text}\n\n"
+            "Provide your reflection:"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        return await self.chat_completion(messages, temperature=0.7)
+
+    async def infer_mood(
+        self,
+        entry_content: str,
+        *,
+        examples: Optional[List[Dict[str, Any]]] = None,
+        baseline_mean: Optional[float] = None,
+    ) -> Tuple[int, str]:
+        """Infer mood (1-5) and confidence from entry content.
+
+        Returns a tuple of `(mood, confidence)` where confidence is one of
+        "high" / "medium" / "low". Callers persist both so the UI can hide
+        low-confidence inferences rather than showing an authoritative-
+        looking badge for a guess.
+
+        When `examples` are provided (semantic neighbors from this user's
+        own mood_user-labeled entries) the prompt switches to a few-shot
+        form that calibrates the model against the user's personal scale.
+        See Zhao et al., ICML 2021 (arXiv:2102.09690) — balanced examples
+        meaningfully reduce LLM scale bias.
+
+        When `baseline_mean` is provided, the prompt notes the user's
+        average labeled mood so the model anchors on personal context.
+        """
+        system_prompt_parts = [
+            "You are an emotion analysis assistant. Classify journal entries on a 1-5 mood scale.\n",
             "MOOD SCALE:\n"
             "1 = Very negative (despair, grief, severe anxiety, hopelessness, anger)\n"
             "2 = Somewhat negative (stress, frustration, sadness, worry, disappointment)\n"
             "3 = Neutral (factual reporting, mixed emotions, ambiguous, mundane activities)\n"
             "4 = Somewhat positive (contentment, mild happiness, hope, calm, gratitude)\n"
-            "5 = Very positive (joy, excitement, achievement, love, euphoria)\n\n"
+            "5 = Very positive (joy, excitement, achievement, love, euphoria)\n",
+        ]
+
+        if baseline_mean is not None:
+            system_prompt_parts.append(
+                f"PERSONAL BASELINE: this writer's average self-labeled mood is "
+                f"{baseline_mean:.1f}. Use this to calibrate — their '3' may differ "
+                f"from another writer's '3'.\n"
+            )
+
+        if examples:
+            example_lines = []
+            for ex in examples:
+                snippet = (ex.get("content") or "").strip()
+                # Keep examples short to leave budget for the entry itself.
+                if len(snippet) > 350:
+                    snippet = snippet[:350].rsplit(" ", 1)[0] + "…"
+                example_lines.append(
+                    f"Example entry (writer labeled this {ex['mood']}):\n{snippet}"
+                )
+            system_prompt_parts.append(
+                "WRITER'S OWN LABELED EXAMPLES (use these to calibrate to their scale):\n\n"
+                + "\n\n".join(example_lines)
+                + "\n"
+            )
+
+        system_prompt_parts.append(
             "INSTRUCTIONS:\n"
             "- Respond ONLY with valid JSON: {\"mood\": <number>, \"confidence\": \"<high|medium|low>\"}\n"
             "- The mood must be an integer from 1 to 5\n"
+            "- Confidence reflects how unambiguous the entry's emotional tone is\n"
             "- Do NOT include explanations or any text outside the JSON"
         )
+
+        system_prompt = "\n".join(system_prompt_parts)
         user_prompt = f"Analyze this journal entry:\n\n{entry_content}\n\nOutput (JSON only):"
 
         messages = [
@@ -348,18 +444,27 @@ class LLMService:
         response_text = await self.chat_completion(messages, temperature=0.3)
         return self._parse_mood_response(response_text)
 
-    def _parse_mood_response(self, response_text: str) -> int:
-        """Parse mood from LLM response with multiple fallback strategies."""
-        mood = None
-        confidence = "low"
+    def _parse_mood_response(self, response_text: str) -> Tuple[int, str]:
+        """Parse mood and confidence from an LLM response.
 
-        # Strategy 1: Try JSON parsing (primary method)
+        Returns `(mood, confidence)` where confidence is one of
+        "high"/"medium"/"low". Confidence reflects how well-formed the
+        LLM response was — strategy-1 JSON parses preserve the LLM's own
+        confidence label; fallback parses always degrade to "low".
+        """
+        mood: Optional[int] = None
+        confidence = "low"
+        valid_confidence = {"high", "medium", "low"}
+
+        # Strategy 1: Try JSON parsing (primary method) — preserves the LLM's
+        # own confidence label when it gave us one.
         try:
             json_match = re.search(r'\{[^}]+\}', response_text)
             if json_match:
                 parsed = json.loads(json_match.group())
                 mood = int(parsed.get("mood", 3))
-                confidence = parsed.get("confidence", "low")
+                raw_conf = str(parsed.get("confidence", "low")).lower().strip()
+                confidence = raw_conf if raw_conf in valid_confidence else "low"
         except (json.JSONDecodeError, ValueError, AttributeError):
             pass
 
@@ -400,7 +505,7 @@ class LLMService:
                 },
             )
 
-        return mood
+        return mood, confidence
 
     async def generate_insights(self, entries_summary: str) -> dict:
         """Generate insights (summary, themes, actions) from entries."""
@@ -429,6 +534,58 @@ class LLMService:
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
+        ]
+
+        response_text = await self.chat_completion(messages, temperature=0.7)
+        return self._parse_insights_response(response_text)
+
+    async def generate_insights_with_themes(
+        self,
+        recent_entries_text: str,
+        older_themed_text: str,
+    ) -> dict:
+        """Generate insights with explicit recent vs. older-themed buckets.
+
+        The two-bucket structure lets the model identify recurring patterns
+        — e.g., "the work stress this month echoes the same pattern from
+        last summer" — without conflating chronological events.
+
+        Falls back gracefully via the same _parse_insights_response logic.
+        """
+        system_prompt = (
+            "Analyze journal entries to surface patterns and actionable advice.\n\n"
+            "You receive entries in two buckets:\n"
+            "- RECENT: what the user wrote in the analysis period\n"
+            "- OLDER THEMES: past entries that semantically resonate with the recent ones\n\n"
+            "Use OLDER THEMES to identify recurring patterns. When a recent issue echoes "
+            "an older one, name it. When something appears genuinely new, name it too.\n\n"
+            "Respond in valid JSON:\n"
+            "{\n"
+            '  "summary": "Brief factual summary. State observed patterns including recurrences. No emotional language.",\n'
+            '  "themes": ["theme1", "theme2", "theme3"],\n'
+            '  "actions": [\n'
+            '    "Concrete action with specific parameters (time, frequency, duration)",\n'
+            '    "Another specific action",\n'
+            '    "Another specific action"\n'
+            "  ]\n"
+            "}\n\n"
+            "RULES:\n"
+            "- Summary: prefer noting recurrences over describing single events.\n"
+            "- Themes: single words or short phrases only.\n"
+            "- Actions: specific and measurable (e.g., '10-min walk before 9am' not 'exercise more').\n"
+            "- No filler phrases, no emotional validation, no rhetorical questions.\n"
+            "- Be direct and clinical.\n\n"
+            "Output ONLY valid JSON."
+        )
+        user_prompt = (
+            f"RECENT ENTRIES:\n{recent_entries_text}\n\n"
+            f"OLDER THEMES (semantically related past entries):\n{older_themed_text}\n\n"
+            "Analyze (JSON only):"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ]
 
         response_text = await self.chat_completion(messages, temperature=0.7)

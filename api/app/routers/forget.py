@@ -13,6 +13,7 @@ from app.models.embedding import EntryEmbedding
 from app.models.entry import Entry
 from app.models.settings import Settings
 from app.models.user import User
+from app.services.reflection_cache import bump_context_version
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -122,5 +123,9 @@ async def forget_entry(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete entry",
         )
+
+    # Cached context bundles may reference the just-deleted entry; invalidate
+    # them so the next AI call rebuilds against the current corpus.
+    bump_context_version(current_user.id)
 
     return None

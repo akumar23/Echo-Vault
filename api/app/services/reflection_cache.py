@@ -201,3 +201,80 @@ def invalidate_reverse_prompt(user_id: int) -> None:
         reflection_cache.redis.delete(f"{_REVERSE_PROMPT_KEY_PREFIX}{user_id}")
     except redis.RedisError:
         logger.warning("Redis DELETE failed for reverse_prompt user %s", user_id)
+
+
+# --- Context cache (semantic retrieval results) ----------------------------
+#
+# Caches the *shape* of a retrieval result — entry IDs, scores, scope params —
+# never decrypted content. Callers re-fetch and decrypt entries through the
+# ORM on cache hit. This honors the EncryptedText column contract end-to-end:
+# a Redis compromise leaks which entries are related, not what they say.
+#
+# Invalidation uses a per-user monotonic version counter so we can invalidate
+# the entire namespace in one Redis op (avoids SCAN, which is bad on free
+# tiers). Stale keys aren't deleted; they just stop being addressable and
+# expire naturally on TTL.
+
+_CTX_KEY_PREFIX = "ctx:v1:user:"
+_CTX_VERSION_KEY_PREFIX = "ctx:v1:ver:user:"
+# Per-intent TTLs (seconds). Chat is short-lived because anchors change per
+# message; reflection/insights/mood are slower-moving.
+_CTX_TTL_BY_INTENT = {
+    "chat": 60 * 5,           # 5 min
+    "mood": 60 * 60,          # 1 hour
+    "reflection": 60 * 60 * 24,    # 24 hours
+    "insights": 60 * 60 * 24,      # 24 hours
+}
+_CTX_DEFAULT_TTL = 60 * 15
+
+
+def get_context_version(user_id: int) -> int:
+    """Return the current context-cache namespace version for a user.
+
+    Returns 0 when Redis is unavailable or the counter has never been set;
+    callers should still proceed (cache becomes effectively pass-through).
+    """
+    try:
+        raw = reflection_cache.redis.get(f"{_CTX_VERSION_KEY_PREFIX}{user_id}")
+        return int(raw) if raw else 0
+    except (redis.RedisError, ValueError):
+        return 0
+
+
+def bump_context_version(user_id: int) -> None:
+    """Invalidate every cached context bundle for a user.
+
+    Cheap O(1) increment; previously cached keys (which embed the old version)
+    become unreachable and expire on their own TTL. Called from entry
+    write/update/delete and forget paths.
+    """
+    try:
+        reflection_cache.redis.incr(f"{_CTX_VERSION_KEY_PREFIX}{user_id}")
+    except redis.RedisError:
+        logger.warning("Redis INCR failed for context version user %s", user_id)
+
+
+def _context_key(user_id: int, intent: str, version: int, params_hash: str) -> str:
+    return f"{_CTX_KEY_PREFIX}{user_id}:{intent}:v{version}:{params_hash}"
+
+
+def get_cached_context(
+    user_id: int, intent: str, params_hash: str
+) -> Optional[dict]:
+    """Return cached context envelope (entry IDs + scores) for (user, intent, params)."""
+    version = get_context_version(user_id)
+    return _safe_get(_context_key(user_id, intent, version, params_hash))
+
+
+def set_cached_context(
+    user_id: int, intent: str, params_hash: str, payload: dict
+) -> None:
+    """Cache context envelope with per-intent TTL.
+
+    `payload` must be JSON-serializable and SHOULD NOT contain decrypted
+    entry content — only IDs, scores, and metadata derivable from non-PII
+    columns. See the module docstring above for rationale.
+    """
+    version = get_context_version(user_id)
+    ttl = _CTX_TTL_BY_INTENT.get(intent, _CTX_DEFAULT_TTL)
+    _safe_setex(_context_key(user_id, intent, version, params_hash), ttl, payload)

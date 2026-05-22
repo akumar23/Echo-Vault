@@ -13,13 +13,12 @@ from contextlib import contextmanager
 from typing import Deque, Dict, List, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from sqlalchemy import func
 from websockets.exceptions import ConnectionClosed
 
 from app.database import SessionLocal
-from app.models.embedding import EntryEmbedding
 from app.models.entry import Entry
 from app.models.user import User
+from app.services.context_service import Intent, context_service
 from app.services.llm_service import get_embedding_service_for_user, get_generation_service_for_user
 from app.services.reflection_cache import reflection_cache
 from app.services.token_store import token_store
@@ -126,36 +125,32 @@ async def authenticate_websocket(websocket: WebSocket, ticket: Optional[str]) ->
 
 
 async def get_related_entries(user_id: int, query: str, embedding_service, k: int = 3) -> List[Dict]:
-    """Get semantically related entries using pgvector (short-lived session)."""
+    """Get semantically related entries via ContextService (short-lived session).
+
+    Returns a list shaped for the chat prompt template — title, truncated
+    content, ISO timestamp, score. Diversity comes from MMR reranking
+    inside the service, so the top-k surface a wider spread of themes
+    than a raw cosine top-k did before.
+    """
     try:
-        query_embedding = await embedding_service.get_embedding(query, input_type="query")
-
         with get_db_session() as db:
-            distance = EntryEmbedding.embedding.cosine_distance(query_embedding)
-            similarity_expr = 1 - (distance / 2)
-
-            results = db.query(
-                Entry.title,
-                Entry.content,
-                Entry.created_at,
-                similarity_expr.label("score"),
-            ).join(
-                EntryEmbedding, Entry.id == EntryEmbedding.entry_id
-            ).filter(
-                Entry.user_id == user_id,
-                Entry.is_deleted == False,
-                EntryEmbedding.is_active == True,
-            ).order_by(distance).limit(k).all()
-
-            return [
-                {
-                    "title": r.title,
-                    "content": r.content[:500] if r.content else "",
-                    "created_at": r.created_at.isoformat(),
-                    "score": float(r.score),
-                }
-                for r in results
-            ]
+            bundle = await context_service.get_context(
+                db=db,
+                user_id=user_id,
+                intent=Intent.CHAT,
+                anchor_text=query,
+                k=k,
+                embedding_service=embedding_service,
+            )
+        return [
+            {
+                "title": e.title,
+                "content": e.content[:500] if e.content else "",
+                "created_at": e.created_at.isoformat() if e.created_at else "",
+                "score": e.score,
+            }
+            for e in bundle.related_entries
+        ]
     except Exception:
         logger.warning("Failed to get related entries", extra={"user_id": user_id}, exc_info=True)
         return []

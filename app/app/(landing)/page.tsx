@@ -107,6 +107,9 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pt-10 pb-16 sm:px-10 sm:pt-14 sm:pb-20">
+        <p className="mb-6 italic text-[#D4D4D4] text-lg sm:text-xl md:text-2xl">
+          if you thought it, might as well write it.
+        </p>
         <h1 className="font-normal leading-[1.04] tracking-tight text-[clamp(2.75rem,9.5vw,7.75rem)]">
           <span className="block">A journal</span>
           <span className="block">

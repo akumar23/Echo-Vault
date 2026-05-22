@@ -32,6 +32,7 @@ from app.services.reflection_cache import (
     get_cached_echoes,
     set_cached_echoes,
     invalidate_reverse_prompt,
+    bump_context_version,
 )
 from app.services.llm_service import (
     LLMProviderError,
@@ -73,6 +74,8 @@ async def create_entry(
     reflection_cache.delete_reflection(current_user.id)
     # Fresh content may change which gaps exist — drop the cached reverse prompt.
     invalidate_reverse_prompt(current_user.id)
+    # New entry → existing context bundles (related-entries, etc.) are stale.
+    bump_context_version(current_user.id)
 
     return entry
 
@@ -510,6 +513,7 @@ async def update_entry(
 
     # Invalidate cached reflection so it regenerates on next view
     reflection_cache.delete_reflection(current_user.id)
+    bump_context_version(current_user.id)
 
     return entry
 
@@ -532,6 +536,7 @@ async def delete_entry(
 
     # Invalidate cached reflection so it regenerates on next view
     reflection_cache.delete_reflection(current_user.id)
+    bump_context_version(current_user.id)
 
     return None
 

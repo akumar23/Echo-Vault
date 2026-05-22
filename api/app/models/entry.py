@@ -15,6 +15,7 @@ class Entry(Base):
     tags = Column(JSON, default=list)
     mood_user = Column(Integer, nullable=True)  # 1-5 from UI
     mood_inferred = Column(Integer, nullable=True)  # 1-5 from LLM
+    mood_confidence = Column(String(8), nullable=True)  # "high" | "medium" | "low"
     reflection = Column(EncryptedText, nullable=True)
     reflection_status = Column(String(16), nullable=True)  # pending|generating|complete|error
     reflection_generated_at = Column(DateTime(timezone=True), nullable=True)

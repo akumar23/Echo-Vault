@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.database import SessionLocal
 from app.models.entry import Entry
+from app.services.context_service import Intent, context_service
 from app.services.llm_service import get_generation_service_for_user
 from app.celery_app import celery_app
 import asyncio
@@ -47,15 +48,48 @@ def infer_mood_task(entry_id: int):
         # Get user-specific generation service
         generation_service = get_generation_service_for_user(db, entry.user_id)
 
-        # Infer mood using OpenAI-compatible API
-        mood = asyncio.run(generation_service.infer_mood(entry.content))
+        # Pull mood context via ContextService: balanced few-shot examples
+        # from this user's own labeled entries (when enough exist) plus the
+        # user's mood baseline. This calibrates the LLM against the user's
+        # personal scale rather than relying on a generic 1-5 rubric.
+        bundle = asyncio.run(
+            context_service.get_context(
+                db=db,
+                user_id=entry.user_id,
+                intent=Intent.MOOD,
+                anchor_entry_id=entry_id,
+                k=0,  # Intent.MOOD doesn't use related_entries for the prompt
+            )
+        )
 
-        # Update entry
+        examples_for_prompt = [
+            {"content": ex.content, "mood": ex.mood}
+            for ex in bundle.mood_examples
+        ]
+
+        mood, confidence = asyncio.run(
+            generation_service.infer_mood(
+                entry.content,
+                examples=examples_for_prompt or None,
+                baseline_mean=bundle.user_baseline.mood_user_mean,
+            )
+        )
+
+        # Persist both — the UI gates display on confidence so low-confidence
+        # guesses don't masquerade as authoritative.
         entry.mood_inferred = mood
+        entry.mood_confidence = confidence
         db.commit()
 
-        # Log successful inference
-        logger.info(f"Successfully inferred mood {mood} for entry {entry_id}")
+        logger.info(
+            "Inferred mood",
+            extra={
+                "entry_id": entry_id,
+                "mood": mood,
+                "confidence": confidence,
+                "few_shot_examples": len(examples_for_prompt),
+            },
+        )
     finally:
         db.close()
 
