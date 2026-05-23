@@ -6,9 +6,6 @@ import { ThemeProvider } from '@/contexts/ThemeContext'
 import { CommandPalette } from '@/components/CommandPalette'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
-// Inside RootLayout's <body>, after your providers (order doesn't matter much):
-{process.env.TAURI_BUILD !== 'true' && <SpeedInsights />}
-
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -107,6 +104,7 @@ export default function RootLayout({
           <Providers>
             {children}
             <CommandPalette />
+            {process.env.TAURI_BUILD !== 'true' && <SpeedInsights />}
           </Providers>
         </ThemeProvider>
       </body>
