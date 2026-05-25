@@ -1,27 +1,3 @@
-import pytest
-from fastapi.testclient import TestClient
-from main import app
-
-
-@pytest.fixture
-def auth_client():
-    """Returns an authenticated TestClient (cookie-based session)."""
-    with TestClient(app) as session_client:
-        session_client.post(
-            "/auth/register",
-            json={
-                "email": "entries@example.com",
-                "username": "entriesuser",
-                "password": "testpass123"
-            }
-        )
-        session_client.post(
-            "/auth/login",
-            json={"email": "entries@example.com", "password": "testpass123"}
-        )
-        yield session_client
-
-
 def test_create_entry(auth_client):
     response = auth_client.post(
         "/entries",

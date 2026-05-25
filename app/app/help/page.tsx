@@ -189,6 +189,7 @@ export default function HelpPage() {
         <ul style={{ marginLeft: 'var(--space-5)' }}>
           <li className="mb-2"><strong>All processing is local:</strong> Your entries never leave your machine</li>
           <li className="mb-2"><strong>No external APIs:</strong> All AI features use your local Ollama instance</li>
+          <li className="mb-2"><strong>Encrypted at rest:</strong> Entry title, content, and reflections are encrypted in the database (Fernet)</li>
           <li className="mb-2"><strong>Encrypted passwords:</strong> Passwords are hashed using bcrypt</li>
           <li className="mb-2"><strong>JWT authentication:</strong> Secure token-based authentication</li>
           <li className="mb-2"><strong>User-scoped data:</strong> You can only access your own entries</li>

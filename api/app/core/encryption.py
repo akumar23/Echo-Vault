@@ -61,6 +61,11 @@ class ContentDecryptionError(RuntimeError):
     """
 
 
+def is_encrypted_at_rest(stored: Optional[str]) -> bool:
+    """True when the DB value is Fernet ciphertext (encv1: prefix)."""
+    return bool(stored and stored.startswith(_CONTENT_PREFIX))
+
+
 def encrypt_content(plaintext: str) -> str:
     """Encrypt entry content/title. Returns 'encv1:<ciphertext>', or plaintext
     unchanged when no key is configured (dev) or input is empty/None."""

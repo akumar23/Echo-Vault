@@ -60,6 +60,10 @@ Inside Docker, the API and worker containers also load `../.env` automatically (
 |---|---|---|
 | `JWT_SECRET` | `change_me` (placeholder!) | The random string used to sign login tokens. **You must change this.** Generate with `openssl rand -hex 32`. |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (1 week in Docker, `15` in compose default) | How long a login session lasts before the user has to log in again. |
+| `ENCRYPTION_KEY` | *(empty — encryption off in dev)* | Fernet key used to encrypt **entry title, content, and reflection** plus **LLM API tokens** before they are stored in Postgres. **Required when `ENV=production`.** Generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Back this key up outside the repo — losing it means encrypted journal text cannot be recovered. |
+| `ENV` | *(unset)* | Set to `production` on deployed hosts. Enables stricter checks (including refusing to start without `ENCRYPTION_KEY`). |
+
+**Neon / hosted Postgres:** set `DATABASE_URL` to your Neon connection string **and** set `ENCRYPTION_KEY` on the API and Celery worker. New entries are encrypted automatically; for rows created before encryption was enabled, run `python scripts/encrypt_existing_entries.py` from the `api/` directory (with the same `ENCRYPTION_KEY` loaded).
 
 ### CORS (required for production)
 
