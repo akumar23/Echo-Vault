@@ -1,0 +1,9 @@
+# Railway configuration for the EchoVault API.
+# Build uses Railpack, which installs from requirements.txt automatically and
+# resolves the Python version from .python-version (+ mise.toml settings).
+
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"

@@ -1,0 +1,8 @@
+[tools]
+python = "3.11.7"
+
+[settings]
+# The prebuilt CPython 3.11.7 tarball predates GitHub artifact attestations,
+# which newer mise versions verify by default. Disable verification so the
+# Railway/Railpack build can install Python.
+python.github_attestations = false
