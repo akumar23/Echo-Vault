@@ -1,5 +1,7 @@
 # EchoVault
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/akumar23/Echo-Vault)
+
 **A self-hosted AI journal that learns from what you write — and forgets when you ask it to.**
 
 EchoVault is a private journaling app. You write entries; an AI on your own machine reads them, finds patterns, and helps you reflect on them. The catch most other journaling apps have — that your words get sent off to someone else's server — does not apply here. By default, nothing leaves your laptop.
