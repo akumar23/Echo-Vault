@@ -1,6 +1,21 @@
 from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional
+from typing import Literal, Optional
 import re
+
+_URL_PATTERN = re.compile(
+    r'^https?://'
+    r'[^\s/$.?#].'
+    r'[^\s]*$',
+    re.IGNORECASE
+)
+
+
+def _validate_optional_url(v: Optional[str]) -> Optional[str]:
+    if v is None or v == '':
+        return None
+    if not _URL_PATTERN.match(v):
+        raise ValueError('Invalid URL format. Must be a valid HTTP/HTTPS URL (e.g., http://localhost:11434)')
+    return v.rstrip('/')
 
 
 class SettingsUpdate(BaseModel):
@@ -22,17 +37,7 @@ class SettingsUpdate(BaseModel):
     @field_validator('generation_url', 'embedding_url')
     @classmethod
     def validate_url(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v == '':
-            return None
-        url_pattern = re.compile(
-            r'^https?://'
-            r'[^\s/$.?#].'
-            r'[^\s]*$',
-            re.IGNORECASE
-        )
-        if not url_pattern.match(v):
-            raise ValueError('Invalid URL format. Must be a valid HTTP/HTTPS URL (e.g., http://localhost:11434)')
-        return v.rstrip('/')
+        return _validate_optional_url(v)
 
     @field_validator('generation_api_token', 'embedding_api_token')
     @classmethod
@@ -47,6 +52,37 @@ class SettingsUpdate(BaseModel):
         if v is None or v == '':
             return None
         return v.strip()
+
+
+class LLMTestRequest(BaseModel):
+    """Schema for probing an LLM endpoint with (possibly unsaved) connection values.
+
+    Blank fields fall back to the server defaults, mirroring how the runtime
+    factories resolve per-user settings — so the test reflects what will
+    actually be used after saving.
+    """
+    service_type: Literal["generation", "embedding"]
+    url: Optional[str] = None
+    api_token: Optional[str] = None
+    model: Optional[str] = None
+
+    @field_validator('url')
+    @classmethod
+    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_optional_url(v)
+
+    @field_validator('api_token', 'model')
+    @classmethod
+    def strip_value(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == '':
+            return None
+        return v.strip()
+
+
+class LLMTestResponse(BaseModel):
+    """Result of an LLM connection probe."""
+    ok: bool
+    message: str
 
 
 class SettingsResponse(BaseModel):

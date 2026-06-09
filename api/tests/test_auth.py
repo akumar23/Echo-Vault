@@ -1,11 +1,26 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.database import Base, engine, SessionLocal
+from app.models.settings import Settings as UserSettings
+from app.models.user import User
 from main import app
 
 Base.metadata.create_all(bind=engine)
 
 client = TestClient(app)
+
+
+def _delete_user(email: str) -> None:
+    """Remove a fixed-email test user so registration is repeatable across runs."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            db.query(UserSettings).filter(UserSettings.user_id == user.id).delete()
+            db.delete(user)
+            db.commit()
+    finally:
+        db.close()
 
 
 @pytest.fixture
@@ -18,6 +33,7 @@ def db():
 
 
 def test_register():
+    _delete_user("test@example.com")
     response = client.post(
         "/auth/register",
         json={
@@ -91,6 +107,7 @@ def test_login_wrong_password():
 
 def test_full_registration_flow():
     """Test complete registration flow: register -> login (cookie) -> get user info"""
+    _delete_user("fullflow@example.com")
     with TestClient(app) as session_client:
         register_response = session_client.post(
             "/auth/register",
@@ -128,8 +145,12 @@ def test_get_me_without_token():
 
 
 def test_get_me_with_invalid_token():
-    response = client.get(
-        "/auth/me",
-        headers={"Authorization": "Bearer invalid_token_here"}
-    )
-    assert response.status_code == 401
+    # Fresh client: the module-level `client` carries auth cookies from the
+    # login tests above, which would satisfy cookie auth and mask the
+    # invalid Bearer token.
+    with TestClient(app) as fresh_client:
+        response = fresh_client.get(
+            "/auth/me",
+            headers={"Authorization": "Bearer invalid_token_here"}
+        )
+        assert response.status_code == 401

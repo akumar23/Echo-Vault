@@ -11,6 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from app.core.rate_limit import limiter
+
+# The limiter stores fixed-window counters in Redis keyed by client IP, and
+# every test shares the IP "testclient" — so the 5/minute login limit makes
+# the suite order- and timing-dependent (later files get 429s). Rate limiting
+# is not under test anywhere; disable it for deterministic runs.
+limiter.enabled = False
 
 
 @pytest.fixture

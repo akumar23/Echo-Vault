@@ -150,6 +150,18 @@ export interface SettingsUpdate {
   embedding_model?: string | null
 }
 
+export interface LLMTestRequest {
+  service_type: 'generation' | 'embedding'
+  url?: string | null
+  api_token?: string | null
+  model?: string | null
+}
+
+export interface LLMTestResult {
+  ok: boolean
+  message: string
+}
+
 export interface Reflection {
   reflection: string
   status: 'generating' | 'complete' | 'error'
@@ -315,6 +327,12 @@ export const settingsApi = {
   },
   update: async (settings: SettingsUpdate): Promise<Settings> => {
     const response = await api.put('/settings', settings)
+    return response.data
+  },
+  testLLM: async (payload: LLMTestRequest): Promise<LLMTestResult> => {
+    // The backend probe waits up to 45s for slow/cold providers; give the
+    // client a little more headroom than that.
+    const response = await api.post('/settings/test-llm', payload, { timeout: 60_000 })
     return response.data
   },
 }
