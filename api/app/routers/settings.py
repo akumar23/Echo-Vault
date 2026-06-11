@@ -1,12 +1,13 @@
 import asyncio
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings as app_settings
 from app.core.dependencies import get_current_user
 from app.core.encryption import encrypt_token
+from app.core.url_guard import OutboundPolicyError, validate_llm_url
 from app.database import get_db
 from app.models.settings import Settings
 from app.models.user import User
@@ -56,6 +57,18 @@ async def update_settings(
     update_dict = settings_data.model_dump(exclude_unset=True)
     token_fields = {"generation_api_token", "embedding_api_token"}
 
+    # The saved URLs are fetched server-side by the worker, so a user-supplied
+    # endpoint must clear the same SSRF policy as the connection probe.
+    for url_field in ("generation_url", "embedding_url"):
+        url = update_dict.get(url_field)
+        if url:
+            try:
+                await validate_llm_url(url)
+            except OutboundPolicyError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+                )
+
     for field, value in update_dict.items():
         if field in token_fields:
             setattr(settings, field, encrypt_token(value) if value else None)
@@ -100,6 +113,15 @@ async def test_llm_connection(
     else:
         base_url = payload.url or app_settings.default_embedding_url
         model = payload.model or app_settings.default_embedding_model
+
+    # Only a user-supplied URL is attacker-controlled; server defaults are
+    # operator-chosen and trusted. Reject disallowed outbound targets before
+    # any request is made (and before any response is reflected back).
+    if payload.url:
+        try:
+            await validate_llm_url(payload.url)
+        except OutboundPolicyError as exc:
+            return LLMTestResponse(ok=False, message=str(exc))
 
     # Constructed directly rather than via the per-user factories because this
     # must test values the user has typed but not yet saved.

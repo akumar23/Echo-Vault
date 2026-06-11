@@ -125,6 +125,40 @@ def test_test_llm_unreachable_endpoint(settings_client, monkeypatch):
     assert "Could not reach" in body["message"]
 
 
+def test_settings_response_exposes_default_urls(settings_client):
+    response = settings_client.get("/settings")
+    assert response.status_code == 200
+    body = response.json()
+    # Used by the onboarding modal to build a deployment-aware "local" preset.
+    assert body["default_generation_url"] == app_settings.default_generation_url
+    assert body["default_embedding_url"] == app_settings.default_embedding_url
+
+
+def test_test_llm_blocks_metadata_endpoint(settings_client, monkeypatch):
+    # The probe must reject the cloud-metadata service before making any
+    # request — it should never reach LLMService.
+    def fail_if_called(self, *args, **kwargs):
+        raise AssertionError("LLMService must not be called for a blocked URL")
+
+    monkeypatch.setattr(LLMService, "chat_completion", fail_if_called)
+
+    response = settings_client.post(
+        "/settings/test-llm",
+        json={"service_type": "generation", "url": "http://169.254.169.254"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is False
+    assert "169.254.169.254" in body["message"]
+
+
+def test_update_rejects_metadata_url(settings_client):
+    response = settings_client.put(
+        "/settings", json={"generation_url": "http://169.254.169.254"}
+    )
+    assert response.status_code == 400
+
+
 def test_test_llm_auth_error_mentions_token(settings_client, monkeypatch):
     async def fake_chat(self, messages, temperature=0.7, max_tokens=None):
         raise LLMProviderError(

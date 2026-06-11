@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Sparkles, XCircle } from "lucide-react";
 
@@ -28,16 +28,21 @@ interface Preset {
   model: string;
 }
 
+// The local Ollama preset points at the server's configured default endpoint,
+// not a hard-coded localhost. In Docker/hosted deployments the backend resolves
+// `localhost` to itself, not the user's machine, so a static localhost preset
+// would save a broken config (the Docker host is `host.docker.internal`).
+//
 // Embedding presets are limited to models that produce 1024-dimensional
 // vectors — the pgvector column width. The test endpoint verifies this,
 // but presets shouldn't steer users into a broken configuration.
-const GENERATION_PRESETS: Preset[] = [
-  { label: "Ollama (local)", url: "http://localhost:11434", model: "llama3.1:8b" },
+const buildGenerationPresets = (ollamaUrl: string): Preset[] => [
+  { label: "Ollama (local)", url: ollamaUrl, model: "llama3.1:8b" },
   { label: "OpenAI", url: "https://api.openai.com", model: "gpt-4o-mini" },
 ];
 
-const EMBEDDING_PRESETS: Preset[] = [
-  { label: "Ollama (local)", url: "http://localhost:11434", model: "mxbai-embed-large" },
+const buildEmbeddingPresets = (ollamaUrl: string): Preset[] => [
+  { label: "Ollama (local)", url: ollamaUrl, model: "mxbai-embed-large" },
   { label: "Voyage AI", url: "https://api.voyageai.com", model: "voyage-3" },
 ];
 
@@ -77,6 +82,12 @@ export function OnboardingModal() {
   const [embeddingTest, setEmbeddingTest] = useState<TestState>(IDLE_TEST);
   const [error, setError] = useState("");
 
+  // Monotonic token per section. Editing a field or starting a new test bumps
+  // it, so an in-flight probe that resolves late is discarded instead of
+  // overwriting state for values the form no longer holds.
+  const generationTestSeq = useRef(0);
+  const embeddingTestSeq = useRef(0);
+
   const shouldShow =
     !authLoading &&
     !settingsLoading &&
@@ -86,34 +97,41 @@ export function OnboardingModal() {
 
   if (!shouldShow) return null;
 
+  const generationPresets = buildGenerationPresets(settings.default_generation_url);
+  const embeddingPresets = buildEmbeddingPresets(settings.default_embedding_url);
+
   const sectionFor = (type: "generation" | "embedding") =>
     type === "generation"
-      ? { fields: generation, setFields: setGeneration, setTest: setGenerationTest }
-      : { fields: embedding, setFields: setEmbedding, setTest: setEmbeddingTest };
+      ? { fields: generation, setFields: setGeneration, setTest: setGenerationTest, seqRef: generationTestSeq }
+      : { fields: embedding, setFields: setEmbedding, setTest: setEmbeddingTest, seqRef: embeddingTestSeq };
 
-  // Any edit invalidates that section's last test result.
+  // Any edit invalidates that section's last test result and supersedes any
+  // probe still in flight.
   const updateField = (
     type: "generation" | "embedding",
     field: keyof SectionFields,
     value: string,
   ) => {
-    const { setFields, setTest } = sectionFor(type);
+    const { setFields, setTest, seqRef } = sectionFor(type);
+    seqRef.current += 1;
     setFields((prev) => ({ ...prev, [field]: value }));
     setTest(IDLE_TEST);
   };
 
   const applyPreset = (type: "generation" | "embedding", preset: Preset) => {
-    const { setFields, setTest } = sectionFor(type);
+    const { setFields, setTest, seqRef } = sectionFor(type);
+    seqRef.current += 1;
     setFields((prev) => ({ ...prev, url: preset.url, model: preset.model }));
     setTest(IDLE_TEST);
   };
 
   const runTest = async (type: "generation" | "embedding") => {
-    const { fields, setTest } = sectionFor(type);
+    const { fields, setTest, seqRef } = sectionFor(type);
     if (!isValidUrl(fields.url)) {
       setTest({ status: "fail", message: "Enter a valid http:// or https:// URL first." });
       return;
     }
+    const seq = (seqRef.current += 1);
     setTest({ status: "testing", message: "" });
     try {
       const result = await settingsApi.testLLM({
@@ -122,8 +140,11 @@ export function OnboardingModal() {
         api_token: fields.token || null,
         model: fields.model || null,
       });
+      // A later edit or test started after this one — drop the stale result.
+      if (seqRef.current !== seq) return;
       setTest({ status: result.ok ? "ok" : "fail", message: result.message });
     } catch {
+      if (seqRef.current !== seq) return;
       setTest({
         status: "fail",
         message: "The test could not run. Check your connection and try again.",
@@ -282,7 +303,7 @@ export function OnboardingModal() {
               <h3 className="text-sm font-semibold text-foreground">
                 Text Generation
               </h3>
-              {renderPresets("generation", GENERATION_PRESETS)}
+              {renderPresets("generation", generationPresets)}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="onboard-gen-url">API URL</Label>
@@ -323,7 +344,7 @@ export function OnboardingModal() {
               <h3 className="text-sm font-semibold text-foreground">
                 Embeddings
               </h3>
-              {renderPresets("embedding", EMBEDDING_PRESETS)}
+              {renderPresets("embedding", embeddingPresets)}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="onboard-emb-url">API URL</Label>

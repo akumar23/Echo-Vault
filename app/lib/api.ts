@@ -136,6 +136,9 @@ export interface Settings {
   embedding_url: string | null
   embedding_api_token_set: boolean
   embedding_model: string | null
+  // Server-configured default endpoints, used to seed deployment-aware presets.
+  default_generation_url: string
+  default_embedding_url: string
 }
 
 export interface SettingsUpdate {

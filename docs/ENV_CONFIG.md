@@ -127,6 +127,23 @@ DEFAULT_GENERATION_MODEL=gpt-4o-mini
 
 When using a cloud provider, the user must also set an **API token** in the in-app Settings page (server defaults intentionally have no token slot).
 
+### Restricting user-supplied LLM endpoints (SSRF guard)
+
+Users can point their LLM endpoints at any URL, and the backend fetches those URLs server-side (both the connection test and the background jobs). On a self-hosted single-user box that is exactly what you want — it lets you reach a local Ollama. On a **hosted, multi-user** deployment it is an SSRF risk: a user could aim the backend at internal services.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `RESTRICT_LLM_ENDPOINTS` | `false` | When `true`, blocks user-supplied LLM URLs that resolve to loopback or private ranges, leaving only public hosts. |
+
+Link-local / cloud-metadata ranges (e.g. `169.254.169.254`) are **always blocked**, regardless of this flag. Server defaults (`DEFAULT_*_URL`) are operator-chosen and are never subject to the guard.
+
+- **Self-hosted / single-user (default):** leave `false` so `localhost` / `host.docker.internal` / LAN Ollama work.
+- **Hosted / multi-user:** set `true`.
+
+```env
+RESTRICT_LLM_ENDPOINTS=true
+```
+
 ### Legacy LLM variables
 
 These older variables are still read for backward compatibility:

@@ -2,6 +2,8 @@ from pydantic import BaseModel, field_validator, model_validator
 from typing import Literal, Optional
 import re
 
+from app.core.config import settings as _app_settings
+
 _URL_PATTERN = re.compile(
     r'^https?://'
     r'[^\s/$.?#].'
@@ -103,6 +105,13 @@ class SettingsResponse(BaseModel):
     embedding_api_token_set: bool = False
     embedding_model: Optional[str] = None
 
+    # Server-configured default endpoints (not user secrets). Exposed so the
+    # client can offer a "local" preset that points at this deployment's actual
+    # backend host instead of hard-coding localhost — which resolves to the
+    # backend container, not the user's machine, in Docker/hosted setups.
+    default_generation_url: str
+    default_embedding_url: str
+
     class Config:
         from_attributes = True
 
@@ -124,6 +133,8 @@ class SettingsResponse(BaseModel):
                 'embedding_url': data.embedding_url,
                 'embedding_api_token_set': bool(data.embedding_api_token),
                 'embedding_model': data.embedding_model,
+                'default_generation_url': _app_settings.default_generation_url,
+                'default_embedding_url': _app_settings.default_embedding_url,
             }
             return result
         return data
