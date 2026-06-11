@@ -68,7 +68,12 @@ def persisted_entry_id():
         db.add(entry)
         db.commit()
         db.refresh(entry)
-        yield entry.id
+        entry_id, user_id = entry.id, user.id
+        yield entry_id
+        # Clean up so the unique email doesn't collide on the next test/run.
+        db.query(Entry).filter(Entry.id == entry_id).delete()
+        db.query(User).filter(User.id == user_id).delete()
+        db.commit()
     finally:
         db.close()
 

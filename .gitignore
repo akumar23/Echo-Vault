@@ -30,6 +30,7 @@ out/
 dist/
 build/
 *.egg-info/
+*.tsbuildinfo
 
 # Database
 *.db

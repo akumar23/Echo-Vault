@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     # Must match the pgvector column width — changing this requires a migration.
     embedding_dim: int = 1024
 
+    # SSRF guard for user-supplied LLM endpoints. The default deployment is
+    # self-hosted single-user pointed at a local Ollama (localhost / LAN), so
+    # loopback and private ranges are allowed by default. Hosted, multi-user
+    # operators set this true to block loopback/private targets and leave only
+    # public hosts. Link-local / cloud-metadata ranges are blocked regardless.
+    restrict_llm_endpoints: bool = False
+
 
 settings = Settings()
 
