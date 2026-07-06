@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Header } from "@/components/Header";
-import { SettingsUpdate } from "@/lib/api";
+import { Settings, SettingsUpdate } from "@/lib/api";
 import {
   Search,
   Bot,
@@ -203,7 +203,11 @@ export default function SettingsPage() {
   const [showEmbeddingToken, setShowEmbeddingToken] = useState(false);
 
   // Sync state when settings load (render-time pattern).
-  const [prevSettings, setPrevSettings] = useState(settings);
+  // Seed with `undefined` (not `settings`) so the sync also fires on a warm
+  // remount, where React Query returns cached data on the first render.
+  const [prevSettings, setPrevSettings] = useState<Settings | undefined>(
+    undefined,
+  );
   if (settings && settings !== prevSettings) {
     setPrevSettings(settings);
     setHalfLife(settings.search_half_life_days ?? 30);
