@@ -13,6 +13,7 @@ export function middleware(request: NextRequest) {
     '/journal',
     '/entries',
     '/new',
+    '/import',
     '/insights',
     '/settings',
   ]

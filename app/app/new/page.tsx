@@ -83,6 +83,12 @@ function NewEntryForm() {
         isDraft={true}
         initialDraft={initialDraft}
       />
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Prefer a document?{' '}
+        <Link href="/import" className="underline underline-offset-4 hover:text-foreground">
+          Import a file
+        </Link>
+      </p>
     </main>
   )
 }

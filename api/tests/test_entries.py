@@ -45,6 +45,7 @@ def test_update_entry(auth_client):
         json={"title": "Update Test", "content": "Original content"},
     )
     entry_id = create_response.json()["id"]
+    original_created_at = create_response.json()["created_at"]
 
     response = auth_client.put(
         f"/entries/{entry_id}",
@@ -54,6 +55,43 @@ def test_update_entry(auth_client):
     data = response.json()
     assert data["title"] == "Updated Title"
     assert data["content"] == "Updated content"
+    assert data["created_at"] == original_created_at
+
+
+def test_create_entry_with_entry_date(auth_client):
+    response = auth_client.post(
+        "/entries",
+        json={
+            "content": "Backdated entry",
+            "entry_date": "2024-06-15",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["created_at"].startswith("2024-06-15")
+
+
+def test_update_entry_date(auth_client):
+    create_response = auth_client.post(
+        "/entries",
+        json={"content": "Date change test"},
+    )
+    entry_id = create_response.json()["id"]
+
+    response = auth_client.put(
+        f"/entries/{entry_id}",
+        json={"entry_date": "2023-01-10"},
+    )
+    assert response.status_code == 200
+    assert response.json()["created_at"].startswith("2023-01-10")
+
+
+def test_reject_future_entry_date(auth_client):
+    response = auth_client.post(
+        "/entries",
+        json={"content": "Future entry", "entry_date": "2099-01-01"},
+    )
+    assert response.status_code == 422
 
 
 def test_related_entries_not_found(auth_client):

@@ -12,6 +12,7 @@ import {
   Sun,
   Moon,
   Laptop,
+  Upload,
 } from 'lucide-react'
 
 import {
@@ -172,6 +173,14 @@ export function CommandPalette() {
             >
               <PenLine />
               <span>New entry</span>
+            </CommandItem>
+
+            <CommandItem
+              value="import-file"
+              onSelect={() => runAndClose(() => router.push('/import'))}
+            >
+              <Upload />
+              <span>Import file</span>
             </CommandItem>
 
             {currentEntryId && (

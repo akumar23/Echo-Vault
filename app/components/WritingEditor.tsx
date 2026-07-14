@@ -14,6 +14,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { startOfDay } from 'date-fns'
+import {
+  EntryDatePicker,
+  entryDateFromTimestamp,
+  toEntryDateIso,
+} from '@/components/EntryDatePicker'
 import { MoreHorizontal, X } from 'lucide-react'
 
 interface WritingEditorProps {
@@ -23,6 +29,7 @@ interface WritingEditorProps {
     content: string
     tags: string[]
     mood_user?: number
+    entry_date?: string
   }) => Promise<void>
   saving?: boolean
   initialPrompt?: string
@@ -130,6 +137,9 @@ export function WritingEditor({
   const [lastSavedTitle, setLastSavedTitle] = useState(
     entry?.title ?? initialDraft?.title ?? ''
   )
+  const [entryDate, setEntryDate] = useState(() =>
+    entry ? entryDateFromTimestamp(entry.created_at) : startOfDay(new Date()),
+  )
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -153,6 +163,7 @@ export function WritingEditor({
       setUseLlmPrediction(entry?.mood_user == null)
       setLastSavedContent(entry?.content ?? '')
       setLastSavedTitle(entry?.title ?? '')
+      setEntryDate(entryDateFromTimestamp(entry.created_at))
     }
   }, [entry])
 
@@ -177,6 +188,17 @@ export function WritingEditor({
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasChanges, saving, isAutosaving])
+
+  const buildSavePayload = useCallback(
+    () => ({
+      title: title.trim() || undefined,
+      content,
+      tags,
+      mood_user: useLlmPrediction ? undefined : mood,
+      ...(isDraft ? { entry_date: toEntryDateIso(entryDate) } : {}),
+    }),
+    [title, content, tags, mood, useLlmPrediction, isDraft, entryDate],
+  )
 
   // Autosave
   useEffect(() => {
@@ -205,12 +227,7 @@ export function WritingEditor({
             savedAt: new Date().toISOString(),
           })
         } else {
-          await onSave({
-            title: title.trim() || undefined,
-            content,
-            tags,
-            mood_user: useLlmPrediction ? undefined : mood,
-          })
+          await onSave(buildSavePayload())
         }
         setLastSavedContent(content)
         setLastSavedTitle(title)
@@ -239,6 +256,7 @@ export function WritingEditor({
     useLlmPrediction,
     onSave,
     isDraft,
+    buildSavePayload,
   ])
 
   // Focus content on mount when creating a new entry
@@ -279,12 +297,7 @@ export function WritingEditor({
   )
 
   const handleSave = async () => {
-    await onSave({
-      title: title.trim() || undefined,
-      content,
-      tags,
-      mood_user: useLlmPrediction ? undefined : mood,
-    })
+    await onSave(buildSavePayload())
 
     setLastSavedContent(content)
     setLastSavedTitle(title)
@@ -361,6 +374,19 @@ export function WritingEditor({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72 p-4">
               <div className="space-y-5">
+                {isDraft && (
+                  <div className="space-y-2">
+                    <div className="text-[0.7rem] font-medium uppercase tracking-wider text-muted-foreground">
+                      Date
+                    </div>
+                    <EntryDatePicker
+                      variant="inline"
+                      date={entryDate}
+                      onDateChange={setEntryDate}
+                    />
+                  </div>
+                )}
+
                 {/* Mood */}
                 <div className="space-y-2">
                   <div className="text-[0.7rem] font-medium uppercase tracking-wider text-muted-foreground">

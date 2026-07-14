@@ -87,6 +87,15 @@ export interface User {
   is_active: boolean
 }
 
+export interface EntryWritePayload {
+  title?: string
+  content: string
+  tags?: string[]
+  mood_user?: number
+  /** Calendar date (YYYY-MM-DD) for when the entry was written */
+  entry_date?: string
+}
+
 export interface Entry {
   id: number
   user_id: number
@@ -95,8 +104,28 @@ export interface Entry {
   tags: string[]
   mood_user: number | null
   mood_inferred: number | null
+  mood_confidence?: string | null
   created_at: string
   updated_at: string | null
+}
+
+export interface EntryUpdatePayload {
+  title?: string
+  content?: string
+  tags?: string[]
+  mood_user?: number
+  entry_date?: string
+}
+
+export interface EntryAttachment {
+  id: number
+  filename: string
+  mime_type: string | null
+}
+
+export interface EntryUploadResult extends Entry {
+  attachment: EntryAttachment
+  truncated: boolean
 }
 
 export interface Insight {
@@ -273,8 +302,37 @@ export const authApi = {
 
 // Entries
 export const entriesApi = {
-  create: async (entry: { title?: string; content: string; tags?: string[]; mood_user?: number }) => {
+  create: async (entry: EntryWritePayload) => {
     const response = await api.post('/entries', entry)
+    return response.data
+  },
+  upload: async (
+    file: File,
+    options?: { title?: string; tags?: string[]; mood_user?: number },
+  ): Promise<EntryUploadResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (options?.title?.trim()) {
+      formData.append('title', options.title.trim())
+    }
+    if (options?.tags && options.tags.length > 0) {
+      formData.append('tags', options.tags.join(','))
+    }
+    if (options?.mood_user != null) {
+      formData.append('mood_user', String(options.mood_user))
+    }
+    // Instance defaults to application/json; strip it so the runtime sets
+    // multipart/form-data with the correct boundary for FormData.
+    const response = await api.post('/entries/upload', formData, {
+      transformRequest: [
+        (data, headers) => {
+          if (data instanceof FormData && headers) {
+            delete headers['Content-Type']
+          }
+          return data
+        },
+      ],
+    })
     return response.data
   },
   list: async (skip = 0, limit = 100) => {
@@ -285,7 +343,7 @@ export const entriesApi = {
     const response = await api.get(`/entries/${id}`)
     return response.data
   },
-  update: async (id: number, entry: Partial<Entry>) => {
+  update: async (id: number, entry: EntryUpdatePayload) => {
     const response = await api.put(`/entries/${id}`, entry)
     return response.data
   },
