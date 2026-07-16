@@ -178,8 +178,8 @@ function ImportForm() {
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Upload a document and EchoVault will extract the text into a journal
-          entry, then embed it for search and reflections — same as writing in
-          the app.
+          entry, ready for search and reflections — same as writing in the
+          app.
         </p>
       </div>
 

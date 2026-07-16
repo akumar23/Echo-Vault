@@ -62,7 +62,7 @@ curl https://<railway-api-domain>/health/full     # includes Redis
 #    devtools > Network: the requests must hit /api/* on the Vercel origin, not the Railway domain.
 
 # 3. Async pipeline: create a test entry in the UI, then check the worker
-#    service logs on Railway for "embedding.create_embedding" / mood task lines.
+#    service logs on Railway for "mood.infer_mood" task lines.
 #    Jobs run ignore_result=True — logs are the only failure signal.
 ```
 

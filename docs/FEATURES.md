@@ -119,7 +119,7 @@ Two modes:
 
 | Mode | What's in context |
 |---|---|
-| **All entries** (default) | The current reflection + the top 3 semantically-similar entries to your message |
+| **All entries** (default) | The current reflection + your 3 most recent journal entries |
 | **Pinned to one entry** | Just that entry's full content (capped at 4000 chars) |
 
 The chat is delivered over a WebSocket and streams token-by-token, so you see the answer typing out in real time. Conversation history is kept for the last 10 messages so follow-ups have context.

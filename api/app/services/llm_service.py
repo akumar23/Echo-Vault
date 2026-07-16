@@ -477,58 +477,6 @@ class LLMService:
         response_text = await self.chat_completion(messages, temperature=0.7)
         return self._parse_insights_response(response_text)
 
-    async def generate_insights_with_themes(
-        self,
-        recent_entries_text: str,
-        older_themed_text: str,
-    ) -> dict:
-        """Generate insights with explicit recent vs. older-themed buckets.
-
-        The two-bucket structure lets the model identify recurring patterns
-        — e.g., "the work stress this month echoes the same pattern from
-        last summer" — without conflating chronological events.
-
-        Falls back gracefully via the same _parse_insights_response logic.
-        """
-        system_prompt = (
-            "Analyze journal entries to surface patterns and actionable advice.\n\n"
-            "You receive entries in two buckets:\n"
-            "- RECENT: what the user wrote in the analysis period\n"
-            "- OLDER THEMES: past entries that semantically resonate with the recent ones\n\n"
-            "Use OLDER THEMES to identify recurring patterns. When a recent issue echoes "
-            "an older one, name it. When something appears genuinely new, name it too.\n\n"
-            "Respond in valid JSON:\n"
-            "{\n"
-            '  "summary": "Brief factual summary. State observed patterns including recurrences. No emotional language.",\n'
-            '  "themes": ["theme1", "theme2", "theme3"],\n'
-            '  "actions": [\n'
-            '    "Concrete action with specific parameters (time, frequency, duration)",\n'
-            '    "Another specific action",\n'
-            '    "Another specific action"\n'
-            "  ]\n"
-            "}\n\n"
-            "RULES:\n"
-            "- Summary: prefer noting recurrences over describing single events.\n"
-            "- Themes: single words or short phrases only.\n"
-            "- Actions: specific and measurable (e.g., '10-min walk before 9am' not 'exercise more').\n"
-            "- No filler phrases, no emotional validation, no rhetorical questions.\n"
-            "- Be direct and clinical.\n\n"
-            "Output ONLY valid JSON."
-        )
-        user_prompt = (
-            f"RECENT ENTRIES:\n{recent_entries_text}\n\n"
-            f"OLDER THEMES (semantically related past entries):\n{older_themed_text}\n\n"
-            "Analyze (JSON only):"
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        response_text = await self.chat_completion(messages, temperature=0.7)
-        return self._parse_insights_response(response_text)
-
     def _parse_insights_response(self, response_text: str) -> dict:
         """Parse insights from LLM response with fallback strategies."""
         default_result = {

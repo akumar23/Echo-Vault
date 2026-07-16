@@ -154,7 +154,7 @@ Navigate to:
 
 The first time you visit, you will be sent to a registration page. Create an account (it's stored locally — there is no email verification). Log in. Write your first entry.
 
-Within a few seconds, the background worker should generate an embedding and infer a mood for your entry. You can verify by opening the entry and seeing the mood badge fill in, or by using the search to look for similar entries.
+Within a few seconds, the background worker should infer a mood for your entry. You can verify by opening the entry and seeing the mood badge fill in, or by using search to look for it by keyword.
 
 ---
 
@@ -170,7 +170,7 @@ curl http://localhost:8000/health
 # Ollama has the right models
 curl http://localhost:11434/api/tags
 
-# Worker is processing jobs (look for log lines about embedding tasks)
+# Worker is processing jobs (look for log lines about mood/reflection tasks)
 docker compose logs worker --tail=50
 ```
 
@@ -336,6 +336,5 @@ docker compose up -d --build    # rebuild from scratch
 - **Port** — a number identifying a network service. Frontend = 3000, API = 8000.
 - **Migration** — a script that updates the database schema.
 - **LLM** — Large Language Model. The AI that reads and writes text.
-- **Embedding** — a list of numbers representing the meaning of a piece of text.
 
 The full glossary lives in the [README](README.md#glossary).

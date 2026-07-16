@@ -14,9 +14,12 @@ x-api-worker-env: &api-worker-env
 
 services:
   db:
-    # Keep the Bookworm base used by pgvector/pgvector:pg16 so existing
-    # volumes do not acquire a glibc collation-version mismatch.
-    image: postgres:16-bookworm
+    # Historical migrations (001, 003, 005) still run `CREATE EXTENSION
+    # vector` on a fresh install even though the app no longer uses it —
+    # those shipped revisions are immutable, so this image (which bundles
+    # the pgvector extension files) must stay put until they're squashed.
+    # Do not switch to a plain postgres:16 image without a migration squash.
+    image: pgvector/pgvector:pg16
     container_name: echovault_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-echovault}
@@ -26,6 +29,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-echovault}"]
       interval: 10s

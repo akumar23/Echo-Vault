@@ -3,6 +3,11 @@
 Revision ID: 013
 Revises: 012
 Create Date: 2026-07-14
+
+Deploy note: this migration drops columns/tables that older, still-running
+API/worker instances may read during a rolling restart. Ship the code that
+stops using entry_embeddings/embedding_* settings first, confirm it is fully
+rolled out, and only then deploy this migration on its own release.
 """
 from alembic import op
 import sqlalchemy as sa

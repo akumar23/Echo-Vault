@@ -360,6 +360,14 @@ class ContextService:
             "anchor_entry_id": bundle.anchor_entry.id if bundle.anchor_entry else None,
             "related_ids": _slim(bundle.related_entries),
             "recent_ids": _slim(bundle.recent_window),
+            "mood_examples": [
+                {
+                    "id": example.entry_id,
+                    "mood": example.mood,
+                    "similarity": example.similarity,
+                }
+                for example in bundle.mood_examples
+            ],
             "bundle_cap_applied": bundle.bundle_cap_applied,
         }
 
@@ -375,8 +383,9 @@ class ContextService:
         try:
             related_meta = cached.get("related_ids") or []
             recent_meta = cached.get("recent_ids") or []
+            mood_meta = cached.get("mood_examples") or []
             anchor_id = cached.get("anchor_entry_id")
-            all_ids = [item["id"] for item in related_meta + recent_meta]
+            all_ids = [item["id"] for item in related_meta + recent_meta + mood_meta]
             if anchor_id is not None:
                 all_ids.append(anchor_id)
             rows = (
@@ -400,13 +409,24 @@ class ContextService:
                     for item in items
                 ]
 
+            def _rehydrate_mood_examples(items: Sequence[dict]) -> List[MoodExample]:
+                return [
+                    MoodExample(
+                        entry_id=item["id"],
+                        content=by_id[item["id"]].content or "",
+                        mood=item["mood"],
+                        similarity=item.get("similarity", 1.0),
+                    )
+                    for item in items
+                ]
+
             return ContextBundle(
                 cold_start=False,
                 intent=intent,
                 anchor_entry=_row_to_summary(by_id[anchor_id]) if anchor_id else None,
                 related_entries=_rehydrate(related_meta),
                 recent_window=_rehydrate(recent_meta),
-                mood_examples=[],
+                mood_examples=_rehydrate_mood_examples(mood_meta),
                 user_baseline=baseline,
                 cache_hit=True,
                 is_local_llm=is_local,

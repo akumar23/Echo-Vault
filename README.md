@@ -12,9 +12,9 @@ This README is the front door. If you have never set up a project like this befo
 
 ## Who this is for
 
-- **You journal and want better recall.** Search by what you meant, not the exact words you typed.
+- **You journal and want better recall.** Search by keyword across titles, text, and tags, ranked by recency.
 - **You care about privacy.** You would rather your therapist's notes app not phone home to OpenAI.
-- **You want to learn how a modern full-stack app is built.** This is a working example with a Next.js frontend, a FastAPI backend, a vector database, a job queue, and a local LLM — all wired together.
+- **You want to learn how a modern full-stack app is built.** This is a working example with a Next.js frontend, a FastAPI backend, a job queue, and a local LLM — all wired together.
 
 If any of those words are new, read the [Glossary](#glossary) at the bottom first.
 

@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { startOfDay } from 'date-fns'
 import {
   EntryDatePicker,
+  entryDateFromIso,
   entryDateFromTimestamp,
   toEntryDateIso,
 } from '@/components/EntryDatePicker'
@@ -62,6 +63,8 @@ export interface DraftData {
   tags: string[]
   mood: number
   useLlmPrediction: boolean
+  /** ISO yyyy-MM-dd, see toEntryDateIso. Optional for drafts saved before this field existed. */
+  entryDate?: string
   savedAt: string
 }
 
@@ -137,9 +140,11 @@ export function WritingEditor({
   const [lastSavedTitle, setLastSavedTitle] = useState(
     entry?.title ?? initialDraft?.title ?? ''
   )
-  const [entryDate, setEntryDate] = useState(() =>
-    entry ? entryDateFromTimestamp(entry.created_at) : startOfDay(new Date()),
-  )
+  const [entryDate, setEntryDate] = useState(() => {
+    if (entry) return entryDateFromTimestamp(entry.created_at)
+    if (initialDraft?.entryDate) return entryDateFromIso(initialDraft.entryDate)
+    return startOfDay(new Date())
+  })
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -224,6 +229,7 @@ export function WritingEditor({
             tags,
             mood,
             useLlmPrediction,
+            entryDate: toEntryDateIso(entryDate),
             savedAt: new Date().toISOString(),
           })
         } else {
@@ -254,6 +260,7 @@ export function WritingEditor({
     tags,
     mood,
     useLlmPrediction,
+    entryDate,
     onSave,
     isDraft,
     buildSavePayload,

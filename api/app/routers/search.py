@@ -14,7 +14,13 @@ from app.models.user import User
 from app.schemas.search import SearchRequest, SearchResult
 
 router = APIRouter()
-_MAX_SEARCH_CORPUS = 1000
+# Entries are decrypted in the API process (content is encrypted at rest, so
+# matching can't happen in SQL). We scan the user's full filtered corpus in
+# batches, newest first, so a term match on an old entry is never silently
+# dropped. _MAX_SEARCH_CORPUS is only a defensive ceiling for pathological
+# journal sizes, not the expected result set.
+_SEARCH_BATCH_SIZE = 1000
+_MAX_SEARCH_CORPUS = 50_000
 
 
 def _terms(query: str) -> List[str]:
@@ -66,18 +72,22 @@ async def keyword_search(
     if search_request.tags:
         query = query.filter(Entry.tags.contains(search_request.tags))
 
-    entries = (
-        query.order_by(Entry.created_at.desc()).limit(_MAX_SEARCH_CORPUS).all()
-    )
-    ranked = [
-        (entry, _entry_score(entry, terms, half_life_days))
-        for entry in entries
-    ]
-    ranked = [
-        (entry, score)
-        for entry, score in ranked
-        if score > 0
-    ]
+    query = query.order_by(Entry.created_at.desc())
+
+    ranked: List[tuple] = []
+    offset = 0
+    while offset < _MAX_SEARCH_CORPUS:
+        batch = query.offset(offset).limit(_SEARCH_BATCH_SIZE).all()
+        if not batch:
+            break
+        ranked.extend(
+            (entry, score)
+            for entry in batch
+            if (score := _entry_score(entry, terms, half_life_days)) > 0
+        )
+        offset += len(batch)
+        if len(batch) < _SEARCH_BATCH_SIZE:
+            break
     ranked.sort(key=lambda item: item[1], reverse=True)
 
     return [

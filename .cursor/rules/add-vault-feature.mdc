@@ -58,13 +58,13 @@ Copy the shape of `api/app/jobs/reflection_job.py` exactly:
 - `@celery_app.task(name="<area>.<verb>", ignore_result=True, time_limit=..., soft_time_limit=..., autoretry_for=(httpx.HTTPError, httpx.TimeoutException, ConnectionError), retry_backoff=True)`
 - Open `db = SessionLocal()`, `finally: db.close()`
 - Wrap async LLM calls in `asyncio.run(...)` — deliberate pattern, documented in `docs/architecture/async-celery-pattern.md`. Do not "fix" it with a shared event loop.
-- LLM access ONLY via the per-user factories in `api/app/services/llm_service.py` — `get_generation_service_for_user(db, user_id)` (line 817) or `get_embedding_service_for_user(db, user_id)` (line 836). Never construct `LLMService` directly; the factories handle per-user provider overrides, server defaults, and a fresh `httpx.AsyncClient` per request.
+- LLM access ONLY via the per-user factory in `api/app/services/llm_service.py` — `get_generation_service_for_user(db, user_id)` (line 740). Never construct `LLMService` directly; the factory handles per-user provider overrides, server defaults, and a fresh `httpx.AsyncClient` per request.
 - On transient errors: log + `raise` so Celery retries. On fatal errors: persist an `"error"` status so the frontend stops polling (see `reflection_job.py:201-216`).
 - Export an `enqueue_<feature>_job(...)` helper that calls `.delay()`.
 
 ## 6. Prompt template — `api/prompts/<feature>.txt`
 
-Plain text with `{placeholders}`; add a `generate_<feature>` method on `LLMService` next to `generate_reflection` (`api/app/services/llm_service.py:307`).
+Plain text with `{placeholders}`; add a `generate_<feature>` method on `LLMService` next to `generate_reflection` (`api/app/services/llm_service.py:245`).
 
 ## 7. Frontend
 
@@ -90,8 +90,7 @@ Create an entry at http://localhost:3000 and watch the worker log for your task 
 
 ## Gotchas
 
-- **Embedding dimension is frozen**: `embedding_dim: int = 1024` (`api/app/core/config.py:78`) must match the `vector(1024)` column on `entry_embeddings`. A different-dimension embedding model requires a migration, not a config change.
-- **Silent failures are by design**: all jobs run `ignore_result=True` (no Celery result backend, tuned for Upstash). If a feature "never appears", the answer is in `docker compose logs worker` — or work through the stack-doctor diagnostic tree (see the `vault-stack-doctor` rule) for Celery/Ollama/embedding failures.
+- **Silent failures are by design**: all jobs run `ignore_result=True` (no Celery result backend, tuned for Upstash). If a feature "never appears", the answer is in `docker compose logs worker` — or work through the stack-doctor diagnostic tree (see the `vault-stack-doctor` rule) for Celery/Ollama failures.
 - **Never log raw URLs/exceptions** — they can carry DB/LLM credentials. Follow the `_scrub_creds` / `_safe_db_url_summary` pattern in `api/main.py`.
 - **OLLAMA_URL inside containers is `http://ollama:11434`**, not `localhost` — `infra/docker-compose.override.yml` documents a past outage from getting this wrong.
 - **Frontend state split**: React Query for server state, Zustand for UI state (`app/lib/commandPaletteStore.ts`). Don't mirror server data into Zustand.
