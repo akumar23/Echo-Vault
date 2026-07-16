@@ -10,13 +10,10 @@ interface EchoesProps {
 }
 
 /**
- * Echoes — entries across the user's journal that semantically resonate with
- * the current one, surfaced with a brief LLM-generated observation about what
- * connects them.
+ * Echoes — recent or tag-related entries surfaced with a brief LLM-generated
+ * observation about what connects them.
  *
- * Renders nothing when the user has no other entries (empty) or when the
- * current entry's embedding is still being generated (pending) — so new
- * users and new entries stay quiet.
+ * Renders nothing when the user has no other entries.
  */
 export function Echoes({ entryId, k = 3 }: EchoesProps) {
   const { data, isLoading } = useEchoes(entryId, k)
@@ -35,7 +32,7 @@ export function Echoes({ entryId, k = 3 }: EchoesProps) {
           ⟲
         </span>
         {data.echoes.length} {data.echoes.length === 1 ? 'Echo' : 'Echoes'} ·
-        Resonant entries
+        Related entries
       </p>
 
       {data.framing && (

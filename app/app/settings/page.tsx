@@ -55,8 +55,8 @@ interface LLMSettingsSectionProps {
   model: string;
   setModel: (v: string) => void;
   tokenSet: boolean;
-  type: "generation" | "embedding";
-  onClearToken: (type: "generation" | "embedding") => void;
+  type: "generation";
+  onClearToken: () => void;
 }
 
 function LLMSettingsSection({
@@ -145,7 +145,7 @@ function LLMSettingsSection({
               type="button"
               variant="destructive"
               size="icon"
-              onClick={() => onClearToken(type)}
+              onClick={onClearToken}
               title="Clear token"
             >
               <Trash2 className="h-4 w-4" />
@@ -165,11 +165,7 @@ function LLMSettingsSection({
           type="text"
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          placeholder={
-            type === "generation"
-              ? "llama3.1:8b, gpt-4, claude-3-haiku, etc."
-              : "mxbai-embed-large, text-embedding-3-small, etc."
-          }
+          placeholder="llama3.1:8b, gpt-4, claude-3-haiku, etc."
         />
         <p className="text-xs text-muted-foreground">
           Leave empty to use the default model
@@ -195,13 +191,6 @@ export default function SettingsPage() {
   const [generationUrlError, setGenerationUrlError] = useState("");
   const [showGenerationToken, setShowGenerationToken] = useState(false);
 
-  // Embedding LLM settings
-  const [embeddingUrl, setEmbeddingUrl] = useState("");
-  const [embeddingToken, setEmbeddingToken] = useState("");
-  const [embeddingModel, setEmbeddingModel] = useState("");
-  const [embeddingUrlError, setEmbeddingUrlError] = useState("");
-  const [showEmbeddingToken, setShowEmbeddingToken] = useState(false);
-
   // Sync state when settings load (render-time pattern).
   // Seed with `undefined` (not `settings`) so the sync also fires on a warm
   // remount, where React Query returns cached data on the first render.
@@ -214,8 +203,6 @@ export default function SettingsPage() {
     setHardDelete(settings.privacy_hard_delete ?? false);
     setGenerationUrl(settings.generation_url ?? "");
     setGenerationModel(settings.generation_model ?? "");
-    setEmbeddingUrl(settings.embedding_url ?? "");
-    setEmbeddingModel(settings.embedding_model ?? "");
     // Tokens are write-only — never hydrated.
   }
 
@@ -272,28 +259,19 @@ export default function SettingsPage() {
       toast.error("Fix the highlighted URL errors before saving.");
       return;
     }
-    if (!validateUrl(embeddingUrl, setEmbeddingUrlError)) {
-      toast.error("Fix the highlighted URL errors before saving.");
-      return;
-    }
-
     const update: SettingsUpdate = {
       search_half_life_days: halfLife,
       privacy_hard_delete: hardDelete,
       generation_url: generationUrl || null,
       generation_model: generationModel || null,
-      embedding_url: embeddingUrl || null,
-      embedding_model: embeddingModel || null,
     };
 
     if (generationToken) update.generation_api_token = generationToken;
-    if (embeddingToken) update.embedding_api_token = embeddingToken;
 
     updateMutation.mutate(update, {
       onSuccess: () => {
         toast.success("Settings saved");
         setGenerationToken("");
-        setEmbeddingToken("");
       },
       onError: (error) => {
         toast.error(extractErrorMessage(error));
@@ -301,17 +279,10 @@ export default function SettingsPage() {
     });
   };
 
-  const clearToken = (type: "generation" | "embedding") => {
-    const update: SettingsUpdate =
-      type === "generation"
-        ? { generation_api_token: "" }
-        : { embedding_api_token: "" };
-
-    updateMutation.mutate(update, {
+  const clearToken = () => {
+    updateMutation.mutate({ generation_api_token: "" }, {
       onSuccess: () => {
-        toast.success(
-          `${type === "generation" ? "Generation" : "Embedding"} API token cleared`,
-        );
+        toast.success("Generation API token cleared");
       },
       onError: (error) => {
         toast.error(extractErrorMessage(error));
@@ -395,7 +366,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Search Settings</CardTitle>
                 <CardDescription>
-                  Control how semantic search balances relevance and recency.
+                  Control how keyword search balances matches and recency.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -423,8 +394,7 @@ export default function SettingsPage() {
                     <p className="mb-4">
                       Controls how search results balance relevance vs.
                       recency. When you search for entries, the system
-                      considers both how similar they are to your query AND
-                      how recent they are.
+                      considers both keyword matches and how recent entries are.
                     </p>
                     <ul className="ml-5 list-disc space-y-1">
                       <li>
@@ -437,7 +407,7 @@ export default function SettingsPage() {
                       </li>
                       <li>
                         <strong>Higher values (60-365 days):</strong> Only
-                        relevance matters
+                        keyword matches matter most
                       </li>
                     </ul>
                   </AlertDescription>
@@ -451,9 +421,8 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>LLM Settings</CardTitle>
                 <CardDescription>
-                  Configure the AI models used for reflections, insights, mood
-                  analysis, and semantic search. Uses OpenAI-compatible API
-                  format.
+                  Configure the AI model used for reflections, insights, mood
+                  analysis, and chat. Uses the OpenAI-compatible API format.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -473,25 +442,6 @@ export default function SettingsPage() {
                   setModel={setGenerationModel}
                   tokenSet={settings?.generation_api_token_set ?? false}
                   type="generation"
-                  onClearToken={clearToken}
-                />
-
-                <LLMSettingsSection
-                  title="Embeddings"
-                  description="Used for semantic search to find related entries"
-                  url={embeddingUrl}
-                  setUrl={setEmbeddingUrl}
-                  urlError={embeddingUrlError}
-                  validateUrl={validateUrl}
-                  setUrlError={setEmbeddingUrlError}
-                  token={embeddingToken}
-                  setToken={setEmbeddingToken}
-                  showToken={showEmbeddingToken}
-                  setShowToken={setShowEmbeddingToken}
-                  model={embeddingModel}
-                  setModel={setEmbeddingModel}
-                  tokenSet={settings?.embedding_api_token_set ?? false}
-                  type="embedding"
                   onClearToken={clearToken}
                 />
 
@@ -551,8 +501,7 @@ export default function SettingsPage() {
                     </p>
                     <ul className="mb-4 ml-5 list-disc space-y-1">
                       <li>Entry is removed from search results</li>
-                      <li>Content is preserved in your journal</li>
-                      <li>Embedding vector is zeroed out</li>
+                      <li>Content and identifying metadata are erased</li>
                     </ul>
 
                     <p className="mb-2">

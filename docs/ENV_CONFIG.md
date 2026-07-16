@@ -110,8 +110,6 @@ These are the **defaults** used when a user has not configured their own LLM end
 |---|---|---|
 | `DEFAULT_GENERATION_URL` | `http://ollama:11434` | Where to send chat / reflection / mood / insights prompts. |
 | `DEFAULT_GENERATION_MODEL` | `llama3.1:8b` | Which model to use for generation. |
-| `DEFAULT_EMBEDDING_URL` | `http://ollama:11434` | Where to generate vector embeddings. |
-| `DEFAULT_EMBEDDING_MODEL` | `mxbai-embed-large` | Which model produces 1024-dim vectors. |
 
 These work with anything OpenAI-compatible. Examples:
 
@@ -152,7 +150,6 @@ These older variables are still read for backward compatibility:
 |---|---|---|
 | `OLLAMA_URL` | `http://ollama:11434` | Older alias used by some code paths. |
 | `REFLECTION_MODEL` | `llama3.1:8b` | Legacy alias. |
-| `EMBED_MODEL` | `mxbai-embed-large` | Legacy alias. |
 
 You can usually leave these alone. New deployments should rely on the `DEFAULT_*` variables above.
 
@@ -250,20 +247,14 @@ To switch to a different Ollama model:
 ```bash
 # Pull the new model
 ollama pull llama3.1:70b
-ollama pull nomic-embed-text
 
 # Update your .env
 DEFAULT_GENERATION_MODEL=llama3.1:70b
-DEFAULT_EMBEDDING_MODEL=nomic-embed-text
 
 # Restart the services that read those values
 cd infra
 docker compose restart api worker
 ```
-
-> Note: changing the embedding model means existing embeddings won't match new queries (different model, different vector space). You'll need to re-embed everything for search to work properly.
-
----
 
 ## Running Ollama outside Docker
 
@@ -273,7 +264,6 @@ If you'd rather run Ollama natively on your host (faster on Apple Silicon, for i
    ```env
    OLLAMA_URL=http://localhost:11434
    DEFAULT_GENERATION_URL=http://localhost:11434
-   DEFAULT_EMBEDDING_URL=http://localhost:11434
    ```
 
 2. Start Compose with the override file that disables the bundled Ollama service:

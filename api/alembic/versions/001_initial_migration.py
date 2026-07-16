@@ -7,7 +7,6 @@ Create Date: 2024-01-01 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -18,9 +17,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Enable pgvector extension
-    op.execute('CREATE EXTENSION IF NOT EXISTS vector')
-    
     # Create users table
     op.create_table(
         'users',
@@ -53,18 +49,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_entries_id'), 'entries', ['id'], unique=False)
-    
-    # Create entry_embeddings table
-    op.create_table(
-        'entry_embeddings',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('entry_id', sa.Integer(), nullable=False),
-        sa.Column('embedding', Vector(1024), nullable=False),
-        sa.Column('is_active', sa.Boolean(), nullable=True),
-        sa.ForeignKeyConstraint(['entry_id'], ['entries.id'], ),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_entry_embeddings_id'), 'entry_embeddings', ['id'], unique=False)
     
     # Create insights table
     op.create_table(
@@ -120,8 +104,6 @@ def downgrade() -> None:
     op.drop_table('settings')
     op.drop_index(op.f('ix_insights_id'), table_name='insights')
     op.drop_table('insights')
-    op.drop_index(op.f('ix_entry_embeddings_id'), table_name='entry_embeddings')
-    op.drop_table('entry_embeddings')
     op.drop_index(op.f('ix_entries_id'), table_name='entries')
     op.drop_table('entries')
     op.drop_index(op.f('ix_users_username'), table_name='users')

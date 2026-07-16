@@ -1,7 +1,5 @@
-from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.user import User
-from app.models.entry import Entry
 from app.models.insight import Insight
 from app.services.context_service import Intent, context_service
 from app.services.llm_service import get_generation_service_for_user
@@ -37,17 +35,14 @@ def generate_insights_task(user_id: int, days: int = 7):
         # Get user-specific generation service
         generation_service = get_generation_service_for_user(db, user_id)
 
-        # Pull recent window + MMR-diverse older themed entries via ContextService.
-        # The centroid-anchored related_entries surface recurring patterns
-        # from outside the window — the substantive upgrade over the old
-        # chronological-concatenation approach.
+        # Pull the bounded recent window via ContextService.
         bundle = asyncio.run(
             context_service.get_context(
                 db=db,
                 user_id=user_id,
                 intent=Intent.INSIGHTS,
                 time_window_days=days,
-                k=8,  # older themed entries to surface
+                k=8,
             )
         )
 
@@ -61,23 +56,9 @@ def generate_insights_task(user_id: int, days: int = 7):
             for e in bundle.recent_window
         )
 
-        if bundle.related_entries:
-            older_text = "\n\n".join(
-                f"[{e.created_at.date()}] {e.title or 'Untitled'}\n{e.content}"
-                for e in bundle.related_entries
-            )
-            insights_data = asyncio.run(
-                generation_service.generate_insights_with_themes(
-                    recent_entries_text=recent_text,
-                    older_themed_text=older_text,
-                )
-            )
-        else:
-            # No older corpus or all entries fell within the window — use the
-            # generic single-bucket prompt.
-            insights_data = asyncio.run(
-                generation_service.generate_insights(recent_text)
-            )
+        insights_data = asyncio.run(
+            generation_service.generate_insights(recent_text)
+        )
 
         # Create insight record
         insight = Insight(

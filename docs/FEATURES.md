@@ -70,25 +70,19 @@ If you don't pick a mood, a background AI job reads the entry and infers one. Th
 - **Mood insights** — chart of your mood over 7 / 30 / 90 days, plus AI-generated observations.
 - **Streaks and best days** — light gamification.
 
-### Semantic search
+### Keyword search
 
-`/entries` has a search bar that does **semantic search** — it understands meaning, not just keywords.
+`/entries` searches words across decrypted titles, content, and tags.
 
-Search "feeling stuck at work" and you'll get hits like "Why is everything boring lately?" or "Need to switch projects" — because the AI knows those are about the same thing.
+Search "work stress" to find entries containing those words in the journal text,
+title, or tags.
 
 How it works under the hood:
 
-1. Your query is turned into a 1024-dimensional vector by the embedding model.
-2. PostgreSQL (with pgvector) finds entries whose vectors are closest by cosine similarity.
-3. Each result's score is multiplied by a time-decay factor:
-
-   ```
-   score = similarity * (1 / (1 + age_days / half_life_days))
-   ```
-
-   Recent entries get a small boost; ancient entries need to be very on-topic to rank.
-
-4. Results come back ranked by combined score.
+1. PostgreSQL applies user, date, and tag filters.
+2. The API loads at most the 1,000 most recent matching entries.
+3. The ORM decrypts title and content inside the API process.
+4. Results rank by keyword match count plus a recency score.
 
 You can adjust the half-life in Settings (default: 30 days). Lower = favor recent. Higher = treat all entries equally.
 
@@ -197,23 +191,21 @@ If you want to use OpenAI, Groq, Together.ai, or any OpenAI-compatible API, conf
 When you "forget" an entry:
 
 - `entries.is_deleted` is set to `true` — the entry disappears from the UI.
-- `entry_embeddings.is_active` is set to `false`.
-- The embedding vector is overwritten with 1024 zeros — the entry can no longer surface in semantic search.
-- The original content stays in the database (recoverable in principle, but not via the UI).
+- The title, content, tags, and mood values are erased.
+- The empty row remains only for referential integrity.
 
 ### Hard delete (opt-in)
 
 Toggle "Hard delete" in Settings. After that, "forget" actually deletes:
 
 - Entry row → gone
-- Embedding row → gone
 - Attachment files on disk → gone
 
 There's no undo.
 
 ### Export
 
-`GET /export/entries` returns your data as JSONL (one JSON object per line). Each line includes the entry plus its embedding vector, so you can migrate to another system without losing semantic search.
+`GET /export/entries` returns your data as JSONL (one JSON object per line).
 
 ---
 
@@ -238,16 +230,13 @@ All data endpoints require a valid JWT. All queries are scoped to the authentica
 
 ### LLM endpoints
 
-You configure generation and embedding **separately**, each with URL + token + model. This lets you mix providers — for example, local embeddings + cloud generation.
+Configure the generation provider used for reflections, mood, insights, and chat.
 
 | Field | Example |
 |---|---|
 | Generation URL | `http://localhost:11434` or `https://api.openai.com/v1` |
 | Generation Model | `llama3.1:8b` or `gpt-4o-mini` |
 | Generation API Token | Bearer token (only needed for cloud) |
-| Embedding URL | `http://localhost:11434` |
-| Embedding Model | `mxbai-embed-large` or `text-embedding-3-small` |
-| Embedding API Token | Bearer token (only needed for cloud) |
 
 Tokens are write-only — once saved, they're never returned by the API.
 
@@ -277,7 +266,6 @@ Everything slow runs in a Celery worker so the UI stays snappy:
 
 | Job | When it runs | How long |
 |---|---|---|
-| Embedding | Entry created or updated | ~500ms - 2s |
 | Mood inference | Entry created without a user-set mood | ~1 - 5s |
 | Reflection | On reflection request, after entry changes | ~5 - 30s |
 | Insights | Manual trigger or scheduled cron | ~5 - 30s |
@@ -321,14 +309,14 @@ Every feature above is built on top of these endpoints:
 - `GET /entries/{id}` — read one
 - `PUT /entries/{id}` — update
 - `DELETE /entries/{id}` — soft delete
-- `GET /entries/{id}/related` — find similar
-- `GET /entries/{id}/echoes` — past entries that "rhyme" with this one
+- `GET /entries/{id}/related` — find recent or tag-related entries
+- `GET /entries/{id}/echoes` — frame recent or tag-related past entries
 - `GET /entries/{id}/reflection` — per-entry reflection
 - `POST /entries/{id}/reflection/regenerate` — force regen
-- `POST /entries/retry-failed` — re-run failed embedding/mood jobs
+- `POST /entries/retry-failed` — re-run failed mood jobs
 
 ### Search
-- `POST /search/semantic` — semantic search with time decay
+- `POST /search` — private keyword search with recency scoring
 
 ### Reflections
 - `GET /reflections` — get cached or trigger generation

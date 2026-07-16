@@ -1,6 +1,5 @@
 """Tests for file → entry upload and the text extraction reader."""
 
-import io
 from unittest.mock import patch
 
 import pytest
@@ -58,9 +57,7 @@ def test_extract_empty_file():
 def test_upload_txt_creates_entry(auth_client, tmp_path, monkeypatch):
     monkeypatch.setattr("app.routers.entries.app_settings.upload_dir", str(tmp_path))
 
-    with patch("app.routers.entries.enqueue_embedding_job") as embed, patch(
-        "app.routers.entries.enqueue_mood_job"
-    ) as mood:
+    with patch("app.routers.entries.enqueue_mood_job") as mood:
         response = auth_client.post(
             "/entries/upload",
             files={"file": ("morning.txt", b"Woke up early and felt calm.", "text/plain")},
@@ -75,11 +72,10 @@ def test_upload_txt_creates_entry(auth_client, tmp_path, monkeypatch):
     assert data["mood_user"] == 3
     assert data["attachment"]["filename"] == "morning.txt"
     assert data["truncated"] is False
-    embed.assert_called_once_with(data["id"])
     mood.assert_called_once_with(data["id"])
 
     # File landed on disk under the user-scoped directory.
-    stored = list(tmp_path.rglob("morning.txt"))
+    stored = list(tmp_path.rglob("*_morning.txt"))
     assert len(stored) == 1
 
 
@@ -95,9 +91,7 @@ def test_upload_rejects_exe(auth_client, tmp_path, monkeypatch):
 
 def test_upload_defaults_title_from_filename(auth_client, tmp_path, monkeypatch):
     monkeypatch.setattr("app.routers.entries.app_settings.upload_dir", str(tmp_path))
-    with patch("app.routers.entries.enqueue_embedding_job"), patch(
-        "app.routers.entries.enqueue_mood_job"
-    ):
+    with patch("app.routers.entries.enqueue_mood_job"):
         response = auth_client.post(
             "/entries/upload",
             files={"file": ("my-thoughts.md", b"# Hello\n\nWorld", "text/markdown")},

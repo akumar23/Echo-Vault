@@ -10,7 +10,7 @@ The overall plan:
 |---|---|---|
 | Next.js frontend | Vercel | Best-in-class Next.js host, instant deploys |
 | FastAPI + Celery worker | Railway / Render / Fly.io | Run long-lived Python servers |
-| PostgreSQL + pgvector | Neon or Supabase | Managed Postgres with pgvector pre-installed |
+| PostgreSQL | Neon or Supabase | Managed relational database |
 | Redis | Upstash or Railway | Managed Redis with a free tier |
 | LLM | User's local Ollama, or a hosted OpenAI-compatible API | Privacy-first stays optional in production |
 
@@ -22,7 +22,7 @@ If you just want to run it locally, skip this doc — `docker compose up -d` is 
 
 1. [Architecture Overview](#architecture-overview)
 2. [Prerequisites](#prerequisites)
-3. [Database Setup (PostgreSQL with pgvector)](#database-setup-postgresql-with-pgvector)
+3. [Database Setup (PostgreSQL)](#database-setup-postgresql)
 4. [Redis Setup](#redis-setup)
 5. [Backend Deployment](#backend-deployment)
 6. [Ollama Considerations](#ollama-considerations)
@@ -48,7 +48,7 @@ EchoVault is a multi-service application that requires careful consideration dur
                                              v
 +------------------+              +------------------+              +------------------+
 |   PostgreSQL     |<------------>|    FastAPI       |<------------>|      Redis       |
-|   (pgvector)     |              |    Backend       |              |    (Celery)      |
+|                  |              |    Backend       |              |    (Celery)      |
 +------------------+              +--------+---------+              +------------------+
                                            |
                                            | (Optional)
@@ -63,7 +63,7 @@ EchoVault is a multi-service application that requires careful consideration dur
 |-----------|---------------------|---------|
 | Frontend | Vercel | Next.js 16 with App Router |
 | Backend API | Railway, Render, or Fly.io | FastAPI with Celery workers |
-| Database | Neon or Supabase | PostgreSQL 16 with pgvector |
+| Database | Neon or Supabase | PostgreSQL 16 |
 | Cache/Queue | Upstash or Railway Redis | Celery broker |
 | LLM | User's local Ollama or OpenAI-compatible API | AI inference |
 
@@ -95,13 +95,13 @@ openssl rand -hex 32
 
 ---
 
-## Database Setup (PostgreSQL with pgvector)
+## Database Setup (PostgreSQL)
 
-EchoVault requires PostgreSQL with the pgvector extension for vector similarity search. Choose one of the following providers:
+EchoVault requires standard PostgreSQL 16. Choose one of the following providers:
 
 ### Option A: Neon (Recommended)
 
-Neon provides serverless PostgreSQL with pgvector pre-installed.
+Neon provides serverless PostgreSQL.
 
 1. **Create a Neon account** at [neon.tech](https://neon.tech)
 
@@ -109,18 +109,12 @@ Neon provides serverless PostgreSQL with pgvector pre-installed.
    - Select the region closest to your backend deployment
    - Choose PostgreSQL 16
 
-3. **Enable pgvector extension**
-   ```sql
-   -- Run in the Neon SQL Editor
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
-
-4. **Copy the connection string**
+3. **Copy the connection string**
    - Navigate to your project dashboard
    - Copy the connection string from the "Connection Details" panel
    - Format: `postgresql://user:password@host/database?sslmode=require`
 
-5. **Convert to SQLAlchemy format**
+4. **Convert to SQLAlchemy format**
    ```
    # Neon provides:
    postgresql://user:password@host/database?sslmode=require
@@ -131,15 +125,11 @@ Neon provides serverless PostgreSQL with pgvector pre-installed.
 
 ### Option B: Supabase
 
-Supabase also provides PostgreSQL with pgvector support.
+Supabase also provides managed PostgreSQL.
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com)
 
-2. **Enable pgvector extension**
-   - Go to Database > Extensions
-   - Search for "vector" and enable it
-
-3. **Get the connection string**
+2. **Get the connection string**
    - Go to Settings > Database
    - Copy the "Connection string" (use the "URI" format)
    - Ensure you use the pooler connection for production
@@ -304,8 +294,6 @@ EchoVault supports user-configurable LLM endpoints. Users can:
 Users configure this in the Settings page:
 - **Generation URL**: The LLM API endpoint (e.g., `http://localhost:11434` for local Ollama)
 - **Generation Model**: Model name (e.g., `llama3.1:8b` or `gpt-4o`)
-- **Embedding URL**: The embedding API endpoint
-- **Embedding Model**: Embedding model name (e.g., `mxbai-embed-large` or `text-embedding-3-small`)
 
 ### Option 2: Default OpenAI-Compatible API
 
@@ -315,8 +303,6 @@ Configure the backend to use OpenAI or another cloud LLM provider as the default
 # In your backend environment variables
 DEFAULT_GENERATION_URL=https://api.openai.com/v1
 DEFAULT_GENERATION_MODEL=gpt-4o-mini
-DEFAULT_EMBEDDING_URL=https://api.openai.com/v1
-DEFAULT_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 Note: This requires an API key and users should be informed that their data will be sent to a third-party service.
@@ -333,8 +319,6 @@ For organizations wanting to maintain the privacy-first approach:
 # Example for self-hosted Ollama
 DEFAULT_GENERATION_URL=https://your-ollama-instance.com
 DEFAULT_GENERATION_MODEL=llama3.1:8b
-DEFAULT_EMBEDDING_URL=https://your-ollama-instance.com
-DEFAULT_EMBEDDING_MODEL=mxbai-embed-large
 ```
 
 ### Privacy Implications
@@ -429,8 +413,6 @@ CORS_ORIGINS=https://your-project.vercel.app,https://your-custom-domain.com
 | `CORS_ORIGINS` | Yes | Allowed origins (comma-separated) | `https://your-app.vercel.app` |
 | `DEFAULT_GENERATION_URL` | No | Default LLM API URL | `http://localhost:11434` |
 | `DEFAULT_GENERATION_MODEL` | No | Default LLM model | `llama3.1:8b` |
-| `DEFAULT_EMBEDDING_URL` | No | Default embedding API URL | `http://localhost:11434` |
-| `DEFAULT_EMBEDDING_MODEL` | No | Default embedding model | `mxbai-embed-large` |
 | `UPLOAD_DIR` | No | File upload directory | `/data/uploads` |
 
 ### Frontend (Next.js) Environment Variables
@@ -451,8 +433,6 @@ After deploying all services, verify each component:
 # Test from your local machine with the production DATABASE_URL
 psql "postgresql://user:pass@host/db?sslmode=require" -c "SELECT 1;"
 
-# Verify pgvector extension
-psql "postgresql://user:pass@host/db?sslmode=require" -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
 ```
 
 ### 2. Backend Health Check
@@ -485,7 +465,7 @@ You should see the FastAPI Swagger documentation.
 
 3. **Verify the entry appears** in the entries list
 
-4. **Test search functionality** (requires embeddings to be generated)
+4. **Test keyword search**
 
 5. **Check Celery worker logs** in your backend deployment platform to verify background tasks are processing
 
@@ -499,7 +479,7 @@ You should see the FastAPI Swagger documentation.
 - [ ] User login works
 - [ ] Creating entries works
 - [ ] Celery workers are processing tasks (check logs)
-- [ ] Search returns results (after embeddings are generated)
+- [ ] Keyword search returns results
 
 ---
 
@@ -539,16 +519,12 @@ CORS_ORIGINS=https://your-project.vercel.app/
 **Symptoms**: `alembic upgrade head` fails
 
 **Solutions**:
-1. Ensure pgvector extension is enabled:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
-2. Verify database credentials have sufficient permissions
-3. Check for existing tables that might conflict
+1. Verify database credentials have sufficient permissions
+2. Check for existing tables that might conflict
 
 ### Issue: Celery Workers Not Processing
 
-**Symptoms**: Journal entries don't get embeddings, insights don't generate
+**Symptoms**: Mood inference or insights do not generate
 
 **Solutions**:
 1. Verify Redis connection URL is correct
@@ -582,9 +558,9 @@ railway logs --service worker
 2. Check `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` is set appropriately
 3. Clear browser localStorage and try logging in again
 
-### Issue: Embeddings/Reflections Not Working
+### Issue: Mood/Reflections Not Working
 
-**Symptoms**: Search returns no results, reflections don't generate
+**Symptoms**: Mood inference or reflections do not generate
 
 **Solutions**:
 1. Check if users have configured their LLM settings

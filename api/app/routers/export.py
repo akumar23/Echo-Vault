@@ -16,12 +16,7 @@ async def export_entries(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Export journal entries as JSONL (one JSON object per line).
-
-    Embeddings are intentionally excluded: they are derived from content and
-    can be used for semantic inference attacks if the export is shared or intercepted.
-    """
+    """Export journal entries as JSONL (one JSON object per line)."""
     entries = db.query(Entry).filter(
         Entry.user_id == current_user.id,
         Entry.is_deleted == False,

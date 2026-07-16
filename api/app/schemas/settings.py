@@ -31,24 +31,19 @@ class SettingsUpdate(BaseModel):
     generation_api_token: Optional[str] = None
     generation_model: Optional[str] = None
 
-    # Embedding LLM settings
-    embedding_url: Optional[str] = None
-    embedding_api_token: Optional[str] = None
-    embedding_model: Optional[str] = None
-
-    @field_validator('generation_url', 'embedding_url')
+    @field_validator('generation_url')
     @classmethod
     def validate_url(cls, v: Optional[str]) -> Optional[str]:
         return _validate_optional_url(v)
 
-    @field_validator('generation_api_token', 'embedding_api_token')
+    @field_validator('generation_api_token')
     @classmethod
     def validate_api_token(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == '':
             return None
         return v.strip()
 
-    @field_validator('generation_model', 'embedding_model')
+    @field_validator('generation_model')
     @classmethod
     def validate_model(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == '':
@@ -63,7 +58,7 @@ class LLMTestRequest(BaseModel):
     factories resolve per-user settings — so the test reflects what will
     actually be used after saving.
     """
-    service_type: Literal["generation", "embedding"]
+    service_type: Literal["generation"]
     url: Optional[str] = None
     api_token: Optional[str] = None
     model: Optional[str] = None
@@ -100,17 +95,11 @@ class SettingsResponse(BaseModel):
     generation_api_token_set: bool = False
     generation_model: Optional[str] = None
 
-    # Embedding LLM settings
-    embedding_url: Optional[str] = None
-    embedding_api_token_set: bool = False
-    embedding_model: Optional[str] = None
-
     # Server-configured default endpoints (not user secrets). Exposed so the
     # client can offer a "local" preset that points at this deployment's actual
     # backend host instead of hard-coding localhost — which resolves to the
     # backend container, not the user's machine, in Docker/hosted setups.
     default_generation_url: str
-    default_embedding_url: str
 
     class Config:
         from_attributes = True
@@ -130,11 +119,7 @@ class SettingsResponse(BaseModel):
                 'generation_url': data.generation_url,
                 'generation_api_token_set': bool(data.generation_api_token),
                 'generation_model': data.generation_model,
-                'embedding_url': data.embedding_url,
-                'embedding_api_token_set': bool(data.embedding_api_token),
-                'embedding_model': data.embedding_model,
                 'default_generation_url': _app_settings.default_generation_url,
-                'default_embedding_url': _app_settings.default_embedding_url,
             }
             return result
         return data

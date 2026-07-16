@@ -33,17 +33,9 @@ interface Preset {
 // `localhost` to itself, not the user's machine, so a static localhost preset
 // would save a broken config (the Docker host is `host.docker.internal`).
 //
-// Embedding presets are limited to models that produce 1024-dimensional
-// vectors — the pgvector column width. The test endpoint verifies this,
-// but presets shouldn't steer users into a broken configuration.
 const buildGenerationPresets = (ollamaUrl: string): Preset[] => [
   { label: "Ollama (local)", url: ollamaUrl, model: "llama3.1:8b" },
   { label: "OpenAI", url: "https://api.openai.com", model: "gpt-4o-mini" },
-];
-
-const buildEmbeddingPresets = (ollamaUrl: string): Preset[] => [
-  { label: "Ollama (local)", url: ollamaUrl, model: "mxbai-embed-large" },
-  { label: "Voyage AI", url: "https://api.voyageai.com", model: "voyage-3" },
 ];
 
 interface TestState {
@@ -77,16 +69,13 @@ export function OnboardingModal() {
   const router = useRouter();
 
   const [generation, setGeneration] = useState<SectionFields>({ url: "", token: "", model: "" });
-  const [embedding, setEmbedding] = useState<SectionFields>({ url: "", token: "", model: "" });
   const [generationTest, setGenerationTest] = useState<TestState>(IDLE_TEST);
-  const [embeddingTest, setEmbeddingTest] = useState<TestState>(IDLE_TEST);
   const [error, setError] = useState("");
 
-  // Monotonic token per section. Editing a field or starting a new test bumps
+  // Monotonic token. Editing a field or starting a new test bumps
   // it, so an in-flight probe that resolves late is discarded instead of
   // overwriting state for values the form no longer holds.
   const generationTestSeq = useRef(0);
-  const embeddingTestSeq = useRef(0);
 
   const shouldShow =
     !authLoading &&
@@ -98,54 +87,44 @@ export function OnboardingModal() {
   if (!shouldShow) return null;
 
   const generationPresets = buildGenerationPresets(settings.default_generation_url);
-  const embeddingPresets = buildEmbeddingPresets(settings.default_embedding_url);
 
-  const sectionFor = (type: "generation" | "embedding") =>
-    type === "generation"
-      ? { fields: generation, setFields: setGeneration, setTest: setGenerationTest, seqRef: generationTestSeq }
-      : { fields: embedding, setFields: setEmbedding, setTest: setEmbeddingTest, seqRef: embeddingTestSeq };
-
-  // Any edit invalidates that section's last test result and supersedes any
+  // Any edit invalidates the last test result and supersedes any
   // probe still in flight.
   const updateField = (
-    type: "generation" | "embedding",
     field: keyof SectionFields,
     value: string,
   ) => {
-    const { setFields, setTest, seqRef } = sectionFor(type);
-    seqRef.current += 1;
-    setFields((prev) => ({ ...prev, [field]: value }));
-    setTest(IDLE_TEST);
+    generationTestSeq.current += 1;
+    setGeneration((prev) => ({ ...prev, [field]: value }));
+    setGenerationTest(IDLE_TEST);
   };
 
-  const applyPreset = (type: "generation" | "embedding", preset: Preset) => {
-    const { setFields, setTest, seqRef } = sectionFor(type);
-    seqRef.current += 1;
-    setFields((prev) => ({ ...prev, url: preset.url, model: preset.model }));
-    setTest(IDLE_TEST);
+  const applyPreset = (preset: Preset) => {
+    generationTestSeq.current += 1;
+    setGeneration((prev) => ({ ...prev, url: preset.url, model: preset.model }));
+    setGenerationTest(IDLE_TEST);
   };
 
-  const runTest = async (type: "generation" | "embedding") => {
-    const { fields, setTest, seqRef } = sectionFor(type);
-    if (!isValidUrl(fields.url)) {
-      setTest({ status: "fail", message: "Enter a valid http:// or https:// URL first." });
+  const runTest = async () => {
+    if (!isValidUrl(generation.url)) {
+      setGenerationTest({ status: "fail", message: "Enter a valid http:// or https:// URL first." });
       return;
     }
-    const seq = (seqRef.current += 1);
-    setTest({ status: "testing", message: "" });
+    const seq = (generationTestSeq.current += 1);
+    setGenerationTest({ status: "testing", message: "" });
     try {
       const result = await settingsApi.testLLM({
-        service_type: type,
-        url: fields.url || null,
-        api_token: fields.token || null,
-        model: fields.model || null,
+        service_type: "generation",
+        url: generation.url || null,
+        api_token: generation.token || null,
+        model: generation.model || null,
       });
       // A later edit or test started after this one — drop the stale result.
-      if (seqRef.current !== seq) return;
-      setTest({ status: result.ok ? "ok" : "fail", message: result.message });
+      if (generationTestSeq.current !== seq) return;
+      setGenerationTest({ status: result.ok ? "ok" : "fail", message: result.message });
     } catch {
-      if (seqRef.current !== seq) return;
-      setTest({
+      if (generationTestSeq.current !== seq) return;
+      setGenerationTest({
         status: "fail",
         message: "The test could not run. Check your connection and try again.",
       });
@@ -191,7 +170,7 @@ export function OnboardingModal() {
   };
 
   const handleSave = () => {
-    if (!isValidUrl(generation.url) || !isValidUrl(embedding.url)) {
+    if (!isValidUrl(generation.url)) {
       setError("Please enter valid http:// or https:// URLs.");
       return;
     }
@@ -201,11 +180,8 @@ export function OnboardingModal() {
       onboarding_completed: true,
       generation_url: generation.url || null,
       generation_model: generation.model || null,
-      embedding_url: embedding.url || null,
-      embedding_model: embedding.model || null,
     };
     if (generation.token) update.generation_api_token = generation.token;
-    if (embedding.token) update.embedding_api_token = embedding.token;
 
     updateMutation.mutate(update, {
       onSuccess: () => {
@@ -217,13 +193,13 @@ export function OnboardingModal() {
     });
   };
 
-  const renderTestRow = (type: "generation" | "embedding", test: TestState) => (
+  const renderTestRow = (test: TestState) => (
     <div className="space-y-1.5">
       <Button
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => runTest(type)}
+        onClick={runTest}
         disabled={test.status === "testing" || updateMutation.isPending}
       >
         {test.status === "testing" ? (
@@ -253,7 +229,7 @@ export function OnboardingModal() {
     </div>
   );
 
-  const renderPresets = (type: "generation" | "embedding", presets: Preset[]) => (
+  const renderPresets = (presets: Preset[]) => (
     <div className="flex flex-wrap gap-1.5">
       {presets.map((preset) => (
         <Button
@@ -262,7 +238,7 @@ export function OnboardingModal() {
           variant="secondary"
           size="sm"
           className="h-7 px-2.5 text-xs"
-          onClick={() => applyPreset(type, preset)}
+          onClick={() => applyPreset(preset)}
         >
           {preset.label}
         </Button>
@@ -285,8 +261,8 @@ export function OnboardingModal() {
           </div>
           <DialogTitle>Configure your LLM (optional)</DialogTitle>
           <DialogDescription>
-            EchoVault uses an LLM for reflections, mood analysis, and semantic
-            search. Pick a preset or enter any OpenAI-compatible API — or skip
+            EchoVault uses an LLM for reflections, mood analysis, insights,
+            and chat. Pick a preset or enter any OpenAI-compatible API — or skip
             and use the server defaults.
           </DialogDescription>
         </DialogHeader>
@@ -303,7 +279,7 @@ export function OnboardingModal() {
               <h3 className="text-sm font-semibold text-foreground">
                 Text Generation
               </h3>
-              {renderPresets("generation", generationPresets)}
+              {renderPresets(generationPresets)}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="onboard-gen-url">API URL</Label>
@@ -311,7 +287,7 @@ export function OnboardingModal() {
                 id="onboard-gen-url"
                 type="url"
                 value={generation.url}
-                onChange={(e) => updateField("generation", "url", e.target.value)}
+                onChange={(e) => updateField("url", e.target.value)}
                 placeholder={URL_PLACEHOLDER}
               />
             </div>
@@ -322,7 +298,7 @@ export function OnboardingModal() {
                   id="onboard-gen-token"
                   type="password"
                   value={generation.token}
-                  onChange={(e) => updateField("generation", "token", e.target.value)}
+                  onChange={(e) => updateField("token", e.target.value)}
                   placeholder="Optional"
                 />
               </div>
@@ -331,53 +307,12 @@ export function OnboardingModal() {
                 <Input
                   id="onboard-gen-model"
                   value={generation.model}
-                  onChange={(e) => updateField("generation", "model", e.target.value)}
+                  onChange={(e) => updateField("model", e.target.value)}
                   placeholder="llama3.1:8b"
                 />
               </div>
             </div>
-            {renderTestRow("generation", generationTest)}
-          </section>
-
-          <section className="space-y-3 border-t border-border pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-foreground">
-                Embeddings
-              </h3>
-              {renderPresets("embedding", embeddingPresets)}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="onboard-emb-url">API URL</Label>
-              <Input
-                id="onboard-emb-url"
-                type="url"
-                value={embedding.url}
-                onChange={(e) => updateField("embedding", "url", e.target.value)}
-                placeholder={URL_PLACEHOLDER}
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="onboard-emb-token">API Token</Label>
-                <Input
-                  id="onboard-emb-token"
-                  type="password"
-                  value={embedding.token}
-                  onChange={(e) => updateField("embedding", "token", e.target.value)}
-                  placeholder="Optional"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="onboard-emb-model">Model</Label>
-                <Input
-                  id="onboard-emb-model"
-                  value={embedding.model}
-                  onChange={(e) => updateField("embedding", "model", e.target.value)}
-                  placeholder="mxbai-embed-large"
-                />
-              </div>
-            </div>
-            {renderTestRow("embedding", embeddingTest)}
+            {renderTestRow(generationTest)}
           </section>
 
           {error && (

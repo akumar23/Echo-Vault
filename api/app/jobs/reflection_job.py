@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta, timezone
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from app.database import SessionLocal
 from app.models.entry import Entry
 from app.services.context_service import Intent, context_service
@@ -142,11 +141,9 @@ def generate_entry_reflection_task(user_id: int, entry_id: int):
 
         generation_service = get_generation_service_for_user(db, user_id)
 
-        # Pull MMR-ranked semantically similar past entries via ContextService.
-        # When echoes exist, the reflection prompt frames today's entry against
-        # them — recurrence, evolution, contrast. When the user is cold-start
-        # or this entry has no thematic neighbors yet, fall back to the
-        # generic single-entry reflection prompt.
+        # Pull recent past entries via ContextService. When echoes exist, the
+        # reflection prompt frames today's entry against them; otherwise use
+        # the generic single-entry reflection prompt.
         bundle = asyncio.run(
             context_service.get_context(
                 db=db,

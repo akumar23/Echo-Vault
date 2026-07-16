@@ -2,20 +2,15 @@
 """
 Seed 50 dummy journal entries for the test user, spread evenly over the
 last ~50 weeks. Each entry gets a mood_user label (mood-balanced across 1-5
-so the few-shot calibrator has data) and a varied content theme so the
-embedding/semantic features have something interesting to work with.
+so the few-shot calibrator has data) and varied tags for related-entry ranking.
 
-After writing rows, the script enqueues embedding + mood jobs for each
-entry via the existing Celery tasks. The worker picks them up and runs
-the Ollama calls in the background — total runtime for 50 entries is
-~5-15 minutes on a typical laptop.
+After writing rows, the script enqueues mood jobs for each entry.
 """
 from datetime import datetime, timedelta, timezone
 
 from app.database import SessionLocal
 from app.models.entry import Entry
 from app.models.user import User
-from app.jobs.embedding_job import enqueue_embedding_job
 from app.jobs.mood_job import enqueue_mood_job
 
 
@@ -227,11 +222,10 @@ def main():
 
         # Enqueue background jobs. The Celery worker picks these up and
         # runs Ollama calls in the background — total runtime ~5-15 min.
-        print("Enqueueing embedding + mood inference jobs...")
+        print("Enqueueing mood inference jobs...")
         for r in rows:
-            enqueue_embedding_job(r.id)
             enqueue_mood_job(r.id)
-        print(f"Enqueued {len(rows) * 2} jobs ({len(rows)} embedding + {len(rows)} mood).")
+        print(f"Enqueued {len(rows)} mood jobs.")
         print("")
         print("Done. Monitor worker progress with:")
         print("  docker compose logs -f worker")

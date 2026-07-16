@@ -1,5 +1,9 @@
 # Technical Leverage Analysis: Three Unique Insight Features for EchoVault
 
+> Archived design exploration (2025): vector embeddings and pgvector were
+> removed in migration 013. Vector-specific proposals below are retained only
+> as historical context and do not describe the current architecture.
+
 This document provides deep technical analysis of three leverage points that can make EchoVault's insights feature uniquely powerful by exploiting existing infrastructure.
 
 **Author:** Claude Code (Agent Expert)

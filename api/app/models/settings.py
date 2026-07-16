@@ -19,11 +19,6 @@ class Settings(Base):
     generation_api_token = Column(String, nullable=True, default=None)
     generation_model = Column(String, nullable=True, default=None)
 
-    # Embedding LLM settings (semantic search)
-    embedding_url = Column(String, nullable=True, default=None)
-    embedding_api_token = Column(String, nullable=True, default=None)
-    embedding_model = Column(String, nullable=True, default=None)
-
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

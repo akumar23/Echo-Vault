@@ -4,7 +4,7 @@
 **Date**: 2025-11-28
 **Decision Maker**: Backend Architecture Review
 
-> **Plain-English summary:** Our Celery background jobs (the things that generate embeddings, infer mood, etc.) are written in regular synchronous Python. But the LLM client they call is asynchronous (it uses `httpx.AsyncClient` for non-blocking HTTP). To bridge the two, every Celery task wraps its async call in `asyncio.run(...)`. This doc explains why we picked that approach over fancier alternatives — short version: the overhead is microseconds while LLM calls take seconds, so there is nothing to optimize.
+> **Plain-English summary:** Our Celery background jobs (mood, reflections, and insights) are written in regular synchronous Python. But the LLM client they call is asynchronous. To bridge the two, every Celery task wraps its async call in `asyncio.run(...)`.
 >
 > If you are not familiar with Celery, see [ARCHITECTURE.md](../ARCHITECTURE.md#celery-worker) first.
 
@@ -17,15 +17,14 @@ Our Celery background jobs need to call async methods in `OllamaService` (which 
 All Celery tasks use `asyncio.run()` to execute async OllamaService methods:
 
 ```python
-@celery_app.task(name="embedding.create_embedding")
-def create_embedding_task(entry_id: int):
+@celery_app.task(name="mood.infer_mood")
+def infer_mood_task(entry_id: int):
     # ... database setup ...
-    embedding_vector = asyncio.run(ollama_service.get_embedding(text_to_embed))
-    # ... save to database ...
+    mood = asyncio.run(ollama_service.infer_mood(entry.content))
+    # ... save mood to database ...
 ```
 
 **Affected Files**:
-- `/api/app/jobs/embedding_job.py`
 - `/api/app/jobs/mood_job.py`
 - `/api/app/jobs/reflection_job.py`
 - `/api/app/jobs/insights_job.py`
@@ -58,8 +57,8 @@ def create_embedding_task(entry_id: int):
 from app.utils.async_runner import run_async
 
 @celery_app.task
-def create_embedding_task(entry_id: int):
-    embedding_vector = run_async(ollama_service.get_embedding(text_to_embed))
+def infer_mood_task(entry_id: int):
+    mood = run_async(ollama_service.infer_mood(entry.content))
 ```
 
 **Pros**:
@@ -104,7 +103,6 @@ Event loop creation overhead compared to actual task execution time:
 
 | Task Type | LLM Inference Time | Event Loop Overhead | Overhead % |
 |-----------|-------------------|---------------------|------------|
-| Embedding | 500ms - 2s | 50-200μs | 0.001% - 0.04% |
 | Mood Inference | 1s - 5s | 50-200μs | 0.001% - 0.02% |
 | Reflection | 5s - 30s | 50-200μs | 0.0003% - 0.004% |
 | Insights | 5s - 30s | 50-200μs | 0.0003% - 0.004% |
@@ -164,14 +162,14 @@ print(f"Event loop overhead: {(end - start) / 1000 * 1000000:.2f}μs per iterati
 
 # Compare to actual LLM call
 start = time.perf_counter()
-asyncio.run(ollama_service.get_embedding("test text"))
+asyncio.run(ollama_service.infer_mood("test text"))
 end = time.perf_counter()
-print(f"LLM embedding time: {(end - start) * 1000:.2f}ms")
+print(f"LLM inference time: {(end - start) * 1000:.2f}ms")
 ```
 
 Expected results:
 - Event loop overhead: ~50-200μs
-- LLM embedding: ~500-2000ms
+- LLM inference: ~1000-5000ms
 - **Ratio: ~1:10,000**
 
 ## When to Reconsider

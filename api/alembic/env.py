@@ -9,9 +9,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import Base
-from app.models import (
-    User, Entry, EntryEmbedding, Insight, Settings, Attachment
-)
+import app.models  # noqa: F401 -- importing models registers their metadata
 
 # this is the Alembic Config object
 config = context.config

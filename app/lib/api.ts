@@ -162,12 +162,8 @@ export interface Settings {
   generation_url: string | null
   generation_api_token_set: boolean
   generation_model: string | null
-  embedding_url: string | null
-  embedding_api_token_set: boolean
-  embedding_model: string | null
   // Server-configured default endpoints, used to seed deployment-aware presets.
   default_generation_url: string
-  default_embedding_url: string
 }
 
 export interface SettingsUpdate {
@@ -177,13 +173,10 @@ export interface SettingsUpdate {
   generation_url?: string | null
   generation_api_token?: string | null
   generation_model?: string | null
-  embedding_url?: string | null
-  embedding_api_token?: string | null
-  embedding_model?: string | null
 }
 
 export interface LLMTestRequest {
-  service_type: 'generation' | 'embedding'
+  service_type: 'generation'
   url?: string | null
   api_token?: string | null
   model?: string | null
@@ -246,7 +239,7 @@ export interface EchoItem {
 export interface EchoesResponse {
   echoes: EchoItem[]
   framing: string | null
-  status: 'complete' | 'empty' | 'pending'
+  status: 'complete' | 'empty'
 }
 
 export interface ReversePromptResponse {
@@ -358,8 +351,8 @@ export const entriesApi = {
 
 // Search
 export const searchApi = {
-  semantic: async (query: string, k = 10, date_range?: { start: string; end: string }, tags?: string[]) => {
-    const response = await api.post('/search/semantic', { query, k, date_range, tags })
+  search: async (query: string, k = 10, date_range?: { start: string; end: string }, tags?: string[]) => {
+    const response = await api.post('/search', { query, k, date_range, tags })
     return response.data
   },
 }

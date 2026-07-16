@@ -5,7 +5,6 @@ x-common-env: &common-env
   OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
   JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
   REFLECTION_MODEL: ${REFLECTION_MODEL:-llama3.1:8b}
-  EMBED_MODEL: ${EMBED_MODEL:-mxbai-embed-large}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
 
 x-api-worker-env: &api-worker-env
@@ -15,10 +14,9 @@ x-api-worker-env: &api-worker-env
 
 services:
   db:
-    # Pinned to PostgreSQL 16 with pgvector extension
-    # Using pg16 tag which tracks PostgreSQL 16.x stable releases
-    # To update: check https://github.com/pgvector/pgvector for latest pg16 tag
-    image: pgvector/pgvector:pg16
+    # Keep the Bookworm base used by pgvector/pgvector:pg16 so existing
+    # volumes do not acquire a glibc collation-version mismatch.
+    image: postgres:16-bookworm
     container_name: echovault_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-echovault}
@@ -28,7 +26,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-echovault}"]
       interval: 10s

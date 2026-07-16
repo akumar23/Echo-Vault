@@ -4,7 +4,7 @@
 # `deploy.replicas: 0`, which is a swarm-only directive and ignored by
 # `docker compose up`) and redirected api/worker to a host-installed Ollama
 # at `host.docker.internal`. That setup required Ollama to be installed on
-# the host; without it, api/worker get DNS errors and no embeddings run.
+# the host; without it, api/worker get DNS errors and AI jobs fail.
 #
 # This version points api+worker back at the containerized Ollama so seeding
 # works without a host install. To switch back to host Ollama for Metal

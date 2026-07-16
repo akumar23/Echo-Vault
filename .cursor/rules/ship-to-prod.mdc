@@ -1,0 +1,86 @@
+---
+description: Pre-flight checks, deploy-quirk guardrails, and post-deploy verification for EchoVault's Vercel (frontend) + Railway (API/worker) + Neon (Postgres) + Upstash (Redis) production split. Apply when asked to "deploy", "ship to prod", "push this release", "is prod broken after deploy", or when bumping dependencies/migrations that affect the split.
+alwaysApply: false
+---
+
+# Ship to Prod (Vercel + Railway + Neon + Upstash)
+
+There is no CI — these checks are the only gate. Each guardrail below exists because skipping it once cost a real fix commit.
+
+## 1. Pre-flight (run all, from repo root)
+
+```bash
+cd api && pytest
+cd app && pnpm run lint && pnpm run build
+cd app && pnpm install --frozen-lockfile   # lockfile drift broke a deploy before (8e35a9a)
+```
+
+If `--frozen-lockfile` fails, regenerate with `pnpm install` and commit `pnpm-lock.yaml` with the dependency change.
+
+## 2. Migration safety
+
+Railway runs migrations automatically on every deploy — `api/railway.toml`:
+
+```toml
+[deploy]
+startCommand = "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+```
+
+Before shipping a new revision in `api/alembic/versions/`:
+- It must be **backward-compatible** — Railway restarts mid-deploy, so old code briefly runs against the new schema. Add columns as `nullable=True`; never drop/rename in the same release that stops using them.
+- Test locally: `cd api && alembic upgrade head` then `alembic downgrade -1 && alembic upgrade head` to confirm both directions work.
+
+## 3. Env var invariants (see docs/ENV_CONFIG.md)
+
+| Var | Rule |
+|---|---|
+| `API_PROXY_URL` | Server-only Next.js rewrite target (Railway API URL). Distinct from `NEXT_PUBLIC_API_URL` — the proxy is what makes cookies first-party. |
+| `NEXT_PUBLIC_API_URL` | Browser-reachable API URL, baked in at Vercel build time. |
+| `ENCRYPTION_KEY` | Required when `ENV=production` — the API **refuses to start** without it (`api/app/core/config.py:59-68`). Must be identical on the API and the Celery worker. Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Back it up outside the repo — losing it makes encrypted entries unrecoverable. |
+| `JWT_SECRET` | `openssl rand -hex 32`. Rotating it invalidates all sessions. |
+| `cookie_same_site` | Stays `lax` (`config.py:52`) — safe because all browser traffic goes through the same-origin `/api` proxy (`app/next.config.js:16-25`). **Never** switch the frontend to direct cross-origin API calls; it breaks `Set-Cookie` (cost two fix commits: f7c9c7c, ea167c2). |
+| `DATABASE_URL` | Neon connection string; `config.py` auto-rewrites `postgresql://` → `postgresql+psycopg://`. |
+| `REDIS_URL` | Upstash URL, shared by API and worker (Celery broker). |
+
+## 4. Railway build gotchas
+
+- `api/railway.toml` pins `builder = "RAILPACK"` — do not switch back to Nixpacks.
+- `api/mise.toml` pins Python 3.11.7 with `python.github_attestations = false`. **Do not remove that setting** — the prebuilt CPython 3.11.7 tarball predates GitHub attestations and the build fails verification without it (fix commit 13abe2d).
+- `api/.python-version` must stay in sync with `mise.toml`.
+- The Celery worker is a **separate Railway service** from the API, same repo/root, start command: `celery -A app.celery_app worker --loglevel=info --concurrency=1`. Deploy both when backend code changes.
+- Vercel config is `app/vercel.json` (pnpm install/build); the frontend root directory on Vercel is `app/`.
+
+## 5. Post-deploy verification (in order)
+
+```bash
+# 1. API alive + DB connected
+curl https://<railway-api-domain>/health          # {"status":"ok","database":"connected"} expected
+curl https://<railway-api-domain>/health/full     # includes Redis
+
+# 2. Auth round-trip THROUGH the Vercel proxy (validates Set-Cookie + rewrites)
+#    Register or log in at https://<vercel-domain>/login in a browser —
+#    devtools > Network: the requests must hit /api/* on the Vercel origin, not the Railway domain.
+
+# 3. Async pipeline: create a test entry in the UI, then check the worker
+#    service logs on Railway for "embedding.create_embedding" / mood task lines.
+#    Jobs run ignore_result=True — logs are the only failure signal.
+```
+
+After any encryption-related change, dry-run the backfill against prod (with prod `DATABASE_URL` + `ENCRYPTION_KEY` exported):
+
+```bash
+cd api && python scripts/encrypt_existing_entries.py --dry-run
+```
+
+## 6. Rollback
+
+- **Vercel**: instant rollback to the previous deployment from the dashboard.
+- **Railway**: redeploy the previous build (Deployments → Redeploy). Remember `startCommand` re-runs `alembic upgrade head` — old code + new schema is why step 2's backward-compat rule matters.
+- **Migrations**: no auto-downgrade. If a revision must be reverted: `cd api && alembic downgrade -1` manually against the prod `DATABASE_URL`, and only if the revision's `downgrade()` is non-destructive.
+
+## Gotchas
+
+- The Tauri desktop build bypasses the proxy (`NEXT_PUBLIC_TAURI_BUILD === 'true'` in `app/lib/api.ts`) and needs a direct, CORS-allowed API URL — add the desktop origin to `CORS_ORIGINS` if shipping Tauri.
+- `CORS_ORIGINS` on the Railway API must include the Vercel domain for the few direct (WebSocket) calls; REST goes through the proxy.
+- WebSocket chat (`/chat/ws/chat`) does not traverse the Next.js rewrite — verify chat works post-deploy, and see `docs/WEBSOCKET_AUTH_GUIDE.md` if it 403s.
+- Neon cold-starts can make the first `/health` after deploy slow — retry before declaring the deploy broken.

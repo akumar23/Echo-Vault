@@ -31,7 +31,7 @@ interface UseChatOptions {
   onError?: (error: string) => void
   /**
    * Pin the conversation to a single entry. When unset, the backend scopes
-   * the chat across all of the user's entries via semantic search.
+   * the chat across recent entries selected by the backend.
    */
   entryId?: number
   /** Maximum number of reconnection attempts. Default: 5 */

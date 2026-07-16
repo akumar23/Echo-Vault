@@ -9,7 +9,6 @@ from app.core.config import settings as app_settings
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.attachment import Attachment
-from app.models.embedding import EntryEmbedding
 from app.models.entry import Entry
 from app.models.settings import Settings
 from app.models.user import User
@@ -99,13 +98,7 @@ async def forget_entry(
                         exc_info=True,
                     )
         else:
-            # Soft forget: zero the embedding vector and wipe PII from the entry row.
-            # The row is kept for referential integrity but contains no recoverable content.
-            embeddings = db.query(EntryEmbedding).filter(EntryEmbedding.entry_id == entry_id).all()
-            for embedding in embeddings:
-                embedding.embedding = [0.0] * app_settings.embedding_dim
-                embedding.is_active = False
-
+            # Soft forget: wipe PII while keeping the row for referential integrity.
             entry.content = ""
             entry.title = None
             entry.tags = []
