@@ -74,41 +74,6 @@ def test_test_llm_generation_success(settings_client, monkeypatch):
     assert "llama3.1:8b" in body["message"]
 
 
-def test_test_llm_embedding_success(settings_client, monkeypatch):
-    async def fake_embed(self, text, input_type=None):
-        return [0.0] * app_settings.embedding_dim
-
-    monkeypatch.setattr(LLMService, "get_embedding", fake_embed)
-
-    response = settings_client.post(
-        "/settings/test-llm",
-        json={"service_type": "embedding", "model": "mxbai-embed-large"},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["ok"] is True
-    assert str(app_settings.embedding_dim) in body["message"]
-
-
-def test_test_llm_embedding_dimension_mismatch(settings_client, monkeypatch):
-    wrong_dim = app_settings.embedding_dim + 512
-
-    async def fake_embed(self, text, input_type=None):
-        return [0.0] * wrong_dim
-
-    monkeypatch.setattr(LLMService, "get_embedding", fake_embed)
-
-    response = settings_client.post(
-        "/settings/test-llm",
-        json={"service_type": "embedding", "model": "text-embedding-3-small"},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["ok"] is False
-    assert str(wrong_dim) in body["message"]
-    assert str(app_settings.embedding_dim) in body["message"]
-
-
 def test_test_llm_unreachable_endpoint(settings_client, monkeypatch):
     async def fake_chat(self, messages, temperature=0.7, max_tokens=None):
         raise httpx.ConnectError("connection refused")
@@ -131,7 +96,6 @@ def test_settings_response_exposes_default_urls(settings_client):
     body = response.json()
     # Used by the onboarding modal to build a deployment-aware "local" preset.
     assert body["default_generation_url"] == app_settings.default_generation_url
-    assert body["default_embedding_url"] == app_settings.default_embedding_url
 
 
 def test_test_llm_blocks_metadata_endpoint(settings_client, monkeypatch):

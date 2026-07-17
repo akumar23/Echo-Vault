@@ -24,6 +24,5 @@ class Entry(Base):
     is_deleted = Column(Boolean, default=False)
     
     user = relationship("User", back_populates="entries")
-    embeddings = relationship("EntryEmbedding", back_populates="entry", cascade="all, delete-orphan")
     attachments = relationship("Attachment", back_populates="entry", cascade="all, delete-orphan")
 

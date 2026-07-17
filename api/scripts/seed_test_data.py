@@ -18,9 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.celery_app import celery_app  # noqa: F401 — registers tasks
 from app.core.security import get_password_hash
 from app.database import SessionLocal
-from app.jobs.embedding_job import enqueue_embedding_job
 from app.jobs.mood_job import enqueue_mood_job
-from app.models.embedding import EntryEmbedding
 from app.models.entry import Entry
 from app.models.settings import Settings
 from app.models.user import User
@@ -271,11 +269,8 @@ def main() -> int:
 
         existing_ids = [eid for (eid,) in db.query(Entry.id).filter(Entry.user_id == user.id).all()]
         if existing_ids:
-            db.query(EntryEmbedding).filter(EntryEmbedding.entry_id.in_(existing_ids)).delete(
-                synchronize_session=False
-            )
             db.query(Entry).filter(Entry.user_id == user.id).delete(synchronize_session=False)
-            print(f"Removed {len(existing_ids)} existing entries + embeddings")
+            print(f"Removed {len(existing_ids)} existing entries")
 
         db.commit()
 
@@ -304,9 +299,8 @@ def main() -> int:
         print(f"Inserted {len(created_ids)} entries for {TEST_EMAIL}")
 
         for entry_id in created_ids:
-            enqueue_embedding_job(entry_id)
             enqueue_mood_job(entry_id)
-        print(f"Enqueued {len(created_ids)} embedding + {len(created_ids)} mood jobs")
+        print(f"Enqueued {len(created_ids)} mood jobs")
 
         print()
         print("=" * 50)

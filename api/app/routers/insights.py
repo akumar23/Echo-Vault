@@ -10,7 +10,6 @@ from app.core.dependencies import get_current_user
 from app.core.rate_limit import limiter
 from app.database import get_db
 from app.jobs.insights_job import generate_insights_task, nightly_insights_task
-from app.models.embedding import EntryEmbedding
 from app.models.entry import Entry
 from app.models.insight import Insight
 from app.models.user import User
@@ -87,12 +86,9 @@ async def get_semantic_mood_insights(
         Entry.title,
         Entry.mood_user,
         Entry.mood_inferred,
-    ).join(
-        EntryEmbedding, Entry.id == EntryEmbedding.entry_id
     ).filter(
         Entry.user_id == current_user.id,
         Entry.is_deleted.is_not(True),
-        EntryEmbedding.is_active.is_not(False),
     ).all()
 
     total_entries = len(entries)

@@ -19,7 +19,7 @@ from app.database import SessionLocal
 from app.models.entry import Entry
 from app.models.user import User
 from app.services.context_service import Intent, context_service
-from app.services.llm_service import get_embedding_service_for_user, get_generation_service_for_user
+from app.services.llm_service import get_generation_service_for_user
 from app.services.reflection_cache import reflection_cache
 from app.services.token_store import token_store
 
@@ -57,7 +57,7 @@ CHAT_SYSTEM_PROMPT_ALL = """You are a thoughtful journaling assistant helping th
 Current Reflection:
 {reflection}
 
-Related Journal Entries (surfaced by semantic search for this question):
+Recent Journal Entries:
 {related_entries}
 
 Guidelines:
@@ -124,23 +124,15 @@ async def authenticate_websocket(websocket: WebSocket, ticket: Optional[str]) ->
     return user_id
 
 
-async def get_related_entries(user_id: int, query: str, embedding_service, k: int = 3) -> List[Dict]:
-    """Get semantically related entries via ContextService (short-lived session).
-
-    Returns a list shaped for the chat prompt template — title, truncated
-    content, ISO timestamp, score. Diversity comes from MMR reranking
-    inside the service, so the top-k surface a wider spread of themes
-    than a raw cosine top-k did before.
-    """
+async def get_related_entries(user_id: int, k: int = 3) -> List[Dict]:
+    """Get recent entries via ContextService using a short-lived session."""
     try:
         with get_db_session() as db:
             bundle = await context_service.get_context(
                 db=db,
                 user_id=user_id,
                 intent=Intent.CHAT,
-                anchor_text=query,
                 k=k,
-                embedding_service=embedding_service,
             )
         return [
             {
@@ -179,7 +171,7 @@ async def chat_websocket(
         entry_id: Optional — when present, the chat is pinned to this specific
             entry and the LLM is given only that entry as context. When absent,
             the chat spans all of the user's entries (current reflection plus
-            semantic-search hits on each message).
+            recent journal context on each message).
 
     Client Messages:
         {"type": "chat_message", "content": "user message"}
@@ -227,7 +219,6 @@ async def chat_websocket(
 
         with get_db_session() as db:
             generation_service = get_generation_service_for_user(db, user_id)
-            embedding_service = get_embedding_service_for_user(db, user_id)
 
         context_payload: Dict = {
             "type": "context",
@@ -282,7 +273,7 @@ async def chat_websocket(
                         entry_content=pinned_entry["content"][:_MAX_PINNED_ENTRY_CHARS],
                     )
                 else:
-                    related_entries = await get_related_entries(user_id, user_message, embedding_service, k=3)
+                    related_entries = await get_related_entries(user_id, k=3)
                     system_prompt = CHAT_SYSTEM_PROMPT_ALL.format(
                         reflection=reflection_text,
                         related_entries=format_related_entries(related_entries),

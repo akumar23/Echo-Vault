@@ -2,7 +2,7 @@
 LLM Service using OpenAI-compatible API format.
 
 This service supports any LLM provider that implements the OpenAI API standard:
-- Ollama (via /v1/chat/completions and /v1/embeddings)
+- Ollama (via /v1/chat/completions)
 - OpenAI
 - LM Studio
 - vLLM
@@ -10,8 +10,7 @@ This service supports any LLM provider that implements the OpenAI API standard:
 - Groq
 - And many others
 
-The service uses the chat completions format for text generation and the
-embeddings endpoint for vector generation.
+The service uses the chat completions format for text generation.
 """
 import hashlib
 import httpx
@@ -19,7 +18,6 @@ import json
 import re
 import logging
 from typing import List, Dict, Optional, Any, AsyncGenerator, Tuple
-from urllib.parse import urlparse
 
 from app.core.config import settings as app_settings
 
@@ -69,16 +67,11 @@ class LLMService:
         base_url: str,
         model: str,
         api_token: Optional[str] = None,
-        service_type: str = "generation"  # "generation" or "embedding"
     ):
         self.base_url = base_url.rstrip('/')
         self.model = model
         self.api_token = api_token
-        self.service_type = service_type
         self._logger = logging.getLogger(__name__)
-        # One-shot guard so we log at most once per service instance when a
-        # caller passes input_type to a non-Voyage provider (avoids log spam).
-        self._logged_dropped_input_type = False
 
     def _raise_for_provider_status(self, response: httpx.Response, endpoint: str) -> None:
         """Inspect the response; on non-2xx, log the body snippet and raise LLMProviderError."""
@@ -125,61 +118,6 @@ class LLMService:
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
             headers=headers
         )
-
-    async def get_embedding(
-        self,
-        text: str,
-        input_type: Optional[str] = None,
-    ) -> List[float]:
-        """
-        Get embedding vector using OpenAI-compatible embeddings endpoint.
-
-        Uses POST /v1/embeddings with {"model": "...", "input": "..."}.
-
-        `input_type` is forwarded only when set; Voyage uses "document" / "query"
-        for retrieval-tuned embeddings, while OpenAI/Ollama ignore or reject it,
-        so callers should only pass it for Voyage-compatible providers.
-        """
-        payload: Dict[str, Any] = {"model": self.model, "input": text}
-
-        # Detect Voyage by hostname (not substring) so URLs like
-        # https://api.voyageai.com.evil.tld or paths containing "voyageai.com"
-        # don't get matched. Hostname is parsed once per call; cheap.
-        hostname = (urlparse(self.base_url).hostname or "").lower()
-        is_voyage = hostname == "voyageai.com" or hostname.endswith(".voyageai.com")
-
-        if input_type:
-            if is_voyage:
-                payload["input_type"] = input_type
-            elif not self._logged_dropped_input_type:
-                self._logger.info(
-                    "Dropping input_type for non-Voyage embedding provider",
-                    extra={
-                        "base_url": self.base_url,
-                        "hostname": hostname,
-                        "input_type": input_type,
-                    },
-                )
-                self._logged_dropped_input_type = True
-
-        endpoint = f"{self.base_url}/v1/embeddings"
-        async with self._create_client() as client:
-            response = await client.post(
-                endpoint,
-                json=payload,
-                timeout=30.0
-            )
-            self._raise_for_provider_status(response, endpoint)
-            data = response.json()
-
-            # OpenAI format returns {"data": [{"embedding": [...]}]}
-            if "data" in data and len(data["data"]) > 0:
-                return data["data"][0]["embedding"]
-            # Fallback for simple format {"embedding": [...]}
-            elif "embedding" in data:
-                return data["embedding"]
-            else:
-                raise ValueError(f"Unexpected embedding response format: {data}")
 
     async def chat_completion(
         self,
@@ -539,58 +477,6 @@ class LLMService:
         response_text = await self.chat_completion(messages, temperature=0.7)
         return self._parse_insights_response(response_text)
 
-    async def generate_insights_with_themes(
-        self,
-        recent_entries_text: str,
-        older_themed_text: str,
-    ) -> dict:
-        """Generate insights with explicit recent vs. older-themed buckets.
-
-        The two-bucket structure lets the model identify recurring patterns
-        — e.g., "the work stress this month echoes the same pattern from
-        last summer" — without conflating chronological events.
-
-        Falls back gracefully via the same _parse_insights_response logic.
-        """
-        system_prompt = (
-            "Analyze journal entries to surface patterns and actionable advice.\n\n"
-            "You receive entries in two buckets:\n"
-            "- RECENT: what the user wrote in the analysis period\n"
-            "- OLDER THEMES: past entries that semantically resonate with the recent ones\n\n"
-            "Use OLDER THEMES to identify recurring patterns. When a recent issue echoes "
-            "an older one, name it. When something appears genuinely new, name it too.\n\n"
-            "Respond in valid JSON:\n"
-            "{\n"
-            '  "summary": "Brief factual summary. State observed patterns including recurrences. No emotional language.",\n'
-            '  "themes": ["theme1", "theme2", "theme3"],\n'
-            '  "actions": [\n'
-            '    "Concrete action with specific parameters (time, frequency, duration)",\n'
-            '    "Another specific action",\n'
-            '    "Another specific action"\n'
-            "  ]\n"
-            "}\n\n"
-            "RULES:\n"
-            "- Summary: prefer noting recurrences over describing single events.\n"
-            "- Themes: single words or short phrases only.\n"
-            "- Actions: specific and measurable (e.g., '10-min walk before 9am' not 'exercise more').\n"
-            "- No filler phrases, no emotional validation, no rhetorical questions.\n"
-            "- Be direct and clinical.\n\n"
-            "Output ONLY valid JSON."
-        )
-        user_prompt = (
-            f"RECENT ENTRIES:\n{recent_entries_text}\n\n"
-            f"OLDER THEMES (semantically related past entries):\n{older_themed_text}\n\n"
-            "Analyze (JSON only):"
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        response_text = await self.chat_completion(messages, temperature=0.7)
-        return self._parse_insights_response(response_text)
-
     def _parse_insights_response(self, response_text: str) -> dict:
         """Parse insights from LLM response with fallback strategies."""
         default_result = {
@@ -796,21 +682,6 @@ def get_generation_service(
         base_url=url or app_settings.default_generation_url,
         model=model or app_settings.default_generation_model,
         api_token=api_token,
-        service_type="generation"
-    )
-
-
-def get_embedding_service(
-    url: Optional[str] = None,
-    model: Optional[str] = None,
-    api_token: Optional[str] = None
-) -> LLMService:
-    """Get an embedding LLM service instance."""
-    return LLMService(
-        base_url=url or app_settings.default_embedding_url,
-        model=model or app_settings.default_embedding_model,
-        api_token=api_token,
-        service_type="embedding"
     )
 
 
@@ -827,26 +698,6 @@ def get_generation_service_for_user(db, user_id: int) -> LLMService:
             base_url=user_settings.generation_url or app_settings.default_generation_url,
             model=user_settings.generation_model or app_settings.default_generation_model,
             api_token=decrypt_token(raw_token) if raw_token else None,
-            service_type="generation",
         )
 
     return get_generation_service()
-
-
-def get_embedding_service_for_user(db, user_id: int) -> LLMService:
-    """Get an embedding LLM service for a specific user."""
-    from app.core.encryption import decrypt_token
-    from app.models.settings import Settings
-
-    user_settings = db.query(Settings).filter(Settings.user_id == user_id).first()
-
-    if user_settings:
-        raw_token = user_settings.embedding_api_token
-        return LLMService(
-            base_url=user_settings.embedding_url or app_settings.default_embedding_url,
-            model=user_settings.embedding_model or app_settings.default_embedding_model,
-            api_token=decrypt_token(raw_token) if raw_token else None,
-            service_type="embedding",
-        )
-
-    return get_embedding_service()

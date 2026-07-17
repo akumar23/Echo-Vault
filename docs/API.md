@@ -187,8 +187,8 @@ Delete an entry (soft delete).
 
 ### Search
 
-#### POST `/search/semantic`
-Semantic search with time decay.
+#### POST `/search`
+Keyword search over decrypted title/content/tags with recency scoring.
 
 **Request:**
 ```json
@@ -295,8 +295,8 @@ Export all entries as JSONL.
 Content-Type: `application/x-ndjson`
 
 ```
-{"id":1,"title":"Entry 1","content":"...","embedding":[...]}
-{"id":2,"title":"Entry 2","content":"...","embedding":[...]}
+{"id":1,"title":"Entry 1","content":"...","tags":["work"]}
+{"id":2,"title":"Entry 2","content":"...","tags":["family"]}
 ```
 
 ### WebSocket
@@ -323,7 +323,7 @@ WS /chat/ws/chat?ticket={ticket}
 ```
 
 Optional query parameter:
-- `entry_id` — pin the chat to a specific journal entry. When present, the LLM is given only that entry's content as context. When absent, the chat spans all entries (current reflection + the top 3 semantically similar entries per message).
+- `entry_id` — pin the chat to a specific journal entry. When present, the LLM is given only that entry's content as context. When absent, the chat uses the current reflection plus the three most recent entries.
 
 #### Messages
 

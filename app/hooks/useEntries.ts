@@ -29,12 +29,8 @@ export function useEntry(id: number, enabled = true) {
 }
 
 /**
- * Hook to fetch "echoes" — entries across the user's journal that semantically
- * resonate with this one, wrapped in an LLM-generated observation about what
- * connects them.
- *
- * Polls every 5s while the source entry's embedding is still being generated
- * (`status === 'pending'`), stops once the result is settled.
+ * Hook to fetch recent or tag-related "echoes", wrapped in an LLM-generated
+ * observation about what connects them.
  */
 export function useEchoes(id: number, k = 3, enabled = true) {
   const { user, loading } = useAuth()
@@ -44,7 +40,5 @@ export function useEchoes(id: number, k = 3, enabled = true) {
     queryFn: () => entriesApi.getEchoes(id, k),
     enabled: enabled && !!id && !loading && !!user,
     staleTime: 5 * 60_000,
-    refetchInterval: (query) =>
-      query.state.data?.status === 'pending' ? 5_000 : false,
   })
 }

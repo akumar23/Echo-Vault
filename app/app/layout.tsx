@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: '%s | EchoVault',
   },
   description:
-    'A privacy-first journal that understands you. Write freely, search semantically, and reflect with AI—all running locally on your device. Free and open source.',
+    'A privacy-first journal that understands you. Write freely, search privately, and reflect with AI—all running locally on your device. Free and open source.',
   keywords: [
     'journal',
     'diary',
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     'open source',
     'mental health',
     'reflection',
-    'semantic search',
+    'private search',
   ],
   authors: [{ name: 'Aryan Kumar' }],
   creator: 'Aryan Kumar',
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     siteName: 'EchoVault',
     title: 'EchoVault - Privacy-First AI Journal',
     description:
-      'A privacy-first journal that understands you. Write freely, search semantically, and reflect with AI—all running locally on your device.',
+      'A privacy-first journal that understands you. Write freely, search privately, and reflect with AI—all running locally on your device.',
     images: [
       {
         url: '/og-image.png',
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'EchoVault - Privacy-First AI Journal',
     description:
-      'A privacy-first journal that understands you. Write freely, search semantically, and reflect with AI—all running locally.',
+      'A privacy-first journal that understands you. Write freely, search privately, and reflect with AI—all running locally.',
     images: ['/og-image.png'],
   },
   icons: {

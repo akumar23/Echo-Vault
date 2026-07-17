@@ -136,7 +136,7 @@ reflection_cache = ReflectionCache()
 # They deliberately reuse ``reflection_cache.redis`` so we don't open extra
 # connection pools — free-tier Redis tiers have strict connection limits.
 
-_ECHOES_KEY_PREFIX = "echoes:v2:user:"
+_ECHOES_KEY_PREFIX = "echoes:v3:user:"
 _ECHOES_TTL = 60 * 60 * 24 * 7  # 7 days
 
 _REVERSE_PROMPT_KEY_PREFIX = "reverse_prompt:user:"

@@ -24,7 +24,7 @@ EchoVault is a normal web app with one twist: it does AI work locally.
               v                  v                  v              v
        +-----------+      +-----------+      +-----------+   +-----------+
        | Postgres  |      |   Redis   |      | Celery    |   |  Ollama   |
-       | + pgvector|      |  (cache + |      | worker    |   |  (LLM)    |
+       |           |      |  (cache + |      | worker    |   |  (LLM)    |
        | port 5432 |      |   broker) |      | (no port) |   | port 11434|
        +-----------+      +-----------+      +-----------+   +-----------+
 ```
@@ -67,11 +67,9 @@ The API is a FastAPI app (Python 3.11) running on port 8000. It exposes HTTP end
 
 Browse the live, interactive docs at http://localhost:8000/docs once the API is running.
 
-### Database — PostgreSQL + pgvector
+### Database — PostgreSQL
 
-PostgreSQL 16 stores everything: users, entries, settings, insights, attachments. The `pgvector` extension adds a `vector(1024)` column type used in the `entry_embeddings` table.
-
-This is the key trick: instead of running a separate vector database, we use the same Postgres instance for both relational data and vector search. One database, one backup, one connection pool.
+PostgreSQL 16 stores users, encrypted entries, settings, insights, and attachments. Search and AI context do not require a vector extension or separate vector database.
 
 ### Redis
 
@@ -86,7 +84,6 @@ Celery is a separate Python process that runs background jobs. The API never blo
 
 Jobs include:
 
-- `embedding_job` — generate the 1024-dim vector for an entry
 - `mood_job` — infer a 1-5 mood score
 - `reflection_job` — generate a fresh reflection
 - `insights_job` — generate 3/7/14/30-day insights
@@ -95,15 +92,11 @@ All jobs use `asyncio.run()` to call async LLM service methods. There's a design
 
 ### Ollama (or any OpenAI-compatible API)
 
-Ollama is a small server that runs LLMs on your machine, exposing an HTTP API on port 11434. EchoVault speaks the OpenAI API format (`/v1/chat/completions` and `/v1/embeddings`), which means anything OpenAI-compatible works as a drop-in replacement: OpenAI itself, Groq, Together.ai, vLLM, LM Studio, etc.
+Ollama is a small server that runs LLMs on your machine, exposing an HTTP API on port 11434. EchoVault speaks the OpenAI chat-completions API format, which means compatible providers work as drop-in replacements.
 
 The `LLMService` class (`api/app/services/llm_service.py`) creates a fresh `httpx.AsyncClient` per request. This avoids event-loop issues that would otherwise occur in Celery workers.
 
-Two factory functions resolve which endpoint to use:
-- `get_generation_service_for_user(db, user_id)` — for chat/reflection/insight calls
-- `get_embedding_service_for_user(db, user_id)` — for vector embeddings
-
-Both fall back to the server-wide defaults (`DEFAULT_GENERATION_*` and `DEFAULT_EMBEDDING_*` env vars) if the user has not configured their own endpoints.
+`get_generation_service_for_user(db, user_id)` resolves the endpoint for chat, reflection, mood, and insight calls. It falls back to the server-wide `DEFAULT_GENERATION_*` settings.
 
 ---
 
@@ -136,18 +129,9 @@ The full schema lives in `api/app/models/`. Here are the important tables:
 | `is_deleted` | bool | Soft-delete flag |
 | `created_at`, `updated_at` | timestamps | |
 
-### `entry_embeddings`
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | int | Primary key |
-| `entry_id` | int | FK to `entries` |
-| `embedding` | vector(1024) | The pgvector column |
-| `is_active` | bool | False after a soft-forget |
-
 ### `settings`
 
-Per-user preferences: search half-life, privacy mode, and the LLM endpoint config (generation URL/token/model + embedding URL/token/model).
+Per-user preferences: search half-life, privacy mode, and generation LLM URL/token/model.
 
 ### `insights`
 
@@ -170,30 +154,24 @@ Records when a user accepts/dismisses a generated prompt — used to improve fut
 ```
 1. Browser → POST /entries with title/content/tags/mood
 2. API saves the entry row
-3. API enqueues two Celery jobs:
-     - embedding_job
-     - mood_job (only if mood_user is null)
+3. API enqueues `mood_job` (only if `mood_user` is null)
 4. API invalidates the reflection cache key for this user
 5. API returns 201 with the new entry
-6. (Background) worker pops embedding_job:
-     - Calls the user's embedding endpoint
-     - Stores the 1024-dim vector in entry_embeddings
-7. (Background) worker pops mood_job:
+6. (Background) worker pops mood_job:
      - Calls the LLM with a mood prompt
      - Updates entry.mood_inferred
 ```
 
-The user sees the entry instantly. The embedding and mood typically appear within a couple of seconds.
+The user sees the entry instantly. The inferred mood typically appears within a couple of seconds.
 
-### Semantic search
+### Keyword search
 
 ```
-1. Browser → POST /search/semantic with query, k, optional filters
-2. API embeds the query via the user's embedding service
-3. SQL: pgvector cosine_distance(query_embedding, entry_embedding)
-4. Score = similarity * decay
-   where decay = 1 / (1 + age_days / half_life_days)
-5. Order by score desc, return top k
+1. Browser → POST /search with query, k, optional filters
+2. SQL applies user/date/tag filters and loads at most 1,000 recent entries
+3. The ORM decrypts title/content inside the API process
+4. The API counts keyword matches in title/content/tags
+5. Results rank by match count plus recency decay, then return top k
 ```
 
 Filters (date range, tags) are applied as SQL WHERE clauses before the similarity sort.
@@ -225,7 +203,7 @@ The cache is invalidated whenever the user creates, updates, or deletes an entry
 4. Server sends a "context" message with the current reflection
    (and, if entry-pinned, the entry contents)
 5. For each user message:
-   - Server fetches the top-3 semantically similar entries (when in "all" scope)
+   - Server fetches the three most recent entries (when in "all" scope)
    - Builds a system prompt with reflection + related entries
    - Streams the LLM response token-by-token as {"type":"token", "content":"..."} messages
    - Sends {"type":"complete"} when done
@@ -240,13 +218,11 @@ There are two modes, controlled by `settings.privacy_hard_delete` per user:
 
 **Soft delete (default):**
 - `entry.is_deleted = True`
-- `entry_embeddings.is_active = False`
-- `entry_embeddings.embedding` is overwritten with `[0.0] * 1024`
-- The entry is hidden from search and the UI but remains recoverable in the DB
+- Entry content/title/tags/moods are erased
+- The row remains only for referential integrity
 
 **Hard delete:**
 - The entry row is deleted
-- The embedding row is deleted
 - Any attachment files are removed from disk
 - Nothing is recoverable
 
@@ -285,9 +261,9 @@ This avoids putting long-lived JWTs in server logs (where query strings end up).
 
 1. **Local LLM by default.** With Ollama in Docker, no journal text leaves your machine.
 2. **No telemetry.** The app does not call out to any analytics or error-reporting service.
-3. **Soft delete zeros out the vector.** Even though the row stays in the DB, the embedding is replaced with zeros so it cannot resurface in search.
+3. **Soft forget erases journal content.** The row remains for referential integrity but cannot resurface in search.
 4. **Hard delete is real delete.** Row removed, file removed, no archive.
-5. **Export.** `GET /export/entries` returns your entries as JSONL including embeddings — you can leave whenever you want.
+5. **Export.** `GET /export/entries` returns your entries as JSONL — you can leave whenever you want.
 
 ---
 
@@ -313,11 +289,9 @@ Next.js is the de facto framework for production React apps. It gives you routin
 
 **Alternatives:** Plain React + Vite (more wiring, no SSR), Remix (smaller community), SvelteKit (would have meant rewriting with a different framework).
 
-### Why PostgreSQL with pgvector?
+### Why PostgreSQL?
 
-We need two kinds of storage: relational (users, entries, settings) and vector (embeddings for semantic search). pgvector lets one database handle both. One backup, one connection pool, one set of credentials, transactional consistency between an entry and its embedding.
-
-**Alternatives:** Postgres + a separate vector DB like Pinecone or Weaviate (operational complexity, network latency between two systems, no transactions across them), SQLite (no vector support), MongoDB (weaker relational story).
+PostgreSQL provides reliable relational storage for encrypted journal data without requiring a second retrieval database. Keyword search happens in the API process because encrypted text cannot be indexed safely with PostgreSQL full-text search.
 
 ### Why Redis?
 
@@ -327,7 +301,7 @@ Redis is the most common Celery broker, and it doubles as a fast in-memory cache
 
 ### Why Celery?
 
-Generating an embedding takes 1-2 seconds. Generating a reflection takes 5-30 seconds. If the API blocked on these, every entry creation would feel sluggish. Celery moves the slow work off the request path so the UI stays responsive.
+Generating a reflection takes 5-30 seconds. If the API blocked on generation, requests would feel sluggish. Celery moves slow LLM work off the request path so the UI stays responsive.
 
 **Alternatives:** asyncio background tasks (lost on API restart, harder to scale workers separately), `arq` or `dramatiq` (smaller ecosystems), no background work (terrible UX).
 
@@ -343,7 +317,7 @@ The whole privacy story falls apart if we have to send your journal entries to O
 
 The default config is sized for a single user on a laptop. If you wanted to scale this up:
 
-- **Database:** vector indexes (HNSW or IVFFlat) help once you have tens of thousands of entries. See `api/SEARCH_OPTIMIZATION_INDEXES.sql`.
+- **Database:** keyword search intentionally scans at most the 1,000 most recent entries per user. Larger corpora need a privacy-preserving search design before raising that cap.
 - **Worker:** the worker is started with `--concurrency=1` to minimize Redis ops for single-user installs. Bump it for multi-user.
 - **API:** for production, swap uvicorn for gunicorn with uvicorn workers (`gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker`).
 - **Ollama:** the bottleneck for any real workload. Run on a GPU box, or switch to a hosted OpenAI-compatible API.

@@ -8,8 +8,12 @@ import {
 } from '@/hooks/useEntryMutations'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { format } from 'date-fns'
 import { WritingEditor } from '@/components/WritingEditor'
+import {
+  EntryDatePicker,
+  entryDateFromTimestamp,
+  toEntryDateIso,
+} from '@/components/EntryDatePicker'
 import { EntryReflectionPanel } from '@/components/EntryReflectionPanel'
 import { Echoes } from '@/components/Echoes'
 import { ReversePrompt } from '@/components/ReversePrompt'
@@ -87,9 +91,15 @@ export default function EntryDetailPage() {
             All entries
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {format(new Date(entry.created_at), 'MMMM d, yyyy')}
-            </span>
+            <EntryDatePicker
+              date={entryDateFromTimestamp(entry.created_at)}
+              saving={updateMutation.isPending}
+              onDateChange={async (date) => {
+                await updateMutation.mutateAsync({
+                  entry_date: toEntryDateIso(date),
+                })
+              }}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="More actions">

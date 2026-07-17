@@ -1,7 +1,7 @@
 """Outbound URL policy for user-supplied LLM endpoints (SSRF guard).
 
-The settings probe and the saved generation/embedding URLs are fetched
-server-side, so an authenticated user controls the request target. Without a
+The settings probe and the saved generation URL are fetched server-side, so an
+authenticated user controls the request target. Without a
 policy this is an SSRF primitive: a hosted deployment could be pointed at a
 cloud metadata service, a loopback admin port, or an internal host — and the
 probe even reflects response snippets back to the caller.
@@ -20,9 +20,8 @@ resolves to an internal IP is rejected. This narrows but does not fully close
 DNS rebinding (the address at fetch time may differ from the one validated
 here); it is a pragmatic mitigation, not a network sandbox.
 
-Only *user-supplied* URLs are validated. Server defaults
-(``DEFAULT_GENERATION_URL`` / ``DEFAULT_EMBEDDING_URL``) are operator-chosen
-and trusted, so callers pass them straight through.
+Only *user-supplied* URLs are validated. The server's
+``DEFAULT_GENERATION_URL`` is operator-chosen and trusted.
 """
 import asyncio
 import ipaddress

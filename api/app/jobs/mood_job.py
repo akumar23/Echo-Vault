@@ -1,4 +1,3 @@
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.database import SessionLocal
 from app.models.entry import Entry

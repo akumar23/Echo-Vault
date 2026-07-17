@@ -12,9 +12,9 @@ This README is the front door. If you have never set up a project like this befo
 
 ## Who this is for
 
-- **You journal and want better recall.** Search by what you meant, not the exact words you typed.
+- **You journal and want better recall.** Search by keyword across titles, text, and tags, ranked by recency.
 - **You care about privacy.** You would rather your therapist's notes app not phone home to OpenAI.
-- **You want to learn how a modern full-stack app is built.** This is a working example with a Next.js frontend, a FastAPI backend, a vector database, a job queue, and a local LLM — all wired together.
+- **You want to learn how a modern full-stack app is built.** This is a working example with a Next.js frontend, a FastAPI backend, a job queue, and a local LLM — all wired together.
 
 If any of those words are new, read the [Glossary](#glossary) at the bottom first.
 
@@ -25,16 +25,16 @@ If any of those words are new, read the [Glossary](#glossary) at the bottom firs
 ### Things you can do as a user
 
 - **Write journal entries** in a clean editor. Tag them, set a mood, or let the AI guess the mood for you.
-- **Search by meaning.** Type "feeling stuck at work" and find old entries that talk about being demotivated, even if you never used those exact words.
+- **Search privately by keyword** across titles, journal text, and tags.
 - **Get AI reflections** — short, generated summaries that surface themes across your recent writing.
-- **Chat with your journal** in a streaming conversation, where the AI pulls in relevant past entries as context.
+- **Chat with your journal** in a streaming conversation grounded in recent entries.
 - **Track mood trends** over 7, 30, or 90 days.
 - **Forget things.** Soft delete hides an entry from search; hard delete erases it permanently.
 
 ### Things that happen behind the scenes
 
-- Every entry is converted into a **vector embedding** — a list of 1024 numbers that represents the entry's meaning. Search works by comparing embeddings.
-- A background worker handles the slow stuff (embedding, mood inference, reflections) so the UI never freezes.
+- Search decrypts a bounded set of entries only inside the API process and never needs a plaintext database index.
+- A background worker handles slow mood inference, reflections, and insights so the UI never freezes.
 - A local LLM (Ollama) runs on your machine and does all the AI work by default. You can swap it out for OpenAI, Groq, or any OpenAI-compatible API in Settings.
 
 ---
@@ -84,7 +84,6 @@ cp default.env .env
 
 # 3. Pull the AI models (this downloads several GB, takes a few minutes)
 ollama pull llama3.1:8b
-ollama pull mxbai-embed-large
 
 # 4. Start everything
 cd infra
@@ -100,7 +99,7 @@ If something goes wrong, jump to [Troubleshooting](#troubleshooting) or the more
 
 ## How the AI features actually work
 
-If "vector search" and "LLM" are buzzwords to you, here is what they really mean inside this app.
+Here is what the AI and search features do inside the app.
 
 ### The LLM (Large Language Model)
 
@@ -112,23 +111,16 @@ An LLM is a program that reads text and writes text back. EchoVault uses one for
 
 By default, the LLM is **Ollama** running on your own machine. Your text never leaves your computer. You can switch to OpenAI, Groq, or any compatible service in Settings if you prefer.
 
-### Vector embeddings and semantic search
+### Private keyword search
 
-Traditional search ("Ctrl-F") matches exact words. **Semantic search** matches meaning.
+Search matches words across entry titles, content, and tags. Because journal text
+is encrypted in PostgreSQL, matching happens only after the ORM decrypts a bounded
+set of entries inside the API process.
 
-Here is the trick: a separate AI model (called an embedding model) converts each journal entry into a list of 1024 numbers. Entries about similar topics end up with similar lists of numbers, even when the words are completely different. When you search, your query also gets turned into 1024 numbers, and the database finds entries whose numbers are closest.
+### Recency scoring
 
-So you can search "feeling stuck at work" and get back an old entry titled "Why is everything boring lately?" because, mathematically, those two are talking about the same thing.
-
-### Time-decayed scoring
-
-Pure semantic similarity has a problem: a perfectly-matching entry from two years ago will outrank a slightly-less-matching one from yesterday — but you probably wanted yesterday's. EchoVault fixes this by multiplying the similarity score by a **decay factor** based on age:
-
-```
-score = similarity * (1 / (1 + age_in_days / half_life_days))
-```
-
-The half-life is set in Settings (default: 30 days). Lower it to favor recent entries; raise it to treat all entries equally regardless of age.
+Results rank primarily by keyword match count, with a recency score controlled by
+the half-life setting (default: 30 days). Lower it to favor recent entries.
 
 ---
 
@@ -139,9 +131,9 @@ The half-life is set in Settings (default: 30 days). Lower it to favor recent en
 | **Docker** | Lets you run six different services (database, web app, API, job queue, etc.) without installing six different programs on your machine. Each service runs in a sealed box that talks to the others over a private network. |
 | **Next.js + React** | Next.js is the framework for the web frontend. We picked it because it has good defaults for server-side rendering, routing, and deployment to Vercel. React is the UI library it's built on. |
 | **FastAPI (Python)** | The backend API server. FastAPI is fast, easy to write, and gives you free interactive API docs at `/docs`. Python was the natural choice because most LLM tooling is Python-first. |
-| **PostgreSQL + pgvector** | PostgreSQL is the database that stores your account, entries, and tags. The `pgvector` extension is what lets the same database also store and search vector embeddings, so we don't need a separate vector database. |
+| **PostgreSQL** | Stores accounts, encrypted entries, settings, and insights. No vector database or extension is required. |
 | **Redis** | A fast in-memory store. We use it for two things: passing job messages to the background worker, and caching reflections so they load instantly on a return visit. |
-| **Celery** | A background-job runner. Embedding an entry takes 1-2 seconds, which is too slow to make the user wait. Celery picks up that work in the background while the UI stays snappy. |
+| **Celery** | Runs slow mood, reflection, and insight generation away from the request path so the UI stays responsive. |
 | **Ollama** | Runs the LLM on your machine. The privacy story falls apart if we have to send your journal to OpenAI for every reflection — Ollama is what makes local-first possible. |
 
 ---
@@ -170,7 +162,7 @@ When `docker compose up -d` finishes, six containers are running:
 | `web` | 3000 | The Next.js frontend you open in the browser. |
 | `api` | 8000 | The FastAPI backend that handles all data and auth. |
 | `worker` | — | A Celery process that runs background jobs. |
-| `db` | 5432 | PostgreSQL with pgvector — stores everything. |
+| `db` | 5432 | PostgreSQL — stores everything. |
 | `redis` | 6379 | The job queue and reflection cache. |
 | `ollama` | 11434 | The local LLM. |
 
@@ -241,7 +233,6 @@ Common Settings-page options:
 | Setting | What it does |
 |---|---|
 | Generation URL / Model | Where to send chat/reflection prompts. Use `http://localhost:11434` for local Ollama, or `https://api.openai.com/v1` for OpenAI. |
-| Embedding URL / Model | Where to generate vector embeddings. Often the same as Generation. |
 | API Token | Bearer token, only needed for cloud providers like OpenAI/Groq. |
 | Search half-life | How quickly older entries decay in search results. Default 30 days. |
 | Hard delete | Off by default. When on, "forget" permanently deletes entries instead of soft-hiding them. |
@@ -258,7 +249,7 @@ For the full list of environment variables, see [docs/ENV_CONFIG.md](docs/ENV_CO
 curl http://localhost:11434/api/tags
 ```
 
-You should see a JSON list of models. If not, start Ollama and re-run `ollama pull llama3.1:8b mxbai-embed-large`.
+You should see a JSON list of models. If not, start Ollama and re-run `ollama pull llama3.1:8b`.
 
 ### "Service is not healthy" on startup
 
@@ -269,7 +260,7 @@ docker compose logs <name> # read its logs
 
 The most common causes are: Ollama not finished starting, the `.env` file missing a value, or port 3000/5432/6379/8000/11434 already in use by something else.
 
-### Embeddings or reflections never appear
+### Mood or reflections never appear
 
 ```bash
 docker compose logs worker
@@ -303,9 +294,7 @@ Quick definitions for the terms used throughout the docs:
 - **JWT** — JSON Web Token. A signed string the app uses to remember you're logged in.
 - **LLM** — Large Language Model. The AI that reads and writes text. EchoVault uses Ollama by default.
 - **Ollama** — a small program that runs LLMs on your machine. Listens on port 11434.
-- **pgvector** — a PostgreSQL extension that adds a "vector" column type so you can do semantic search inside the database.
 - **Port** — a number that identifies a network service on your machine. The frontend lives on port 3000, the API on 8000, and so on.
-- **Vector embedding** — a list of numbers that represents the meaning of a piece of text. Similar meanings produce similar numbers.
 - **WebSocket** — a long-lived two-way connection between the browser and the server, used here for streaming chat responses token-by-token.
 
 ---

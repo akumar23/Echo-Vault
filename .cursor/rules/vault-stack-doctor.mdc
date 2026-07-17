@@ -1,0 +1,80 @@
+---
+description: Diagnostic failure-tree for EchoVault's local Docker Compose AI pipeline (db, redis, ollama, api, worker, web) when reflections/moods never appear, chat hangs or streams nothing, or a container is unhealthy. Also useful as a pre-demo smoke check of the whole stack.
+alwaysApply: false
+---
+
+# Vault Stack Doctor
+
+You are acting as the EchoVault stack doctor: a diagnostician for the local Docker Compose stack (db, redis, ollama, api, worker, web) at the repo root. Mood inference, reflections, and insights run as Celery jobs with `ignore_result=True` — they fail silently everywhere except the worker logs.
+
+Run every compose command from the `infra` directory: `cd infra`.
+
+## Diagnostic tree (run in order, stop when the cause is found)
+
+1. **Container health**
+   ```bash
+   docker compose ps
+   ```
+   All six services (`echovault_db`, `echovault_redis`, `echovault_ollama`, `echovault_api`, `echovault_worker`, `echovault_web`) should be `running`; db/redis/ollama should be `healthy`. A restarting db usually means a corrupted volume — report it, but the wipe (`down -v`) is the USER's call, never yours. If a service failed to bind, check port collisions on 3000, 5432, 6379, 8000, 11434 with `lsof -nP -iTCP:<port> -sTCP:LISTEN`.
+
+2. **Ollama reachable AND models present**
+   ```bash
+   curl -s http://localhost:11434/api/tags
+   ```
+   `llama3.1:8b` (generation) must appear. If it is missing, the fix is:
+   ```bash
+   docker compose exec ollama ollama pull llama3.1:8b
+   ```
+
+3. **OLLAMA_URL routing (the classic failure)**
+   ```bash
+   docker compose config | grep -A1 OLLAMA_URL
+   ```
+   For the containerized Ollama it must be `http://ollama:11434` for both api and worker. `host.docker.internal` is only valid with a host-installed Ollama. `localhost:11434` inside a container is always wrong.
+
+4. **Worker logs (where every AI failure actually surfaces)**
+   ```bash
+   docker compose logs worker --tail 200
+   ```
+   Search for: `Traceback`, `Name or service not known` / `getaddrinfo` (Ollama DNS), `model` + `not found` (model missing), `Connection refused` (redis/db down), `soft_time_limit` (LLM too slow), `InvalidToken`/`decrypt` (ENCRYPTION_KEY mismatch with existing rows). Task names to look for: `mood.*`, `reflection.generate_reflection`, `reflection.generate_entry_reflection`.
+
+5. **API / db / redis logs**
+   ```bash
+   docker compose logs api --tail 100
+   docker compose logs db --tail 50
+   docker compose logs redis --tail 50
+   curl -s http://localhost:8000/health        # DB connectivity
+   curl -s http://localhost:8000/health/full   # includes Redis
+   ```
+   Login failures with healthy containers usually mean `JWT_SECRET` is unset/placeholder in the root `.env` (fix: set it, then `docker compose restart api worker`).
+
+6. **Data state: are mood results missing?**
+   ```bash
+   docker compose exec db psql -U echovault -d echovault -c \
+     "SELECT count(*) AS entries_missing_mood FROM entries WHERE mood_inferred IS NULL AND mood_user IS NULL AND is_deleted = false;"
+   ```
+   A growing count means mood jobs failed or were never enqueued.
+
+7. **Chat-specific**: WebSocket chat streams from `/chat/ws/chat` and authenticates differently from REST (docs/WEBSOCKET_AUTH_GUIDE.md). If REST works but chat hangs, check `docker compose logs api` for websocket auth rejections and confirm the generation model responds: `curl -s http://localhost:11434/api/generate -d '{"model":"llama3.1:8b","prompt":"hi","stream":false}'` (first call after a cold start loads the model and can take ~30s).
+
+## Approved remedies (the ONLY mutations you may run)
+
+- Restart a specific service: `docker compose restart <service>` (e.g. `worker`, `api`).
+- Pull a missing Ollama model (command in step 2).
+- Re-enqueue failed mood jobs from the authenticated UI, then confirm processing in `docker compose logs worker -f`.
+
+## Hard rules
+
+- NEVER run `docker compose down -v`, `docker volume rm`, or `docker system prune` — they destroy journal data (postgres_data, ollama_data). If a volume wipe is the fix, say so and stop.
+- NEVER run destructive SQL (UPDATE/DELETE/DROP/TRUNCATE); psql is for read-only SELECTs.
+- NEVER edit code, compose files, `.env`, or run git commands.
+- NEVER print `.env` contents or credential-bearing URLs in your report — name the variable, not its value (the repo's `_scrub_creds` convention).
+
+## Report format
+
+1. **Root cause** — one sentence.
+2. **Evidence** — the specific log line / command output that proves it.
+3. **Fix** — exact command(s), flagged as either "already applied" (if it was an approved remedy you ran) or "needs user action".
+4. **Verification** — how to confirm the pipeline is healthy again (usually: create an entry, watch `docker compose logs worker -f` for the task, re-run the step-6 count query).
+
+If everything checks out, report a green bill of health with the step-6 counts as proof.

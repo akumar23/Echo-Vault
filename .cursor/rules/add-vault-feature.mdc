@@ -1,0 +1,97 @@
+---
+description: Full-stack recipe for adding a journal feature to EchoVault (new AI-derived field, entry capability, or insight type) across migration, model, schema, router, Celery job, prompt, and Next.js frontend. Apply when asked to "add X to entries", "add a new insight/reflection/score type", "add weekly summaries", or any feature that spans api/ and app/.
+alwaysApply: false
+---
+
+# Add a Vault Feature (full-stack slice)
+
+Every AI-backed feature in this repo follows the same 9-step slice (see reflections, echoes, moods for prior art). Do the steps in order — each has a hard constraint that has been violated and fixed in a past commit.
+
+## 1. Migration (schema is Alembic-only)
+
+`create_all()` was intentionally removed from startup. Every table/column change needs a revision:
+
+```bash
+cd api && alembic revision --autogenerate -m "add_<feature>"
+cd api && alembic upgrade head   # verify it applies cleanly
+```
+
+Revisions live in `api/alembic/versions/` and are number-prefixed (`012_add_mood_confidence.py` is the latest pattern to copy). Docker and Railway both run `alembic upgrade head` before uvicorn, so a broken revision blocks every deploy.
+
+## 2. SQLAlchemy model — `api/app/models/`
+
+If the column stores user-written or LLM-derived text, it MUST use the Fernet `EncryptedText` TypeDecorator (`encv1:` prefix), not `Text`:
+
+```python
+from app.core.encryption import EncryptedText
+# api/app/models/entry.py:13-19 — title, content, and reflection all use it
+new_field = Column(EncryptedText, nullable=True)
+```
+
+Numeric/status fields stay plain (`mood_inferred = Column(Integer)`, `reflection_status = Column(String)` at `api/app/models/entry.py:16-22`).
+
+## 3. Pydantic schema — `api/app/schemas/`
+
+Mirror an existing file (`api/app/schemas/entry.py`). Response models decrypt transparently via the TypeDecorator — never handle ciphertext in schemas.
+
+## 4. Router — `api/app/routers/`
+
+Routers NEVER call the LLM inline (calls take 1-30s). Enqueue and return immediately:
+
+```python
+enqueue_<feature>_job(entry.id)   # wraps task.delay() — see api/app/routers/entries.py:96-97
+```
+
+If the feature mutates entries, invalidate the Redis reflection cache like `api/app/routers/entries.py:100-102` does:
+
+```python
+reflection_cache.delete_reflection(current_user.id)
+invalidate_reverse_prompt(current_user.id)
+```
+
+Register the router in `api/main.py` alongside the existing `include_router` calls.
+
+## 5. Celery job — `api/app/jobs/`
+
+Copy the shape of `api/app/jobs/reflection_job.py` exactly:
+
+- `@celery_app.task(name="<area>.<verb>", ignore_result=True, time_limit=..., soft_time_limit=..., autoretry_for=(httpx.HTTPError, httpx.TimeoutException, ConnectionError), retry_backoff=True)`
+- Open `db = SessionLocal()`, `finally: db.close()`
+- Wrap async LLM calls in `asyncio.run(...)` — deliberate pattern, documented in `docs/architecture/async-celery-pattern.md`. Do not "fix" it with a shared event loop.
+- LLM access ONLY via the per-user factory in `api/app/services/llm_service.py` — `get_generation_service_for_user(db, user_id)` (line 740). Never construct `LLMService` directly; the factory handles per-user provider overrides, server defaults, and a fresh `httpx.AsyncClient` per request.
+- On transient errors: log + `raise` so Celery retries. On fatal errors: persist an `"error"` status so the frontend stops polling (see `reflection_job.py:201-216`).
+- Export an `enqueue_<feature>_job(...)` helper that calls `.delay()`.
+
+## 6. Prompt template — `api/prompts/<feature>.txt`
+
+Plain text with `{placeholders}`; add a `generate_<feature>` method on `LLMService` next to `generate_reflection` (`api/app/services/llm_service.py:245`).
+
+## 7. Frontend
+
+- **Client fn** in `app/lib/api.ts`. The axios instance's baseURL is `/api` (same-origin Next.js proxy) — never call `NEXT_PUBLIC_API_URL` directly; cross-origin calls break httpOnly-cookie auth. Tauri is the only exception and is already handled at the top of the file.
+- **Hook** in `app/hooks/` — for async-generated content copy `useEntryReflection.ts` (polls every 3s while `status === 'generating'`, 3-min cap). For plain server state use React Query like `useEntries.ts`.
+- **Component** in `app/components/`, wire into the page under `app/app/`.
+
+## 8. Tests + lint
+
+```bash
+cd api && pytest                 # add tests in api/tests/, fixtures in conftest.py
+cd app && pnpm run lint          # eslint .
+```
+
+## 9. Verify live
+
+```bash
+cd infra && docker compose up -d
+docker compose logs worker -f    # ignore_result=True means job failures ONLY surface here
+```
+
+Create an entry at http://localhost:3000 and watch the worker log for your task name.
+
+## Gotchas
+
+- **Silent failures are by design**: all jobs run `ignore_result=True` (no Celery result backend, tuned for Upstash). If a feature "never appears", the answer is in `docker compose logs worker` — or work through the stack-doctor diagnostic tree (see the `vault-stack-doctor` rule) for Celery/Ollama failures.
+- **Never log raw URLs/exceptions** — they can carry DB/LLM credentials. Follow the `_scrub_creds` / `_safe_db_url_summary` pattern in `api/main.py`.
+- **OLLAMA_URL inside containers is `http://ollama:11434`**, not `localhost` — `infra/docker-compose.override.yml` documents a past outage from getting this wrong.
+- **Frontend state split**: React Query for server state, Zustand for UI state (`app/lib/commandPaletteStore.ts`). Don't mirror server data into Zustand.
+- Status-tracking columns beat Redis caching for per-entry results — entry reflections moved from the user-wide Redis cache to `reflection_status` on the row for exactly this reason (`reflection_job.py:117-121`).

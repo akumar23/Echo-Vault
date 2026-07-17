@@ -39,25 +39,24 @@ export default function HelpPage() {
         </div>
 
         <div className="mb-6" style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
-          <h3 className="mb-4">Vector Search (Semantic Search)</h3>
+          <h3 className="mb-4">Private Keyword Search</h3>
           <p className="mb-4">
-            Traditional search finds entries by matching exact words. Vector search understands the <em>meaning</em> behind
-            your words, even if you use different phrasing.
+            Search matches words in your titles, journal text, and tags. Entries stay
+            encrypted in PostgreSQL and are decrypted only inside the API for your request.
           </p>
 
           <h4 className="mb-2">How it works:</h4>
           <ol style={{ marginLeft: 'var(--space-5)', marginBottom: 'var(--space-4)' }}>
-            <li className="mb-2">When you write an entry, the AI converts it into a &ldquo;vector&rdquo; (a mathematical representation of meaning)</li>
-            <li className="mb-2">When you search, your query is also converted to a vector</li>
-            <li>The system finds entries with similar meanings, not just matching words</li>
+            <li className="mb-2">Enter one or more keywords</li>
+            <li className="mb-2">The API checks up to your 1,000 most recent entries</li>
+            <li>Matching entries are ranked by match count and recency</li>
           </ol>
 
           <div className="alert alert--info">
             <p className="mb-2"><strong>Example:</strong></p>
             <p className="mb-2">You search for: <em>&ldquo;feeling anxious about deadlines&rdquo;</em></p>
             <p>
-              It finds entries about: &ldquo;work stress&rdquo;, &ldquo;pressure at the office&rdquo;, &ldquo;worried about projects&rdquo; -
-              even if those exact words weren&rsquo;t used!
+              It finds entries containing those words in the title, content, or tags.
             </p>
           </div>
         </div>
@@ -65,16 +64,15 @@ export default function HelpPage() {
         <div style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
           <h3 className="mb-4">Time-Decayed Scoring</h3>
           <p className="mb-4">
-            A way to balance relevance with recency in search results. Entries are ranked by both how similar they are
-            to your query AND how recent they are.
+            A way to balance keyword matches with recency in search results.
           </p>
 
           <div className="alert alert--info">
             <p className="mb-2"><strong>Example:</strong></p>
             <p className="mb-2">If you search for &ldquo;work stress&rdquo; and have 10 relevant entries:</p>
             <ul style={{ marginLeft: 'var(--space-5)' }}>
-              <li>A very recent entry about work stress might rank #1 even if it&rsquo;s slightly less similar</li>
-              <li>An older entry needs to be much more relevant to rank high</li>
+              <li>A very recent matching entry can rank higher</li>
+              <li>An older entry needs more keyword matches to rank high</li>
               <li>You control this balance in Settings with the &ldquo;Search Half-Life&rdquo; setting</li>
             </ul>
           </div>
@@ -111,9 +109,8 @@ export default function HelpPage() {
             <h4 className="text-accent mb-2">Soft Delete (Default)</h4>
             <ul style={{ marginLeft: 'var(--space-5)' }}>
               <li>Entry is removed from search results</li>
-              <li>Content is preserved - you can still access it directly</li>
-              <li>Embedding is zeroed out (can&rsquo;t be found by semantic search)</li>
-              <li>Good for: &ldquo;Hide this from search but keep the memory&rdquo;</li>
+              <li>Content and identifying metadata are erased</li>
+              <li>The row remains only for referential integrity</li>
             </ul>
           </div>
 
@@ -121,7 +118,7 @@ export default function HelpPage() {
             <h4 className="text-error mb-2">Hard Delete</h4>
             <ul style={{ marginLeft: 'var(--space-5)' }}>
               <li>Entry is permanently deleted from the database</li>
-              <li>All associated data is removed (embeddings, attachments)</li>
+              <li>All associated data and attachments are removed</li>
               <li><strong>This action cannot be undone</strong></li>
               <li>Good for: Complete privacy - &ldquo;I never want to see this again&rdquo;</li>
             </ul>
@@ -139,16 +136,16 @@ export default function HelpPage() {
             <li>Add a title (optional) and write your content</li>
             <li>Set your mood using the slider (1 = very negative, 5 = very positive)</li>
             <li>Add tags to categorize your entries</li>
-            <li>After saving, the AI will automatically generate an embedding and infer mood</li>
+            <li>After saving, the AI will automatically infer mood</li>
           </ul>
         </div>
 
         <div className="mb-5" style={{ paddingTop: 'var(--space-5)', borderTop: '1px solid var(--border)' }}>
-          <h3 className="mb-2">Semantic Search</h3>
+          <h3 className="mb-2">Keyword Search</h3>
           <ul style={{ marginLeft: 'var(--space-5)' }}>
-            <li>Search by meaning, not just keywords</li>
-            <li>Describe how you felt or what you were thinking about</li>
-            <li>Results are ranked by relevance and recency</li>
+            <li>Search titles, journal text, and tags</li>
+            <li>Use words you remember from the entry</li>
+            <li>Results are ranked by keyword matches and recency</li>
             <li>Use filters to narrow by date range or tags</li>
           </ul>
         </div>

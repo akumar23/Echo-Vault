@@ -12,6 +12,7 @@ import {
   Sun,
   Moon,
   Laptop,
+  Upload,
 } from 'lucide-react'
 
 import {
@@ -34,7 +35,7 @@ import { format } from 'date-fns'
  *
  * Bound to Cmd+K (mac) / Ctrl+K (others). Renders globally via app/layout.tsx.
  * Only exposes authenticated actions when a user is signed in; search is
- * performed lazily against the semantic endpoint with a 250ms debounce.
+ * performed lazily against the keyword endpoint with a 250ms debounce.
  */
 export function CommandPalette() {
   const open = useCommandPaletteStore((s) => s.open)
@@ -95,7 +96,7 @@ export function CommandPalette() {
     SearchResult[]
   >({
     queryKey: ['command-palette-search', debouncedQuery],
-    queryFn: () => searchApi.semantic(debouncedQuery, 6),
+    queryFn: () => searchApi.search(debouncedQuery, 6),
     enabled: searchEnabled,
     staleTime: 30_000,
   })
@@ -172,6 +173,14 @@ export function CommandPalette() {
             >
               <PenLine />
               <span>New entry</span>
+            </CommandItem>
+
+            <CommandItem
+              value="import-file"
+              onSelect={() => runAndClose(() => router.push('/import'))}
+            >
+              <Upload />
+              <span>Import file</span>
             </CommandItem>
 
             {currentEntryId && (

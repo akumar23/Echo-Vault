@@ -72,17 +72,15 @@ For local development, the rest of the defaults are fine. If you are curious wha
 
 ## Step 3: Pull the AI models
 
-Ollama needs to download two models before EchoVault can use it. This is a one-time download (a few gigabytes total — go grab a coffee).
+Ollama needs to download the generation model before EchoVault can use it.
 
 ```bash
 ollama pull llama3.1:8b
-ollama pull mxbai-embed-large
 ```
 
 | Model | Used for | Size |
 |---|---|---|
 | `llama3.1:8b` | Reflections, mood inference, chat | ~4.7 GB |
-| `mxbai-embed-large` | Vector embeddings (semantic search) | ~670 MB |
 
 Verify the models are present:
 
@@ -90,7 +88,7 @@ Verify the models are present:
 ollama list
 ```
 
-You should see both names in the output.
+You should see `llama3.1:8b` in the output.
 
 ---
 
@@ -118,7 +116,7 @@ When it finishes, six containers are running:
 | `echovault_web` | 3000 | The Next.js frontend (the website you'll visit). |
 | `echovault_api` | 8000 | The FastAPI backend (handles all data and login). |
 | `echovault_worker` | — | A Celery worker that runs background AI jobs. |
-| `echovault_db` | 5432 | PostgreSQL with the pgvector extension. |
+| `echovault_db` | 5432 | PostgreSQL. |
 | `echovault_redis` | 6379 | The job queue and cache. |
 | `echovault_ollama` | 11434 | Local LLM inference. |
 
@@ -156,7 +154,7 @@ Navigate to:
 
 The first time you visit, you will be sent to a registration page. Create an account (it's stored locally — there is no email verification). Log in. Write your first entry.
 
-Within a few seconds, the background worker should generate an embedding and infer a mood for your entry. You can verify by opening the entry and seeing the mood badge fill in, or by using the search to look for similar entries.
+Within a few seconds, the background worker should infer a mood for your entry. You can verify by opening the entry and seeing the mood badge fill in, or by using search to look for it by keyword.
 
 ---
 
@@ -172,7 +170,7 @@ curl http://localhost:8000/health
 # Ollama has the right models
 curl http://localhost:11434/api/tags
 
-# Worker is processing jobs (look for log lines about embedding tasks)
+# Worker is processing jobs (look for log lines about mood/reflection tasks)
 docker compose logs worker --tail=50
 ```
 
@@ -290,9 +288,9 @@ Check that `JWT_SECRET` in `.env` is set (not the placeholder). After changing `
 docker compose restart api worker
 ```
 
-### Embeddings never get generated
+### Mood or reflections never get generated
 
-The worker container is what generates them. Check its logs:
+The worker container generates them. Check its logs:
 
 ```bash
 docker compose logs worker --tail=100
@@ -300,7 +298,7 @@ docker compose logs worker --tail=100
 
 Common causes:
 - Ollama is not reachable. Inside the worker, the URL is `http://ollama:11434` (the container name, not `localhost`).
-- The embedding model isn't pulled. Run `ollama list` and confirm `mxbai-embed-large` is there.
+- The generation model isn't pulled. Run `ollama list` and confirm `llama3.1:8b` is there.
 - The user has bad LLM settings configured in the app. Reset them in Settings, or for a brand-new install they fall back to the `DEFAULT_*` values from `.env`.
 
 ### Frontend shows "Network Error"
@@ -338,6 +336,5 @@ docker compose up -d --build    # rebuild from scratch
 - **Port** — a number identifying a network service. Frontend = 3000, API = 8000.
 - **Migration** — a script that updates the database schema.
 - **LLM** — Large Language Model. The AI that reads and writes text.
-- **Embedding** — a list of numbers representing the meaning of a piece of text.
 
 The full glossary lives in the [README](README.md#glossary).

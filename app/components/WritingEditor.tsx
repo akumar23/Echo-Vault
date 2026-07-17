@@ -14,6 +14,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { startOfDay } from 'date-fns'
+import {
+  EntryDatePicker,
+  entryDateFromIso,
+  entryDateFromTimestamp,
+  toEntryDateIso,
+} from '@/components/EntryDatePicker'
 import { MoreHorizontal, X } from 'lucide-react'
 
 interface WritingEditorProps {
@@ -23,6 +30,7 @@ interface WritingEditorProps {
     content: string
     tags: string[]
     mood_user?: number
+    entry_date?: string
   }) => Promise<void>
   saving?: boolean
   initialPrompt?: string
@@ -55,6 +63,8 @@ export interface DraftData {
   tags: string[]
   mood: number
   useLlmPrediction: boolean
+  /** ISO yyyy-MM-dd, see toEntryDateIso. Optional for drafts saved before this field existed. */
+  entryDate?: string
   savedAt: string
 }
 
@@ -130,6 +140,11 @@ export function WritingEditor({
   const [lastSavedTitle, setLastSavedTitle] = useState(
     entry?.title ?? initialDraft?.title ?? ''
   )
+  const [entryDate, setEntryDate] = useState(() => {
+    if (entry) return entryDateFromTimestamp(entry.created_at)
+    if (initialDraft?.entryDate) return entryDateFromIso(initialDraft.entryDate)
+    return startOfDay(new Date())
+  })
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -153,6 +168,7 @@ export function WritingEditor({
       setUseLlmPrediction(entry?.mood_user == null)
       setLastSavedContent(entry?.content ?? '')
       setLastSavedTitle(entry?.title ?? '')
+      setEntryDate(entryDateFromTimestamp(entry.created_at))
     }
   }, [entry])
 
@@ -178,6 +194,17 @@ export function WritingEditor({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasChanges, saving, isAutosaving])
 
+  const buildSavePayload = useCallback(
+    () => ({
+      title: title.trim() || undefined,
+      content,
+      tags,
+      mood_user: useLlmPrediction ? undefined : mood,
+      ...(isDraft ? { entry_date: toEntryDateIso(entryDate) } : {}),
+    }),
+    [title, content, tags, mood, useLlmPrediction, isDraft, entryDate],
+  )
+
   // Autosave
   useEffect(() => {
     if (autosaveDelay === 0 || saving || isAutosaving) return
@@ -202,15 +229,11 @@ export function WritingEditor({
             tags,
             mood,
             useLlmPrediction,
+            entryDate: toEntryDateIso(entryDate),
             savedAt: new Date().toISOString(),
           })
         } else {
-          await onSave({
-            title: title.trim() || undefined,
-            content,
-            tags,
-            mood_user: useLlmPrediction ? undefined : mood,
-          })
+          await onSave(buildSavePayload())
         }
         setLastSavedContent(content)
         setLastSavedTitle(title)
@@ -237,8 +260,10 @@ export function WritingEditor({
     tags,
     mood,
     useLlmPrediction,
+    entryDate,
     onSave,
     isDraft,
+    buildSavePayload,
   ])
 
   // Focus content on mount when creating a new entry
@@ -279,12 +304,7 @@ export function WritingEditor({
   )
 
   const handleSave = async () => {
-    await onSave({
-      title: title.trim() || undefined,
-      content,
-      tags,
-      mood_user: useLlmPrediction ? undefined : mood,
-    })
+    await onSave(buildSavePayload())
 
     setLastSavedContent(content)
     setLastSavedTitle(title)
@@ -361,6 +381,19 @@ export function WritingEditor({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72 p-4">
               <div className="space-y-5">
+                {isDraft && (
+                  <div className="space-y-2">
+                    <div className="text-[0.7rem] font-medium uppercase tracking-wider text-muted-foreground">
+                      Date
+                    </div>
+                    <EntryDatePicker
+                      variant="inline"
+                      date={entryDate}
+                      onDateChange={setEntryDate}
+                    />
+                  </div>
+                )}
+
                 {/* Mood */}
                 <div className="space-y-2">
                   <div className="text-[0.7rem] font-medium uppercase tracking-wider text-muted-foreground">

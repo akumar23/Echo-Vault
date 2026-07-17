@@ -55,11 +55,11 @@ async def update_settings(
     # Without this, sending `null` to clear a field is indistinguishable from
     # omitting it, so users can never blank out a previously-set URL/model/token.
     update_dict = settings_data.model_dump(exclude_unset=True)
-    token_fields = {"generation_api_token", "embedding_api_token"}
+    token_fields = {"generation_api_token"}
 
     # The saved URLs are fetched server-side by the worker, so a user-supplied
     # endpoint must clear the same SSRF policy as the connection probe.
-    for url_field in ("generation_url", "embedding_url"):
+    for url_field in ("generation_url",):
         url = update_dict.get(url_field)
         if url:
             try:
@@ -101,18 +101,12 @@ async def test_llm_connection(
 ):
     """Probe an LLM endpoint with the given connection values before saving.
 
-    Generation: requests a one-word completion. Embedding: embeds a short
-    string and verifies the vector dimension matches the pgvector column
-    width (a mismatched embedding model silently breaks semantic search).
+    Requests a one-word completion from the generation provider.
     Failures are returned as ok=False with an actionable message, never as
     HTTP errors — a failed probe is a valid result, not a server fault.
     """
-    if payload.service_type == "generation":
-        base_url = payload.url or app_settings.default_generation_url
-        model = payload.model or app_settings.default_generation_model
-    else:
-        base_url = payload.url or app_settings.default_embedding_url
-        model = payload.model or app_settings.default_embedding_model
+    base_url = payload.url or app_settings.default_generation_url
+    model = payload.model or app_settings.default_generation_model
 
     # Only a user-supplied URL is attacker-controlled; server defaults are
     # operator-chosen and trusted. Reject disallowed outbound targets before
@@ -129,41 +123,18 @@ async def test_llm_connection(
         base_url=base_url,
         model=model,
         api_token=payload.api_token,
-        service_type=payload.service_type,
     )
 
     try:
-        if payload.service_type == "generation":
-            await asyncio.wait_for(
-                service.chat_completion(
-                    [{"role": "user", "content": "Reply with the single word: ok"}],
-                    temperature=0.0,
-                    max_tokens=5,
-                ),
-                timeout=TEST_TIMEOUT_SECONDS,
-            )
-            return LLMTestResponse(ok=True, message=f"Connected — {model} responded.")
-
-        embedding = await asyncio.wait_for(
-            service.get_embedding("connection test"),
+        await asyncio.wait_for(
+            service.chat_completion(
+                [{"role": "user", "content": "Reply with the single word: ok"}],
+                temperature=0.0,
+                max_tokens=5,
+            ),
             timeout=TEST_TIMEOUT_SECONDS,
         )
-        dim = len(embedding)
-        if dim != app_settings.embedding_dim:
-            return LLMTestResponse(
-                ok=False,
-                message=(
-                    f"{model} returns {dim}-dimensional vectors, but this server "
-                    f"stores {app_settings.embedding_dim}. Semantic search would "
-                    f"break — pick a model that produces "
-                    f"{app_settings.embedding_dim}-dimensional embeddings "
-                    f"(e.g. mxbai-embed-large or voyage-3)."
-                ),
-            )
-        return LLMTestResponse(
-            ok=True,
-            message=f"Connected — {model} returned {dim}-dimensional embeddings.",
-        )
+        return LLMTestResponse(ok=True, message=f"Connected — {model} responded.")
     except LLMProviderError as exc:
         return LLMTestResponse(ok=False, message=_provider_error_message(exc))
     except asyncio.TimeoutError:
