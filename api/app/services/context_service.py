@@ -51,7 +51,6 @@ class MoodExample:
     entry_id: int
     content: str
     mood: int
-    similarity: float
 
 
 @dataclass
@@ -324,7 +323,6 @@ class ContextService:
                     entry_id=row.id,
                     content=row.content or "",
                     mood=mood,
-                    similarity=1.0,
                 )
             )
             counts[mood] = counts.get(mood, 0) + 1
@@ -361,11 +359,7 @@ class ContextService:
             "related_ids": _slim(bundle.related_entries),
             "recent_ids": _slim(bundle.recent_window),
             "mood_examples": [
-                {
-                    "id": example.entry_id,
-                    "mood": example.mood,
-                    "similarity": example.similarity,
-                }
+                {"id": example.entry_id, "mood": example.mood}
                 for example in bundle.mood_examples
             ],
             "bundle_cap_applied": bundle.bundle_cap_applied,
@@ -415,7 +409,6 @@ class ContextService:
                         entry_id=item["id"],
                         content=by_id[item["id"]].content or "",
                         mood=item["mood"],
-                        similarity=item.get("similarity", 1.0),
                     )
                     for item in items
                 ]

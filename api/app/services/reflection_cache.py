@@ -203,7 +203,7 @@ def invalidate_reverse_prompt(user_id: int) -> None:
         logger.warning("Redis DELETE failed for reverse_prompt user %s", user_id)
 
 
-# --- Context cache (semantic retrieval results) ----------------------------
+# --- Context cache (ContextService bundle metadata) ------------------------
 #
 # Caches the *shape* of a retrieval result — entry IDs, scores, scope params —
 # never decrypted content. Callers re-fetch and decrypt entries through the

@@ -150,3 +150,44 @@ def test_keyword_search_ranks_more_matches_first(auth_client):
     assert len(results) == 2
     assert results[0]["title"] == "Needle needle"
     assert results[0]["score"] > results[1]["score"]
+
+
+def test_search_finds_match_beyond_1000_entries(auth_client):
+    """Regression: search must scan past the first 1,000 rows (newest-first)."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.database import SessionLocal
+    from app.models.entry import Entry
+    from app.models.user import User
+
+    needle = "xylophone_needle_marker"
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == "entriesuser").first()
+        base = datetime.now(timezone.utc) - timedelta(days=2000)
+        db.add(
+            Entry(
+                user_id=user.id,
+                title="oldest match",
+                content=f"contains {needle}",
+                created_at=base,
+            )
+        )
+        for i in range(1000):
+            db.add(
+                Entry(
+                    user_id=user.id,
+                    content=f"filler {i}",
+                    created_at=base + timedelta(hours=i + 1),
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    response = auth_client.post("/search", json={"query": needle, "k": 1})
+
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 1
+    assert needle in results[0]["content"]
