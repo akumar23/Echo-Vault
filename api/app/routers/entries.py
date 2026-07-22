@@ -458,11 +458,23 @@ async def get_entry(
     return entry
 
 
+# Same batching contract as search.py — decrypt/rank in-process over the full
+# corpus (up to a defensive ceiling), not just the 1,000 most recent rows.
+_RELATED_BATCH_SIZE = 1000
+_MAX_RELATED_CORPUS = 50_000
+
+
 def _rank_related_entries(
     db: Session, user_id: int, source: Entry, limit: int
 ) -> List[tuple[Entry, float]]:
     """Rank entries by shared tags, then by recency."""
-    candidates = (
+    source_tags = {tag.casefold() for tag in (source.tags or [])}
+
+    def rank(entry: Entry) -> tuple[int, datetime]:
+        tags = {tag.casefold() for tag in (entry.tags or [])}
+        return len(source_tags & tags), entry.created_at
+
+    query = (
         db.query(Entry)
         .filter(
             Entry.user_id == user_id,
@@ -470,14 +482,18 @@ def _rank_related_entries(
             Entry.id != source.id,
         )
         .order_by(Entry.created_at.desc())
-        .limit(1000)
-        .all()
     )
-    source_tags = {tag.casefold() for tag in (source.tags or [])}
 
-    def rank(entry: Entry) -> tuple[int, datetime]:
-        tags = {tag.casefold() for tag in (entry.tags or [])}
-        return len(source_tags & tags), entry.created_at
+    candidates: List[Entry] = []
+    offset = 0
+    while offset < _MAX_RELATED_CORPUS:
+        batch = query.offset(offset).limit(_RELATED_BATCH_SIZE).all()
+        if not batch:
+            break
+        candidates.extend(batch)
+        offset += len(batch)
+        if len(batch) < _RELATED_BATCH_SIZE:
+            break
 
     candidates.sort(key=rank, reverse=True)
     return [(entry, float(rank(entry)[0])) for entry in candidates[:limit]]

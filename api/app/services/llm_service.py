@@ -267,12 +267,12 @@ class LLMService:
         focus_entry_date: str,
         echoes: List[Dict[str, str]],
     ) -> str:
-        """Reflect on a single entry, informed by semantically related past entries.
+        """Reflect on a single entry, informed by thematically related past entries.
 
         `echoes` is a list of dicts with keys: 'date', 'title', 'content'.
-        These are MMR-diverse past entries that share themes with the focus
-        entry — they let the model reflect on trajectory and recurrence
-        rather than treating the entry in isolation.
+        These are past entries with shared tags (or recent fallbacks) that
+        let the model reflect on trajectory and recurrence rather than
+        treating the entry in isolation.
 
         If `echoes` is empty, callers should fall back to the generic
         generate_reflection() path instead.
@@ -321,8 +321,8 @@ class LLMService:
         low-confidence inferences rather than showing an authoritative-
         looking badge for a guess.
 
-        When `examples` are provided (semantic neighbors from this user's
-        own mood_user-labeled entries) the prompt switches to a few-shot
+        When `examples` are provided (recent mood_user-labeled entries from
+        this user's journal, one per mood level) the prompt switches to a few-shot
         form that calibrates the model against the user's personal scale.
         See Zhao et al., ICML 2021 (arXiv:2102.09690) — balanced examples
         meaningfully reduce LLM scale bias.
@@ -524,7 +524,7 @@ class LLMService:
         echoes: List[Dict[str, str]],
     ) -> str:
         """Generate a 2-3 sentence observation describing what connects the
-        current entry to other semantically resonant entries from the user's
+        current entry to other tag-related (or recent) entries from the user's
         journal. Echoes may be recent or years old; the framing should read
         naturally either way.
 
@@ -537,7 +537,7 @@ class LLMService:
         system_prompt = (
             "You are a thoughtful journaling companion. The user is reading one of their "
             "journal entries. You are given that entry plus a few other entries of theirs "
-            "that semantically resonate with it — some may be recent, some older.\n\n"
+            "that share themes or timing with it — some may be recent, some older.\n\n"
             "Write 2-3 sentences that gently observe the thread connecting them. "
             "Be warm, specific, and non-judgmental. Do NOT list the entries. Do NOT ask "
             "questions. Do NOT give advice. Just notice the thread out loud, like a close "

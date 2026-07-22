@@ -168,13 +168,13 @@ The user sees the entry instantly. The inferred mood typically appears within a 
 
 ```
 1. Browser → POST /search with query, k, optional filters
-2. SQL applies user/date/tag filters and loads at most 1,000 recent entries
+2. SQL applies user/date/tag filters, then loads entries in batches (newest first)
 3. The ORM decrypts title/content inside the API process
 4. The API counts keyword matches in title/content/tags
 5. Results rank by match count plus recency decay, then return top k
 ```
 
-Filters (date range, tags) are applied as SQL WHERE clauses before the similarity sort.
+Filters (date range, tags) are applied as SQL WHERE clauses before in-process ranking.
 
 ### Reflections (HTTP polling pattern)
 
