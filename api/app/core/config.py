@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     # Default LLM settings (used when user has no custom settings)
     default_generation_url: str = "http://ollama:11434"
     default_generation_model: str = "llama3.1:8b"
+    default_embedding_url: str = "http://ollama:11434"
+    default_embedding_model: str = "mxbai-embed-large"
 
     # SSRF guard for user-supplied LLM endpoints. The default deployment is
     # self-hosted single-user pointed at a local Ollama (localhost / LAN), so

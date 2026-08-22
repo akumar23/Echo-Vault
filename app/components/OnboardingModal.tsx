@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ModelSelect } from "@/components/ModelSelect";
 
 const URL_PLACEHOLDER = "http://localhost:11434";
 
@@ -36,6 +37,11 @@ interface Preset {
 const buildGenerationPresets = (ollamaUrl: string): Preset[] => [
   { label: "Ollama (local)", url: ollamaUrl, model: "llama3.1:8b" },
   { label: "OpenAI", url: "https://api.openai.com", model: "gpt-4o-mini" },
+];
+
+const buildEmbeddingPresets = (ollamaUrl: string): Preset[] => [
+  { label: "Ollama (local)", url: ollamaUrl, model: "mxbai-embed-large" },
+  { label: "OpenAI", url: "https://api.openai.com", model: "text-embedding-3-small" },
 ];
 
 interface TestState {
@@ -69,6 +75,7 @@ export function OnboardingModal() {
   const router = useRouter();
 
   const [generation, setGeneration] = useState<SectionFields>({ url: "", token: "", model: "" });
+  const [embedding, setEmbedding] = useState<SectionFields>({ url: "", token: "", model: "" });
   const [generationTest, setGenerationTest] = useState<TestState>(IDLE_TEST);
   const [error, setError] = useState("");
 
@@ -87,6 +94,7 @@ export function OnboardingModal() {
   if (!shouldShow) return null;
 
   const generationPresets = buildGenerationPresets(settings.default_generation_url);
+  const embeddingPresets = buildEmbeddingPresets(settings.default_embedding_url);
 
   // Any edit invalidates the last test result and supersedes any
   // probe still in flight.
@@ -169,8 +177,16 @@ export function OnboardingModal() {
     );
   };
 
+  const updateEmbeddingField = (field: keyof SectionFields, value: string) => {
+    setEmbedding((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const applyEmbeddingPreset = (preset: Preset) => {
+    setEmbedding((prev) => ({ ...prev, url: preset.url, model: preset.model }));
+  };
+
   const handleSave = () => {
-    if (!isValidUrl(generation.url)) {
+    if (!isValidUrl(generation.url) || !isValidUrl(embedding.url)) {
       setError("Please enter valid http:// or https:// URLs.");
       return;
     }
@@ -180,8 +196,11 @@ export function OnboardingModal() {
       onboarding_completed: true,
       generation_url: generation.url || null,
       generation_model: generation.model || null,
+      embedding_url: embedding.url || null,
+      embedding_model: embedding.model || null,
     };
     if (generation.token) update.generation_api_token = generation.token;
+    if (embedding.token) update.embedding_api_token = embedding.token;
 
     updateMutation.mutate(update, {
       onSuccess: () => {
@@ -246,6 +265,23 @@ export function OnboardingModal() {
     </div>
   );
 
+  const renderEmbeddingPresets = (presets: Preset[]) => (
+    <div className="flex flex-wrap gap-1.5">
+      {presets.map((preset) => (
+        <Button
+          key={preset.label}
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-7 px-2.5 text-xs"
+          onClick={() => applyEmbeddingPreset(preset)}
+        >
+          {preset.label}
+        </Button>
+      ))}
+    </div>
+  );
+
   return (
     <Dialog open onOpenChange={() => { /* dismiss only via skip/save */ }}>
       <DialogContent
@@ -291,28 +327,72 @@ export function OnboardingModal() {
                 placeholder={URL_PLACEHOLDER}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="onboard-gen-token">API Token</Label>
-                <Input
-                  id="onboard-gen-token"
-                  type="password"
-                  value={generation.token}
-                  onChange={(e) => updateField("token", e.target.value)}
-                  placeholder="Optional"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="onboard-gen-model">Model</Label>
-                <Input
-                  id="onboard-gen-model"
-                  value={generation.model}
-                  onChange={(e) => updateField("model", e.target.value)}
-                  placeholder="llama3.1:8b"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="onboard-gen-token">API Token</Label>
+              <Input
+                id="onboard-gen-token"
+                type="password"
+                value={generation.token}
+                onChange={(e) => updateField("token", e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="onboard-gen-model">Model</Label>
+              <ModelSelect
+                id="onboard-gen-model"
+                value={generation.model}
+                onChange={(value) => updateField("model", value)}
+                url={generation.url}
+                apiToken={generation.token}
+                urlValid={isValidUrl(generation.url)}
+                serviceType="generation"
+                placeholder="llama3.1:8b"
+              />
             </div>
             {renderTestRow(generationTest)}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                Embeddings
+              </h3>
+              {renderEmbeddingPresets(embeddingPresets)}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="onboard-emb-url">API URL</Label>
+              <Input
+                id="onboard-emb-url"
+                type="url"
+                value={embedding.url}
+                onChange={(e) => updateEmbeddingField("url", e.target.value)}
+                placeholder={URL_PLACEHOLDER}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="onboard-emb-token">API Token</Label>
+              <Input
+                id="onboard-emb-token"
+                type="password"
+                value={embedding.token}
+                onChange={(e) => updateEmbeddingField("token", e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="onboard-emb-model">Model</Label>
+              <ModelSelect
+                id="onboard-emb-model"
+                value={embedding.model}
+                onChange={(value) => updateEmbeddingField("model", value)}
+                url={embedding.url}
+                apiToken={embedding.token}
+                urlValid={isValidUrl(embedding.url)}
+                serviceType="embedding"
+                placeholder="mxbai-embed-large"
+              />
+            </div>
           </section>
 
           {error && (

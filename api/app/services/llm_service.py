@@ -158,6 +158,81 @@ class LLMService:
             else:
                 raise ValueError(f"Unexpected chat completion response format: {data}")
 
+    async def list_models(self) -> List[str]:
+        """Return model IDs from the OpenAI-compatible GET /v1/models endpoint.
+
+        Accepts the standard ``{"data": [{"id": "..."}]}`` payload and a
+        few common variants (top-level list, ``name`` instead of ``id``).
+        """
+        endpoint = f"{self.base_url}/v1/models"
+        async with self._create_client() as client:
+            response = await client.get(endpoint, timeout=15.0)
+            self._raise_for_provider_status(response, endpoint)
+            data = response.json()
+
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = data.get("data")
+            if items is None:
+                raise ValueError("Unexpected models response format")
+        else:
+            raise ValueError("Unexpected models response format")
+
+        if not isinstance(items, list):
+            raise ValueError("Unexpected models response format")
+
+        ids: List[str] = []
+        seen = set()
+        for item in items:
+            if isinstance(item, str):
+                mid = item.strip()
+            elif isinstance(item, dict):
+                raw = item.get("id") or item.get("name")
+                mid = raw.strip() if isinstance(raw, str) else ""
+            else:
+                continue
+            if not mid or mid in seen:
+                continue
+            seen.add(mid)
+            ids.append(mid)
+            if len(ids) >= 500:
+                break
+
+        ids.sort(key=str.lower)
+        return ids
+
+
+_EMBEDDING_NAME_MARKERS = (
+    "embed",
+    "bge-",
+    "e5-",
+    "gte-",
+    "minilm",
+    "voyage-",
+)
+
+
+def is_embedding_model(model_id: str) -> bool:
+    """Heuristic: OpenAI-compatible /v1/models does not mark chat vs embed."""
+    name = model_id.lower()
+    return any(marker in name for marker in _EMBEDDING_NAME_MARKERS)
+
+
+def filter_models_for_purpose(
+    models: List[str], purpose: str
+) -> List[str]:
+    """Keep embedding or generation names. If the filter empties the list,
+    return the original so a custom/unknown provider still works.
+    """
+    if purpose == "embedding":
+        matched = [m for m in models if is_embedding_model(m)]
+    elif purpose == "generation":
+        matched = [m for m in models if not is_embedding_model(m)]
+    else:
+        return models
+    return matched if matched else models
+
     async def chat_completion_stream(
         self,
         messages: List[Dict[str, str]],

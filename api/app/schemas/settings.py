@@ -31,19 +31,24 @@ class SettingsUpdate(BaseModel):
     generation_api_token: Optional[str] = None
     generation_model: Optional[str] = None
 
-    @field_validator('generation_url')
+    # Embedding LLM settings
+    embedding_url: Optional[str] = None
+    embedding_api_token: Optional[str] = None
+    embedding_model: Optional[str] = None
+
+    @field_validator('generation_url', 'embedding_url')
     @classmethod
     def validate_url(cls, v: Optional[str]) -> Optional[str]:
         return _validate_optional_url(v)
 
-    @field_validator('generation_api_token')
+    @field_validator('generation_api_token', 'embedding_api_token')
     @classmethod
     def validate_api_token(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == '':
             return None
         return v.strip()
 
-    @field_validator('generation_model')
+    @field_validator('generation_model', 'embedding_model')
     @classmethod
     def validate_model(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == '':
@@ -82,6 +87,38 @@ class LLMTestResponse(BaseModel):
     message: str
 
 
+class LLMModelsRequest(BaseModel):
+    """Schema for listing models from an (possibly unsaved) LLM endpoint.
+
+    Blank URL falls back to the server default for ``service_type``. A blank
+    token falls back to the matching saved token so a configured key still
+    lists models. ``service_type`` also filters the list to embedding vs
+    chat-style model names when the provider returns both.
+    """
+    service_type: Literal["generation", "embedding"] = "generation"
+    url: Optional[str] = None
+    api_token: Optional[str] = None
+
+    @field_validator('url')
+    @classmethod
+    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_optional_url(v)
+
+    @field_validator('api_token')
+    @classmethod
+    def strip_value(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == '':
+            return None
+        return v.strip()
+
+
+class LLMModelsResponse(BaseModel):
+    """Result of listing models from an OpenAI-compatible /v1/models endpoint."""
+    ok: bool
+    models: list[str] = []
+    message: str
+
+
 class SettingsResponse(BaseModel):
     """Schema for settings response. API tokens are never exposed."""
     id: int
@@ -95,11 +132,17 @@ class SettingsResponse(BaseModel):
     generation_api_token_set: bool = False
     generation_model: Optional[str] = None
 
+    # Embedding LLM settings
+    embedding_url: Optional[str] = None
+    embedding_api_token_set: bool = False
+    embedding_model: Optional[str] = None
+
     # Server-configured default endpoints (not user secrets). Exposed so the
     # client can offer a "local" preset that points at this deployment's actual
     # backend host instead of hard-coding localhost — which resolves to the
     # backend container, not the user's machine, in Docker/hosted setups.
     default_generation_url: str
+    default_embedding_url: str
 
     class Config:
         from_attributes = True
@@ -119,7 +162,11 @@ class SettingsResponse(BaseModel):
                 'generation_url': data.generation_url,
                 'generation_api_token_set': bool(data.generation_api_token),
                 'generation_model': data.generation_model,
+                'embedding_url': data.embedding_url,
+                'embedding_api_token_set': bool(data.embedding_api_token),
+                'embedding_model': data.embedding_model,
                 'default_generation_url': _app_settings.default_generation_url,
+                'default_embedding_url': _app_settings.default_embedding_url,
             }
             return result
         return data

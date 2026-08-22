@@ -162,8 +162,12 @@ export interface Settings {
   generation_url: string | null
   generation_api_token_set: boolean
   generation_model: string | null
+  embedding_url: string | null
+  embedding_api_token_set: boolean
+  embedding_model: string | null
   // Server-configured default endpoints, used to seed deployment-aware presets.
   default_generation_url: string
+  default_embedding_url: string
 }
 
 export interface SettingsUpdate {
@@ -173,6 +177,9 @@ export interface SettingsUpdate {
   generation_url?: string | null
   generation_api_token?: string | null
   generation_model?: string | null
+  embedding_url?: string | null
+  embedding_api_token?: string | null
+  embedding_model?: string | null
 }
 
 export interface LLMTestRequest {
@@ -184,6 +191,18 @@ export interface LLMTestRequest {
 
 export interface LLMTestResult {
   ok: boolean
+  message: string
+}
+
+export interface LLMModelsRequest {
+  service_type?: 'generation' | 'embedding'
+  url?: string | null
+  api_token?: string | null
+}
+
+export interface LLMModelsResult {
+  ok: boolean
+  models: string[]
   message: string
 }
 
@@ -387,6 +406,10 @@ export const settingsApi = {
     // The backend probe waits up to 45s for slow/cold providers; give the
     // client a little more headroom than that.
     const response = await api.post('/settings/test-llm', payload, { timeout: 60_000 })
+    return response.data
+  },
+  listModels: async (payload: LLMModelsRequest): Promise<LLMModelsResult> => {
+    const response = await api.post('/settings/list-models', payload, { timeout: 20_000 })
     return response.data
   },
 }

@@ -39,6 +39,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { ModelSelect } from "@/components/ModelSelect";
 
 interface LLMSettingsSectionProps {
   title: string;
@@ -55,7 +56,7 @@ interface LLMSettingsSectionProps {
   model: string;
   setModel: (v: string) => void;
   tokenSet: boolean;
-  type: "generation";
+  type: "generation" | "embedding";
   onClearToken: () => void;
 }
 
@@ -159,17 +160,22 @@ function LLMSettingsSection({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={`${type}-model`}>Model Name</Label>
-        <Input
+        <Label htmlFor={`${type}-model`}>Model</Label>
+        <ModelSelect
           id={`${type}-model`}
-          type="text"
           value={model}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder="llama3.1:8b, gpt-4, claude-3-haiku, etc."
+          onChange={setModel}
+          url={url}
+          apiToken={token}
+          urlValid={!urlError}
+          tokenSet={tokenSet}
+          serviceType={type}
+          placeholder={
+            type === "embedding"
+              ? "mxbai-embed-large, text-embedding-3-small, …"
+              : "llama3.1:8b, gpt-4o-mini, …"
+          }
         />
-        <p className="text-xs text-muted-foreground">
-          Leave empty to use the default model
-        </p>
       </div>
     </div>
   );
@@ -191,6 +197,13 @@ export default function SettingsPage() {
   const [generationUrlError, setGenerationUrlError] = useState("");
   const [showGenerationToken, setShowGenerationToken] = useState(false);
 
+  // Embedding LLM settings
+  const [embeddingUrl, setEmbeddingUrl] = useState("");
+  const [embeddingToken, setEmbeddingToken] = useState("");
+  const [embeddingModel, setEmbeddingModel] = useState("");
+  const [embeddingUrlError, setEmbeddingUrlError] = useState("");
+  const [showEmbeddingToken, setShowEmbeddingToken] = useState(false);
+
   // Sync state when settings load (render-time pattern).
   // Seed with `undefined` (not `settings`) so the sync also fires on a warm
   // remount, where React Query returns cached data on the first render.
@@ -203,6 +216,8 @@ export default function SettingsPage() {
     setHardDelete(settings.privacy_hard_delete ?? false);
     setGenerationUrl(settings.generation_url ?? "");
     setGenerationModel(settings.generation_model ?? "");
+    setEmbeddingUrl(settings.embedding_url ?? "");
+    setEmbeddingModel(settings.embedding_model ?? "");
     // Tokens are write-only — never hydrated.
   }
 
@@ -259,19 +274,27 @@ export default function SettingsPage() {
       toast.error("Fix the highlighted URL errors before saving.");
       return;
     }
+    if (!validateUrl(embeddingUrl, setEmbeddingUrlError)) {
+      toast.error("Fix the highlighted URL errors before saving.");
+      return;
+    }
     const update: SettingsUpdate = {
       search_half_life_days: halfLife,
       privacy_hard_delete: hardDelete,
       generation_url: generationUrl || null,
       generation_model: generationModel || null,
+      embedding_url: embeddingUrl || null,
+      embedding_model: embeddingModel || null,
     };
 
     if (generationToken) update.generation_api_token = generationToken;
+    if (embeddingToken) update.embedding_api_token = embeddingToken;
 
     updateMutation.mutate(update, {
       onSuccess: () => {
         toast.success("Settings saved");
         setGenerationToken("");
+        setEmbeddingToken("");
       },
       onError: (error) => {
         toast.error(extractErrorMessage(error));
@@ -279,10 +302,18 @@ export default function SettingsPage() {
     });
   };
 
-  const clearToken = () => {
-    updateMutation.mutate({ generation_api_token: "" }, {
+  const clearToken = (type: "generation" | "embedding") => {
+    const update =
+      type === "generation"
+        ? { generation_api_token: "" }
+        : { embedding_api_token: "" };
+    updateMutation.mutate(update, {
       onSuccess: () => {
-        toast.success("Generation API token cleared");
+        toast.success(
+          type === "generation"
+            ? "Generation API token cleared"
+            : "Embedding API token cleared",
+        );
       },
       onError: (error) => {
         toast.error(extractErrorMessage(error));
@@ -421,8 +452,9 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>LLM Settings</CardTitle>
                 <CardDescription>
-                  Configure the AI model used for reflections, insights, mood
-                  analysis, and chat. Uses the OpenAI-compatible API format.
+                  Configure generation and embedding models. Both use the
+                  OpenAI-compatible API format; the model dropdown is filled
+                  from the endpoint&apos;s /v1/models list.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -442,7 +474,26 @@ export default function SettingsPage() {
                   setModel={setGenerationModel}
                   tokenSet={settings?.generation_api_token_set ?? false}
                   type="generation"
-                  onClearToken={clearToken}
+                  onClearToken={() => clearToken("generation")}
+                />
+
+                <LLMSettingsSection
+                  title="Embeddings"
+                  description="Embedding models advertised by this endpoint"
+                  url={embeddingUrl}
+                  setUrl={setEmbeddingUrl}
+                  urlError={embeddingUrlError}
+                  validateUrl={validateUrl}
+                  setUrlError={setEmbeddingUrlError}
+                  token={embeddingToken}
+                  setToken={setEmbeddingToken}
+                  showToken={showEmbeddingToken}
+                  setShowToken={setShowEmbeddingToken}
+                  model={embeddingModel}
+                  setModel={setEmbeddingModel}
+                  tokenSet={settings?.embedding_api_token_set ?? false}
+                  type="embedding"
+                  onClearToken={() => clearToken("embedding")}
                 />
 
                 <Alert>
