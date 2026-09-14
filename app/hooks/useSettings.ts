@@ -23,8 +23,10 @@ export function useUpdateSettings() {
 
   return useMutation({
     mutationFn: (settings: SettingsUpdate) => settingsApi.update(settings),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    onSuccess: (data) => {
+      // Write the PUT response into the cache so the form does not refetch
+      // and re-hydrate (which would wipe text the user just typed).
+      queryClient.setQueryData(['settings'], data)
     },
   })
 }

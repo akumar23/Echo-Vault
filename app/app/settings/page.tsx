@@ -1,11 +1,11 @@
 "use client";
 
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Header } from "@/components/Header";
-import { Settings, SettingsUpdate } from "@/lib/api";
+import { SettingsUpdate } from "@/lib/api";
 import {
   Search,
   Bot,
@@ -89,7 +89,10 @@ function LLMSettingsSection({
         <Label htmlFor={`${type}-url`}>API URL</Label>
         <Input
           id={`${type}-url`}
-          type="url"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          spellCheck={false}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value);
@@ -204,14 +207,12 @@ export default function SettingsPage() {
   const [embeddingUrlError, setEmbeddingUrlError] = useState("");
   const [showEmbeddingToken, setShowEmbeddingToken] = useState(false);
 
-  // Sync state when settings load (render-time pattern).
-  // Seed with `undefined` (not `settings`) so the sync also fires on a warm
-  // remount, where React Query returns cached data on the first render.
-  const [prevSettings, setPrevSettings] = useState<Settings | undefined>(
-    undefined,
-  );
-  if (settings && settings !== prevSettings) {
-    setPrevSettings(settings);
+  // Hydrate local fields once per settings row. Re-syncing whenever the
+  // query object identity changes (refetch, token-clear, setQueryData)
+  // was wiping text the user had typed but not yet saved.
+  const [hydratedId, setHydratedId] = useState<number | null>(null);
+  if (settings && hydratedId !== settings.id) {
+    setHydratedId(settings.id);
     setHalfLife(settings.search_half_life_days ?? 30);
     setHardDelete(settings.privacy_hard_delete ?? false);
     setGenerationUrl(settings.generation_url ?? "");
@@ -225,9 +226,9 @@ export default function SettingsPage() {
     url: string,
     setError: (e: string) => void,
   ): boolean => {
-    if (!url) return true;
+    if (!url.trim()) return true;
     try {
-      const parsed = new URL(url);
+      const parsed = new URL(url.trim());
       if (!["http:", "https:"].includes(parsed.protocol)) {
         setError("URL must use http:// or https://");
         return false;
@@ -269,7 +270,8 @@ export default function SettingsPage() {
     return "Save failed — please try again.";
   };
 
-  const handleSave = () => {
+  const handleSave = (event?: FormEvent) => {
+    event?.preventDefault();
     if (!validateUrl(generationUrl, setGenerationUrlError)) {
       toast.error("Fix the highlighted URL errors before saving.");
       return;
@@ -281,20 +283,26 @@ export default function SettingsPage() {
     const update: SettingsUpdate = {
       search_half_life_days: halfLife,
       privacy_hard_delete: hardDelete,
-      generation_url: generationUrl || null,
-      generation_model: generationModel || null,
-      embedding_url: embeddingUrl || null,
-      embedding_model: embeddingModel || null,
+      generation_url: generationUrl.trim() || null,
+      generation_model: generationModel.trim() || null,
+      embedding_url: embeddingUrl.trim() || null,
+      embedding_model: embeddingModel.trim() || null,
     };
 
     if (generationToken) update.generation_api_token = generationToken;
     if (embeddingToken) update.embedding_api_token = embeddingToken;
 
     updateMutation.mutate(update, {
-      onSuccess: () => {
+      onSuccess: (saved) => {
         toast.success("Settings saved");
         setGenerationToken("");
         setEmbeddingToken("");
+        setGenerationUrl(saved.generation_url ?? "");
+        setGenerationModel(saved.generation_model ?? "");
+        setEmbeddingUrl(saved.embedding_url ?? "");
+        setEmbeddingModel(saved.embedding_model ?? "");
+        setHalfLife(saved.search_half_life_days ?? 30);
+        setHardDelete(saved.privacy_hard_delete ?? false);
       },
       onError: (error) => {
         toast.error(extractErrorMessage(error));
@@ -372,6 +380,7 @@ export default function SettingsPage() {
           </Button>
         </div>
 
+        <form onSubmit={handleSave}>
         <Tabs defaultValue="search" className="gap-6">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="search" className="gap-2">
@@ -625,7 +634,7 @@ export default function SettingsPage() {
         </Tabs>
 
         <Button
-          onClick={handleSave}
+          type="submit"
           disabled={updateMutation.isPending}
           size="lg"
           className="mt-8 w-full"
@@ -642,6 +651,7 @@ export default function SettingsPage() {
             </>
           )}
         </Button>
+        </form>
       </main>
     </ProtectedRoute>
   );
